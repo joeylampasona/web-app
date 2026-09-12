@@ -15,6 +15,9 @@ def main(argv: list[str] | None = None) -> int:
     p_uni = sub.add_parser("universe", help="build the tradable universe")
     p_uni.add_argument("--refresh", action="store_true",
                        help="re-pull reference data and backfill bars first")
+    p_uni.add_argument("--reset", action="store_true",
+                       help="clear every bar and cursor first — needed when "
+                            "switching data.provider")
 
     sub.add_parser("rank", help="relative strength, groups, breadth, rotation")
     sub.add_parser("scan", help="run the four detectors over the universe")

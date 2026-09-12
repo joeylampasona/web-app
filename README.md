@@ -46,6 +46,11 @@ curl "https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/2026-09-11?
 A `results` array with several thousand entries means the plan holds. A
 `NOT_AUTHORIZED` is a stop condition, not a detail.
 
+**Switching provider needs `--reset`.** Prices from one provider and the ticker
+list from another produce a universe that looks plausible and is wrong, so the
+backfill refuses to mix them. When you change `data.provider`, run
+`python -m cli universe --refresh --reset` once to clear the old bars.
+
 Then export your key and set `data.provider` to `polygon` in
 `config/settings.yaml`:
 

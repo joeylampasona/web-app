@@ -13,7 +13,51 @@ from data.types import Bar
 
 log = logging.getLogger(__name__)
 
-CURSOR_KEY = "backfill_cursor"
+# The cursor is scoped per provider. One shared cursor meant that switching
+# data.provider left the new provider resuming from the old one's position — and
+# for a switch away from the fixture, whose cursor was stamped with today, that
+# skipped the entire backfill in silence.
+CURSOR_PREFIX = "backfill_cursor"
+BARS_PROVIDER_KEY = "bars_provider"
+
+
+def cursor_key(provider: str) -> str:
+    return f"{CURSOR_PREFIX}:{provider}"
+
+
+class ProviderMismatch(RuntimeError):
+    """The bars on disk were written by a different provider than the one configured."""
+
+
+def check_provenance(conn: sqlite3.Connection, provider: str) -> None:
+    """Refuse to mix one provider's prices with another's tickers.
+
+    Bars with no recorded provenance are treated as foreign too: they predate
+    this check, so they could have come from anywhere.
+    """
+    bars = conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
+    if not bars:
+        return
+    written_by = store.get_kv(conn, BARS_PROVIDER_KEY)
+    if written_by == provider:
+        return
+    whose = f"the '{written_by}' provider" if written_by else "an earlier run, before we recorded which"
+    raise ProviderMismatch(
+        f"This database already holds {bars:,} bars written by {whose}, but "
+        f"data.provider is now '{provider}'. Mixing them builds the universe from "
+        f"one provider's ticker list and another's prices, which looks plausible "
+        f"and is wrong. Clear them and start this provider's backfill cleanly:\n\n"
+        f"    python -m cli universe --refresh --reset")
+
+
+def clear_bars(conn: sqlite3.Connection) -> int:
+    """Drop every bar and every cursor. Used when switching provider."""
+    count = conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
+    conn.execute("DELETE FROM bars")
+    conn.execute("DELETE FROM universe")
+    conn.execute(f"DELETE FROM kv WHERE key LIKE '{CURSOR_PREFIX}%' OR key = '{BARS_PROVIDER_KEY}'")
+    conn.commit()
+    return int(count)
 
 
 @dataclass
@@ -51,17 +95,23 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     adapter = adapter or get_adapter()
     days = days or int(settings.get("data.backfill_days", 520))
 
+    check_provenance(conn, adapter.name)
+    key = cursor_key(adapter.name)
+
     if adapter.name == "synthetic":
         bars = adapter.all_bars()               # fixture: no per-session calls
         written = store.upsert_bars(conn, bars)
         refs = adapter.get_universe()
         store.upsert_tickers(conn, refs)
-        store.set_kv(conn, CURSOR_KEY, dt.date.today().isoformat())
+        # Its own last session, never today: stamping today would make a later
+        # resume think there is nothing left to fetch.
+        store.set_kv(conn, key, max(b.date for b in bars).isoformat() if bars else "")
+        store.set_kv(conn, BARS_PROVIDER_KEY, adapter.name)
         return written
 
     today = dt.date.today()
     start = today - dt.timedelta(days=int(days * 1.45))   # weekends and holidays
-    cursor = store.get_kv(conn, CURSOR_KEY)
+    cursor = store.get_kv(conn, key)
     if resume and cursor:
         start = max(start, dt.date.fromisoformat(cursor) + dt.timedelta(days=1))
 
@@ -72,10 +122,11 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
             bars: list[Bar] = adapter.get_grouped_daily(day)
             if bars:
                 written += store.upsert_bars(conn, bars)
-            store.set_kv(conn, CURSOR_KEY, day.isoformat())
+            store.set_kv(conn, key, day.isoformat())
             if progress:
                 progress(day, len(bars))
         day += dt.timedelta(days=1)
+    store.set_kv(conn, BARS_PROVIDER_KEY, adapter.name)
     return written
 
 
@@ -119,18 +170,25 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funne
     symbols = [r["symbol"] for r in commons]
     series = store.load_many(conn, symbols)
 
-    priced: list[tuple[sqlite3.Row, float, float]] = []
+    # Having a bar on the latest session is its own stage. Folded into the price
+    # filter it hides the difference between "this stock is cheap" and "we have
+    # no prices for this stock at all", which is the failure that actually bites.
+    quoted: list[tuple[sqlite3.Row, list]] = []
     for r in commons:
         bars = series.get(r["symbol"]) or []
-        if not bars or bars[-1].date != as_of:
-            continue
+        if bars and bars[-1].date == as_of:
+            quoted.append((r, bars))
+    funnel.add(f"has a bar on {as_of}", len(quoted), len(commons))
+
+    priced: list[tuple[sqlite3.Row, float, float]] = []
+    for r, bars in quoted:
         close = bars[-1].close
         if close <= min_price:
             continue
         window = bars[-lookback:]
         adv = sum(b.close * b.volume for b in window) / max(1, len(window))
         priced.append((r, close, adv))
-    funnel.add(f"price > ${min_price:,.0f}", len(priced), len(commons))
+    funnel.add(f"price > ${min_price:,.0f}", len(priced), len(quoted))
 
     shares = shares_outstanding([r["symbol"] for r, _, _ in priced])
     capped: list[tuple[sqlite3.Row, float, float, float]] = []
@@ -163,8 +221,11 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funne
 
 
 def refresh(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
-            progress=None) -> Funnel:
+            progress=None, reset: bool = False) -> Funnel:
     adapter = adapter or get_adapter()
+    if reset:
+        clear_bars(conn)
+    check_provenance(conn, adapter.name)
     refresh_reference(conn, adapter)
     backfill(conn, adapter, progress=progress)
     return build(conn, adapter)

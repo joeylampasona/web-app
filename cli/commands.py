@@ -25,9 +25,15 @@ def cmd_universe(args) -> int:
             def progress(day: dt.date, count: int) -> None:
                 if count:
                     print(f"  {day}  {count:,} bars")
-            funnel = universe.refresh(conn, progress=progress)
+            funnel = universe.refresh(conn, progress=progress,
+                                      reset=getattr(args, "reset", False))
         else:
             funnel = universe.build(conn)
+    except universe.ProviderMismatch as exc:
+        store.finish_run(conn, run, "failed", str(exc))
+        _banner("Stopped — provider mismatch")
+        print(f"  {exc}")
+        return 1
     except Exception as exc:                      # noqa: BLE001
         store.finish_run(conn, run, "failed", str(exc))
         raise
