@@ -255,7 +255,7 @@ def run(market: Market, config: BacktestSettings,
             if close <= pos.stop_price:
                 reason = "stopped out"
             elif config.exit_rule == "take_25" and close >= pos.entry_price * 1.25:
-                reason = "target reached"
+                reason = "reached +25%"
             elif config.exit_rule in TRAIL_WINDOWS:
                 line = (panel.sma50 if config.exit_rule == "trail_50d"
                         else panel.sma150)[i]

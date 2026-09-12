@@ -1,0 +1,14 @@
+{
+  "name": "Base & Breakout",
+  "short_name": "Breakout",
+  "description": "Bases, breakouts and relative strength, after every close.",
+  "start_url": "/screens",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0C0D12",
+  "theme_color": "#0C0D12",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

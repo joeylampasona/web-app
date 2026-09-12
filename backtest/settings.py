@@ -18,7 +18,7 @@ OPTIONS: dict[str, dict] = {
                   "options": [{"value": v, "label": str(v)} for v in (3, 5, 8, 10)]},
     "stop_pct": {"label": "Cut a loser at", "control": "segmented",
                  "options": [{"value": v, "label": f"{v}%"} for v in (7, 8, 10)]},
-    "exit_rule": {"label": "Sell winners by", "control": "segmented",
+    "exit_rule": {"label": "Exit winners by", "control": "segmented",
                   "options": [{"value": "trail_50d", "label": "Trail 50-day"},
                               {"value": "trail_30w", "label": "Trail 30-week"},
                               {"value": "take_25", "label": "Take +25%"}]},

@@ -33,7 +33,7 @@ TOOLTIPS = {
                  "maximum number of positions was already held.",
     "strong_market_pct": "Share of sessions where the benchmark closed above its "
                          "200-day average.",
-    "benchmark": "Buying the benchmark on the first session and holding to the last.",
+    "benchmark": "Holding the benchmark from the first session of the period to the last.",
 }
 
 
@@ -174,7 +174,7 @@ def render(summary: dict) -> str:
                      + ("   PROVISIONAL" if m["provisional"] else ""))
     bench = summary["benchmark"]
     if bench["buy_and_hold_return_pct"] is not None:
-        lines.append(f"  {'Buy and hold ' + bench['symbol']:<30}"
+        lines.append(f"  {'Benchmark held throughout, ' + bench['symbol']:<30}"
                      f"{bench['buy_and_hold_return_pct']:>13,.2f}%")
     lines.append("")
     lines.append(f"  Gross mean trade {summary['gross_mean_return_pct']:+.2f}%,"

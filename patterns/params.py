@@ -257,7 +257,7 @@ SCREENS: dict[str, ScreenSpec] = {
         concepts=[
             Concept("Blue sky", "There is no price history above the pivot.", "opensky"),
             Concept("No trapped sellers", "Nobody who owns it is underwater, so nobody "
-                                          "is waiting to sell at break-even.", "trapped"),
+                                          "is waiting to get out at break-even.", "trapped"),
             Concept("Basing at the high", "It is resting at the top rather than "
                                           "falling away from it.", "base"),
             Concept("The pivot", "The all-time high — the price it has to clear.", "pivot"),
