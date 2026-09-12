@@ -208,3 +208,64 @@ def cmd_catalysts(args) -> int:
     print(f"  {ivmod.COPY['footer']}")
     store.finish_run(conn, run, "ok", f"{len(upcoming)} events, {len(rows)} IV rows")
     return 0
+
+
+def _next_earnings_map(market, symbols):
+    from catalysts import events as ev
+    from data.adapters import get_adapter
+    calendar = ev.build(market, symbols, get_adapter())
+    out = {}
+    for symbol in symbols:
+        nxt = calendar.next_earnings(symbol)
+        if nxt:
+            out[symbol] = nxt.date
+    return out
+
+
+def cmd_backtest(args) -> int:
+    from backtest import engine, metrics
+    from backtest.settings import BacktestSettings
+    from data.market import load
+    from patterns.params import SCREENS
+    conn = _conn()
+    run = store.start_run(conn, "backtest")
+    payload = {
+        "screen": args.screen, "enter": args.enter, "positions": args.positions,
+        "stop_pct": args.stop, "exit_rule": args.exit_rule, "risk": args.risk,
+        "risk_pct": args.risk, "starting_capital": args.capital, "period": args.period,
+        "skip_weak_markets": args.skip_weak, "skip_earnings_7d": args.skip_earnings,
+    }
+    payload.pop("risk")
+    config = BacktestSettings.parse({k: v for k, v in payload.items() if v is not None})
+
+    market = load(conn, include_all=True)
+    earnings = _next_earnings_map(market, market.universe) if config.skip_earnings_7d else {}
+    result = engine.run(market, config, earnings)
+    summary = metrics.summarise(result)
+
+    _banner(f"Backtest — {SCREENS[config.screen].name}")
+    print(f"  enter {config.enter} · {config.positions} positions · stop "
+          f"{config.stop_pct:g}% · {config.exit_rule} · risk {config.risk_pct:g}% · "
+          f"period {config.period}")
+    print(f"  each position is about ${config.position_size(config.starting_capital):,.0f} "
+          f"at {config.risk_pct:g}% risk with a {config.stop_pct:g}% stop")
+    print()
+    print(metrics.render(summary))
+
+    _banner("Year by year")
+    for row in summary["yearly"]:
+        bar = "█" * max(0, min(40, int(abs(row["return_pct"]) / 2)))
+        print(f"  {row['year']}{row['return_pct']:>9.2f}%  {bar}")
+
+    _banner(f"Trades ({len(summary['trades'])}) — losers included")
+    print(f"  {'Ticker':<8}{'Entry':<12}{'Price':>9}  {'Exit':<11}{'Price':>9}"
+          f"{'Return':>9}{'R':>7}  Reason")
+    print("  " + "─" * 86)
+    for t in summary["trades"][:25]:
+        print(f"  {t['ticker']:<8}{t['entry_date']:<12}{t['entry_price']:>9,.2f}"
+              f"  {t['exit_date']:<11}{t['exit_price']:>9,.2f}{t['return_pct']:>8.2f}%"
+              f"{t['r_multiple']:>7.2f}  {t['exit_reason']}")
+    if len(summary["trades"]) > 25:
+        print(f"  … and {len(summary['trades']) - 25} more")
+    store.finish_run(conn, run, "ok", f"{len(summary['trades'])} trades")
+    return 0
