@@ -152,3 +152,59 @@ def cmd_scan(args) -> int:
     store.finish_run(conn, run, "ok",
                      ", ".join(f"{k}={len(v)}" for k, v in result.screens.items()))
     return 0
+
+
+def cmd_catalysts(args) -> int:
+    from catalysts import events as ev, iv as ivmod
+    from data.adapters import get_adapter
+    from data.market import load
+    from patterns import scan
+    from rankings import rs
+    conn = _conn()
+    run = store.start_run(conn, "catalysts")
+    market = load(conn)
+    bundle = rs.Bundle(market)
+    result = scan.run(market, bundle)
+    population = sorted({s.symbol for s in result.all_setups()})
+    adapter = get_adapter()
+
+    calendar = ev.build(market, population, adapter)
+    ev.attach(calendar, result.all_setups())
+
+    _banner(f"Upcoming events — {len(population)} tickers on a screen")
+    upcoming = sorted(
+        (e for rows in calendar.by_ticker.values() for e in rows
+         if e.date >= market.as_of),
+        key=lambda e: (e.date, e.ticker))
+    print(f"  {'Date':<12}{'In':>5}  {'Ticker':<8}{'Type':<14}{'Status':<11}Note")
+    print("  " + "─" * 76)
+    for e in upcoming[:20]:
+        note = ""
+        if e.readthrough:
+            note = f"read-through from {e.readthrough['from']} ({e.readthrough['tag']})"
+        print(f"  {e.date.isoformat():<12}{e.days_until(market.as_of):>4}d  {e.ticker:<8}"
+              f"{ev.TYPE_LABELS.get(e.type, e.type):<14}{e.confirmed:<11}{note}")
+    owned = sum(1 for rows in calendar.by_ticker.values() for e in rows if not e.readthrough)
+    through = sum(1 for rows in calendar.by_ticker.values() for e in rows if e.readthrough)
+    print(f"\n  {owned} ticker-owned events, {through} read-through events, "
+          f"{len(upcoming)} total in the window.")
+
+    names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
+    rows = ivmod.compute(calendar, population, names, adapter)
+    _banner("High IV — ticker-owned dated events only")
+    print(f"  {ivmod.COPY['subhead']}")
+    print()
+    print(f"  {'Ticker':<8}{'Event':<20}{'Date':<12}{'In':>5}{'IV':>8}{'Rich':>8}"
+          f"  {'Band':<11}Dots")
+    print("  " + "─" * 82)
+    for r in rows[:15]:
+        dots = "●" * r.dots + "○" * (int(settings.get("iv.dots", 5)) - r.dots)
+        print(f"  {r.ticker:<8}{r.event_label[:19]:<20}{r.event_date.isoformat():<12}"
+              f"{r.days_until:>4}d{100*r.catalyst_iv:>7.1f}%{r.iv_richness:>8.2f}"
+              f"  {ivmod.BAND_LABELS[r.iv_band]:<11}{dots}")
+    skipped = len(population) - len(rows)
+    print(f"\n  {len(rows)} names qualify. {skipped} are absent — no listed options, or "
+          f"no dated catalyst of their own.")
+    print(f"  {ivmod.COPY['footer']}")
+    store.finish_run(conn, run, "ok", f"{len(upcoming)} events, {len(rows)} IV rows")
+    return 0

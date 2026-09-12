@@ -170,12 +170,23 @@ class SyntheticAdapter(DataAdapter):
         bars = self._series.get(symbol) or []
         spot = bars[-1].close if bars else 50.0
         base_iv = rng.uniform(0.28, 0.85)
+        # The expiry that brackets the ticker's own earnings date carries a bump,
+        # which is the whole point of the High IV table.
+        earnings = self.get_earnings_dates([symbol]).get(symbol) or []
+        event_date = earnings[0].date if earnings else None
+        bump = rng.uniform(1.0, 1.7)
         expiries: list[OptionExpiry] = []
+        dates: list[dt.date] = []
         for weeks in (1, 2, 3, 4, 6, 9, 13):
             expiry = self.end + dt.timedelta(weeks=weeks)
             while expiry.weekday() != 4:
                 expiry += dt.timedelta(days=1)
+            dates.append(expiry)
+        bracketing = next((d for d in dates if event_date and d >= event_date), None)
+        for weeks, expiry in zip((1, 2, 3, 4, 6, 9, 13), dates):
             iv = base_iv * (1.0 + rng.uniform(-0.06, 0.06)) * (1.0 - 0.012 * weeks)
+            if bracketing and expiry == bracketing:
+                iv *= bump
             expiries.append(OptionExpiry(expiry, round(iv, 4), rng.randint(40, 900)))
         return OptionChain(symbol=symbol, spot=spot, expiries=expiries)
 
