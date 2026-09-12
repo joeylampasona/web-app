@@ -1,0 +1,8 @@
+# Core pipeline. Pure Python everywhere else — no numpy, no pandas.
+requests>=2.31
+PyYAML>=6.0
+jsonschema>=4.21
+
+# Catalysts and implied volatility only. Imported lazily; the rest of the
+# pipeline runs without it. Pulls pandas in transitively.
+yfinance>=0.2.40

@@ -1,0 +1,98 @@
+# Every tunable in the pipeline. Nothing downstream hardcodes a threshold.
+
+data:
+  # polygon | stooq | eodhd | synthetic
+  # synthetic is an offline fixture; anything built from it is stamped
+  # data_source: synthetic_demo in meta.json and banners in the web app.
+  provider: synthetic
+  db_path: var/market.db
+  backfill_days: 520          # ~2 years of sessions
+  polygon:
+    base_url: https://api.polygon.io
+    api_key_env: POLYGON_API_KEY
+    calls_per_minute: 5
+    timeout_seconds: 30
+  synthetic:
+    seed: 20260912
+    symbols: 480
+    days: 520
+
+edgar:
+  base_url: https://data.sec.gov
+  # SEC asks for a contactable UA. Override with EDGAR_USER_AGENT.
+  user_agent_env: EDGAR_USER_AGENT
+  default_user_agent: "base-and-breakout-site (contact: operator@example.com)"
+
+universe:
+  min_price: 5.0
+  min_market_cap: 300000000
+  min_avg_dollar_volume: 5000000
+  dollar_volume_lookback: 20
+  # Polygon reference types kept. CS is common stock.
+  allowed_types: ["CS"]
+  # Name fragments that mark a vehicle we do not want even when typed CS.
+  exclude_name_fragments:
+    - " ETF"
+    - " ETN"
+    - "WARRANT"
+    - " UNIT"
+    - "PREFERRED"
+    - "ACQUISITION CORP"
+    - " TRUST"
+    - " FUND"
+  benchmark: SPY
+
+rankings:
+  rs_windows:      { m3: 63, m6: 126, m12: 252 }
+  rs_weights:      { m3: 0.40, m6: 0.30, m12: 0.30 }
+  rs_min_history: 200          # sessions; below this the rating is "not ranked yet"
+  min_group_members: 10
+  leader_rs: 80
+  breadth_series_days: 20
+  near_high_pct: 5.0           # within 5% of the 52-week high counts as "near high"
+  near_low_pct: 5.0
+  rotation_lookback: 21        # one month of sessions for the RS delta
+  sector_etfs: [XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, XLB, XLRE, XLC]
+
+patterns:
+  # Detector defaults live in patterns/params.py so the Learn funnel and the
+  # dial panel can both be generated from one schema. Overrides go here.
+  overrides: {}
+
+catalysts:
+  lookahead_days: 90
+  earnings_badge_days: 7
+  readthrough:
+    enabled: true
+    largest_per_theme: 1       # only the biggest name in a theme emits readthrough
+
+iv:
+  # iv_richness = catalyst expiry IV / mean IV of the two neighbouring expiries
+  bands:
+    very_high: 1.35
+    high:      1.20
+    moderate:  1.08
+  dots: 5
+
+backtest:
+  cost_bps_round_trip: 10
+  survivorship_safe: false
+  provisional_when_unsafe: true
+  benchmark: SPY
+  strong_market_rule: "benchmark above its 200-day average"
+  defaults:
+    screen: vcp
+    enter: breakout_close
+    positions: 5
+    stop_pct: 8
+    exit_rule: trail_50d
+    risk_pct: 1.5
+    skip_weak_markets: true
+    skip_earnings_7d: true
+    period: all
+    starting_capital: 100000
+
+publish:
+  out_dir: out
+  breakouts_retained: 30
+  stocks_bars: 260             # sessions of bars written per stock file

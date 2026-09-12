@@ -1,0 +1,57 @@
+# Themes are how US retail actually navigates. A ticker may belong to several.
+# Unthemed tickers are fine and common.
+#
+# members: explicit ticker membership.
+# industry_match: any ticker whose standard industry contains one of these
+#                 fragments (case-insensitive) joins the theme too.
+themes:
+  - slug: semiconductors
+    name: Semiconductors
+    members: ["NVDA", "AMD", "AVGO", "MU", "TSM", "INTC", "QCOM", "TXN", "ADI", "MRVL", "ON", "NXPI", "LRCX", "AMAT", "KLAC", "ASML", "SMCI", "ARM"]
+    industry_match: ["semiconductor"]
+  - slug: ai-infrastructure
+    name: AI Infrastructure
+    members: ["NVDA", "AVGO", "SMCI", "DELL", "ANET", "VRT", "MRVL", "CIEN", "PSTG", "NTAP", "ARM"]
+    industry_match: ["computer hardware", "computer networking"]
+  - slug: neoclouds
+    name: Neoclouds
+    members: ["CRWV", "NBIS", "IREN", "CIFR", "APLD", "WULF", "CORZ", "GLXY"]
+    industry_match: ["data processing & hosting"]
+  - slug: memory-storage
+    name: Memory & Storage
+    members: ["MU", "WDC", "STX", "SNDK", "PSTG", "NTAP"]
+    industry_match: ["computer storage"]
+  - slug: photonics-optical
+    name: Photonics & Optical
+    members: ["COHR", "LITE", "AAOI", "FN", "CIEN", "POET", "ALAB", "CRDO"]
+    industry_match: ["optical"]
+  - slug: ai-energy
+    name: AI Energy
+    members: ["VST", "CEG", "TLN", "NRG", "GEV", "ETN", "PWR", "BWXT", "POWL", "MOD"]
+    industry_match: ["electric power generation", "electrical equipment"]
+  - slug: mega-cap-tech
+    name: Mega Cap Tech
+    members: ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AVGO", "ORCL", "NFLX"]
+    industry_match: []
+    # Size is the membership rule here, not industry.
+    min_market_cap: 200000000000
+  - slug: quantum-computing
+    name: Quantum Computing
+    members: ["IONQ", "RGTI", "QBTS", "QUBT", "ARQQ"]
+    industry_match: ["quantum computing"]
+  - slug: fintech-crypto
+    name: Fintech & Crypto
+    members: ["COIN", "HOOD", "SQ", "PYPL", "SOFI", "MARA", "RIOT", "MSTR", "CLSK", "AFRM", "NU", "TOST"]
+    industry_match: ["capital markets"]
+  - slug: biotech-health
+    name: Biotech & Health
+    members: ["LLY", "NVO", "VRTX", "REGN", "AMGN", "GILD", "MRNA", "BNTX", "ISRG", "TEM", "HIMS"]
+    industry_match: ["biotech", "pharmaceutical"]
+  - slug: defense-aerospace
+    name: Defense & Aerospace
+    members: ["LMT", "NOC", "GD", "RTX", "LHX", "HWM", "TDG", "AVAV", "KTOS", "RKLB", "LDOS", "BA"]
+    industry_match: ["aerospace", "defense"]
+  - slug: nuclear-energy
+    name: Nuclear Energy
+    members: ["CCJ", "LEU", "SMR", "OKLO", "BWXT", "NNE", "UEC", "UUUU", "LTBR"]
+    industry_match: ["uranium"]

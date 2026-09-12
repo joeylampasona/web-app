@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artefacts
+var/
+out/
+web/node_modules/
+web/.next/
+web/out/
