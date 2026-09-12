@@ -1,0 +1,215 @@
+import "server-only";
+import fs from "node:fs";
+import path from "node:path";
+import type {
+  BacktestSummary, BreadthCard, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
+  ScreenFile, StockFile,
+} from "./types";
+
+// The web layer reads static JSON the pipeline wrote. It never queries a
+// database. The one exception is a custom backtest run, which hits an API route.
+const OUT = path.resolve(process.cwd(), "..", "out");
+
+function read<T>(relative: string): T | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(OUT, relative), "utf-8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+function list(folder: string): string[] {
+  try {
+    return fs.readdirSync(path.join(OUT, folder))
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => f.replace(/\.json$/, ""));
+  } catch {
+    return [];
+  }
+}
+
+export const SCREEN_KEYS = ["vcp", "blue_sky", "multi_year", "ipo"] as const;
+export type ScreenKey = (typeof SCREEN_KEYS)[number];
+
+export function hasData(): boolean {
+  return fs.existsSync(path.join(OUT, "meta.json"));
+}
+
+export function getMeta(): Meta | null {
+  return read<Meta>("meta.json");
+}
+
+export function getScreen(key: string): ScreenFile | null {
+  return read<ScreenFile>(`screens/${key}.json`);
+}
+
+export function getAllScreens(): ScreenFile[] {
+  return SCREEN_KEYS.map(getScreen).filter((s): s is ScreenFile => s !== null);
+}
+
+export function getDiff() {
+  return read<{
+    as_of: string; first_run: boolean;
+    screens: Record<string, {
+      broke_out_today: string[]; newly_forming: string[];
+      left: { symbol: string; from: string; to: string | null; reason: string }[];
+      total: number;
+    }>;
+  }>("screens/diff.json");
+}
+
+export function getBreadth() {
+  return read<{ as_of: string; universe_size: number; cards: BreadthCard[] }>("breadth.json");
+}
+
+export function getRotation() {
+  return read<{
+    as_of: string; lookback_label: string;
+    quadrant_labels: Record<string, string>;
+    industries: { points: RotationPoint[]; counts: Record<string, number> };
+    themes: { points: RotationPoint[]; counts: Record<string, number> };
+    stocks: { points: RotationPoint[]; counts: Record<string, number> };
+  }>("rotation.json");
+}
+
+export function getSectors() {
+  return read<{
+    as_of: string;
+    strongest: GroupRow[]; weakest: GroupRow[];
+    themes_strongest: GroupRow[]; themes_weakest: GroupRow[];
+    heating_cooling: { heating: HeatRow[]; cooling: HeatRow[] };
+    themes_heating_cooling: { heating: HeatRow[]; cooling: HeatRow[] };
+    sector_etfs: { symbol: string; name: string; rs_rating: number | null;
+                   excess_return_pct: number; close: number | null }[];
+  }>("sectors.json");
+}
+
+export interface HeatRow {
+  slug: string; name: string; rs_rating: number | null; avg_member_rs: number;
+  delta: number; leaders: number; fresh_breakouts: number; members: number;
+}
+
+export function getTreemap() {
+  return read<{
+    as_of: string; windows: string[];
+    tiles: {
+      slug: string; name: string; market_value: number; weight: number;
+      rs_rating: number | null; rs_change_w1: number | null;
+      rs_change_m1: number | null; rs_change_m3: number | null;
+      fresh_breakouts: number; members: number; leaders: number;
+    }[];
+  }>("treemap.json");
+}
+
+export function getUpcoming() {
+  return read<{
+    as_of: string; count: number; owned: number; readthrough: number;
+    events: import("./types").CatalystEvent[];
+    type_labels: Record<string, string>;
+  }>("catalysts/upcoming.json");
+}
+
+export function getHighIV() {
+  return read<{
+    as_of: string;
+    copy: { header: string; subhead: string; footer: string };
+    band_labels: Record<string, string>;
+    dots: number;
+    rows: IVRow[];
+  }>("catalysts/high_iv.json");
+}
+
+export function getLearn(key: string): LearnFile | null {
+  return read<LearnFile>(`learn/${key}.json`);
+}
+
+export function getAllLearn(): LearnFile[] {
+  return SCREEN_KEYS.map(getLearn).filter((l): l is LearnFile => l !== null);
+}
+
+export function getStock(symbol: string): StockFile | null {
+  return read<StockFile>(`stocks/${symbol.toUpperCase()}.json`);
+}
+
+export function listStocks(): string[] {
+  return list("stocks");
+}
+
+export function getGroup(kind: "industries" | "themes", slug: string): GroupRow | null {
+  return read<GroupRow>(`${kind}/${slug}.json`);
+}
+
+export function listGroups(kind: "industries" | "themes"): string[] {
+  return list(kind);
+}
+
+export function getBreakoutDates(): string[] {
+  return read<{ dates: string[] }>("breakouts/index.json")?.dates ?? [];
+}
+
+export function getBreakouts(date: string) {
+  return read<{
+    date: string; count: number; metric_set: string[];
+    setups: import("./types").Setup[];
+  }>(`breakouts/${date}.json`);
+}
+
+export function getBacktestOptions() {
+  return read<{
+    options: Record<string, {
+      label: string; control: string;
+      options?: { value: string | number | boolean; label: string }[];
+      min?: number; max?: number; step?: number;
+    }>;
+    defaults: Record<string, unknown>;
+    years: number[];
+  }>("backtest/options.json");
+}
+
+export function getBacktestPresetIndex() {
+  return read<{ default_by_screen: Record<string, string> }>("backtest/presets/index.json");
+}
+
+export function getBacktestPreset(hash: string): BacktestSummary | null {
+  return read<BacktestSummary>(`backtest/presets/${hash}.json`);
+}
+
+export function getDefaultBacktest(screen: string): BacktestSummary | null {
+  const index = getBacktestPresetIndex();
+  const hash = index?.default_by_screen?.[screen];
+  return hash ? getBacktestPreset(hash) : null;
+}
+
+/** A small index for search: every universe name with its RS and industry. */
+export interface SearchRow {
+  symbol: string; name: string; industry: string; rs_rating: number | string;
+  themes: string[];
+}
+
+let searchCache: SearchRow[] | null = null;
+
+export function getSearchIndex(): SearchRow[] {
+  if (searchCache) return searchCache;
+  const rows: SearchRow[] = [];
+  for (const symbol of listStocks()) {
+    const stock = getStock(symbol);
+    if (!stock) continue;
+    rows.push({
+      symbol: stock.symbol, name: stock.name, industry: stock.industry,
+      rs_rating: stock.rs_rating, themes: stock.themes,
+    });
+  }
+  rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  searchCache = rows;
+  return rows;
+}
+
+/** Trimmed bars for a set of symbols, for the charts on a card list. */
+export function barsFor(symbols: string[], limit = 90): Record<string, import("./types").Bar[]> {
+  const out: Record<string, import("./types").Bar[]> = {};
+  for (const symbol of symbols) {
+    const stock = getStock(symbol);
+    if (stock) out[symbol] = stock.bars.slice(-limit);
+  }
+  return out;
+}
