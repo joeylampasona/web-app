@@ -100,3 +100,55 @@ def cmd_rank(args) -> int:
             f"{rotation.LABELS[q].lower()} {counts[q]}" for q in rotation.QUADRANTS))
     store.finish_run(conn, run, "ok", f"{len(numeric)} ranked")
     return 0
+
+
+def cmd_scan(args) -> int:
+    from data.market import load
+    from patterns import scan, stages
+    from patterns.params import SCREENS
+    from rankings import rs
+    conn = _conn()
+    run = store.start_run(conn, "scan")
+    market = load(conn)
+    bundle = rs.Bundle(market)
+    result = scan.run(market, bundle)
+    changes = scan.diff(conn, result)
+
+    _banner(f"Screens — {market.as_of}")
+    header = f"  {'Screen':<26}{'Total':>7}" + "".join(
+        f"{stages.LABELS[s]:>17}" for s in stages.ORDER)
+    print(header)
+    print("  " + "─" * (len(header) - 2))
+    for key, setups in result.screens.items():
+        counts = result.counts(key)
+        print(f"  {SCREENS[key].name:<26}{len(setups):>7}" +
+              "".join(f"{counts[s]:>17}" for s in stages.ORDER))
+
+    _banner("First 10 setups")
+    print(f"  {'Ticker':<8}{'Screen':<13}{'Stage':<16}{'RS':>5}{'Pivot':>10}"
+          f"{'vs pivot':>10}{'Tighten':>9}{'Dry-up':>8}  Flags")
+    print("  " + "─" * 92)
+    shown = 0
+    for key, setups in result.screens.items():
+        for s in setups:
+            if shown >= 10:
+                break
+            rs_text = s.rs_rating if isinstance(s.rs_rating, int) else "—"
+            print(f"  {s.symbol:<8}{key:<13}{s.stage:<16}{rs_text:>5}{s.pivot:>10,.2f}"
+                  f"{(s.now_vs_pivot_pct or 0):>9.1f}%"
+                  f"{(s.tightening_atr_ratio or 0):>8.2f}×"
+                  f"{(s.volume_dryup_ratio or 0):>7.2f}×  {', '.join(s.flags) or '—'}")
+            shown += 1
+        if shown >= 10:
+            break
+
+    _banner("Daily diff")
+    if changes["first_run"]:
+        print("  First scan on this database — nothing to compare against yet.")
+    for key, block in changes["screens"].items():
+        print(f"  {key:<12} broke out {len(block['broke_out_today']):>3}"
+              f"   newly forming {len(block['newly_forming']):>3}"
+              f"   left {len(block['left']):>3}")
+    store.finish_run(conn, run, "ok",
+                     ", ".join(f"{k}={len(v)}" for k, v in result.screens.items()))
+    return 0

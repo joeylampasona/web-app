@@ -14,8 +14,8 @@ data:
     timeout_seconds: 30
   synthetic:
     seed: 20260912
-    symbols: 480
-    days: 520
+    symbols: 700
+    days: 900
 
 edgar:
   base_url: https://data.sec.gov

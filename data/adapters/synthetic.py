@@ -59,8 +59,8 @@ INDUSTRIES = [
 
 # Archetype mix. Most of the market is going nowhere in particular.
 ARCHETYPES = (
-    ["vcp"] * 11 + ["blue_sky"] * 7 + ["multi_year"] * 6 + ["ipo"] * 6
-    + ["laggard"] * 28 + ["chop"] * 42
+    ["vcp"] * 13 + ["blue_sky"] * 7 + ["multi_year"] * 7 + ["ipo"] * 11
+    + ["laggard"] * 26 + ["chop"] * 36
 )
 
 
