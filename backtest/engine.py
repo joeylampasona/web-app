@@ -89,7 +89,7 @@ class _Symbol:
         self.index = {b.date: i for i, b in enumerate(bars)}
 
 
-def _rs_timeline(market: Market, step: int = 5) -> list[tuple[dt.date, dict[str, int]]]:
+def rs_timeline(market: Market, step: int = 5) -> list[tuple[dt.date, dict[str, int]]]:
     """RS ratings sampled through history, so entries are gated point-in-time."""
     calendar = market.calendar
     out: list[tuple[dt.date, dict[str, int]]] = []
@@ -215,7 +215,7 @@ def run(market: Market, config: BacktestSettings,
         next_earnings: dict[str, dt.date] | None = None,
         timeline=None) -> RunOutput:
     params = Params(config.screen)
-    timeline = timeline if timeline is not None else _rs_timeline(market)
+    timeline = timeline if timeline is not None else rs_timeline(market)
     pool = candidates(market, params, timeline)
     panels = {s: _Symbol(s, market.series[s]) for s in pool}
 

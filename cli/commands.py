@@ -307,7 +307,7 @@ def _pipeline(conn, with_backtests: bool = True):
     if with_backtests:
         earnings = {s: e.date for s in market.universe
                     if (e := calendar.next_earnings(s)) is not None}
-        timeline = engine._rs_timeline(market)             # noqa: SLF001 - shared cache
+        timeline = engine.rs_timeline(market)      # computed once, reused per screen
         for screen in SCREEN_KEYS:
             config = BacktestSettings.parse({"screen": screen})
             run_out = engine.run(market, config, earnings, timeline)
