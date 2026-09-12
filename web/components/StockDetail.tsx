@@ -1,0 +1,127 @@
+"use client";
+
+import Link from "next/link";
+import { AuthGate } from "./AuthGate";
+import { CatalystTimeline } from "./CatalystTimeline";
+import { StockCard } from "./StockCard";
+import { XRayChart } from "./XRayChart";
+import { QuadrantBadge } from "./Badges";
+import { compactMoney, rsText } from "@/lib/format";
+import type { StockFile } from "@/lib/types";
+
+/** Reads plainly, and never says what the stock is going to do next. */
+function plainRead(stock: StockFile): string {
+  const setup = stock.primary_setup;
+  const rank = rsText(stock.rs_rating);
+  if (!setup) {
+    return `${stock.name} is not on any of the four screens right now. Its relative ` +
+      `strength rating is ${rank}, and it sits in ${stock.industry}.`;
+  }
+  const weeks = setup.base_weeks?.toFixed(1) ?? "—";
+  const depth = setup.base_depth_pct?.toFixed(0) ?? "—";
+  const gap = setup.now_vs_pivot_pct ?? 0;
+  const where = gap >= 0
+    ? `${gap.toFixed(1)}% above that pivot`
+    : `${Math.abs(gap).toFixed(1)}% below it`;
+  return `The base has run ${weeks} weeks and fell ${depth}% from its ceiling at its ` +
+    `deepest. The pivot is $${setup.pivot.toFixed(2)}, and the stock closed ${where}. ` +
+    `Its relative strength rating is ${rank}.`;
+}
+
+export function StockDetail({ stock }: { stock: StockFile }) {
+  const setup = stock.primary_setup;
+  return (
+    <div className="stack" style={{ gap: "var(--pad-xl)" }}>
+      <div>
+        <div className="between" style={{ marginBottom: "var(--gap-sm)" }}>
+          <div>
+            <h1 style={{ fontSize: "var(--size-h2)" }}>{stock.name}</h1>
+            <div className="num dim footnote">
+              {stock.symbol} · {stock.industry} · {compactMoney(stock.market_cap)}
+            </div>
+          </div>
+          <QuadrantBadge quadrant={stock.quadrant} />
+        </div>
+        {stock.themes.length > 0 && (
+          <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
+            {stock.themes.map((slug) => (
+              <Link key={slug} href={`/themes/${slug}`} className="badge">{slug}</Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {setup ? (
+        <StockCard setup={setup} bars={stock.bars.slice(-140)} />
+      ) : (
+        <div className="card muted footnote">
+          Not on a screen at the moment. The chart and history below still apply.
+        </div>
+      )}
+
+      <section>
+        <div className="eyebrow">The read</div>
+        <p className="muted footnote">{plainRead(stock)}</p>
+      </section>
+
+      {stock.setups.length > 1 && (
+        <section>
+          <div className="eyebrow">Also on</div>
+          <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
+            {stock.setups.map((s) => (
+              <Link key={s.screen} href={`/screens/${s.screen}`} className="badge">
+                {s.screen.replace("_", " ")} · {s.stage.replace("_", " ")}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section>
+        <div className="eyebrow">Peers</div>
+        <div className="grid-2">
+          <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
+            <div className="footnote muted">Same industry</div>
+            {stock.peers.industry.map((peer) => (
+              <Link key={peer.symbol} href={`/stocks/${peer.symbol}`} className="between footnote">
+                <span className="mono">{peer.symbol}</span>
+                <span className="num dim">{rsText(peer.rs_rating)}</span>
+              </Link>
+            ))}
+            {stock.peers.industry.length === 0 && <span className="caption dim">None</span>}
+          </div>
+          <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
+            <div className="footnote muted">Same theme</div>
+            {stock.peers.theme.map((peer) => (
+              <Link key={peer.symbol} href={`/stocks/${peer.symbol}`} className="between footnote">
+                <span className="mono">{peer.symbol}</span>
+                <span className="num dim">{rsText(peer.rs_rating)}</span>
+              </Link>
+            ))}
+            {stock.peers.theme.length === 0 && (
+              <span className="caption dim">No themes — common and fine.</span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="eyebrow">Catalyst roadmap</div>
+        <CatalystTimeline events={stock.catalyst_roadmap} />
+      </section>
+
+      <section>
+        <div className="eyebrow">X-ray</div>
+        <AuthGate
+          reason="See every base this stock has built"
+          blurb="The X-ray puts all of them on one chart, so you can see how this
+                 structure compares with the ones before it."
+        >
+          <div className="card">
+            <XRayChart bars={stock.bars} bases={stock.base_history} />
+          </div>
+        </AuthGate>
+      </section>
+    </div>
+  );
+}

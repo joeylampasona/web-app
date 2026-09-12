@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     p_bt.add_argument("--risk", type=float, default=None, help="risk per trade, percent")
     p_bt.add_argument("--capital", type=float, default=None)
     p_bt.add_argument("--period", default=None, help="all, or a year like 2025")
+    p_bt.add_argument("--json", dest="as_json", action="store_true",
+                      help="print the summary as JSON and save it as a preset")
     p_bt.add_argument("--skip-weak-markets", dest="skip_weak", action="store_true", default=None)
     p_bt.add_argument("--no-skip-weak-markets", dest="skip_weak", action="store_false")
     p_bt.add_argument("--skip-earnings", dest="skip_earnings", action="store_true", default=None)

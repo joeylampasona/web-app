@@ -15,7 +15,10 @@ import type { Contraction, Bar } from "@/lib/types";
 
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
 
-function token(name: string, fallback = "#000"): string {
+// Colours are read from the tokens at paint time, so no component ever writes
+// a colour down. A missing token fails visibly rather than silently picking
+// some other colour.
+function token(name: string, fallback = "transparent"): string {
   if (typeof window === "undefined") return fallback;
   const value = getComputedStyle(document.documentElement).getPropertyValue(name);
   return value.trim() || fallback;

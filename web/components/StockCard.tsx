@@ -1,5 +1,4 @@
-import Link from "next/link";
-import type { Setup } from "@/lib/types";
+import type { Bar, Setup } from "@/lib/types";
 import { copy } from "@/lib/copy";
 import {
   change, decimal, longDate, price, ratio, rsText, shortDate, signed, tone, volume,
@@ -9,20 +8,19 @@ import { MetricRow } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
 import { SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
+import { TickerLink } from "./StockDrawer";
 import { WatchStar } from "./WatchStar";
-import type { Bar } from "@/lib/types";
 
 /**
  * Every surface on this site is a list of these. The metric rows swap on the
  * breakouts view; everything else is identical wherever the card appears.
  */
 export function StockCard({
-  setup, bars, variant = "setup", href,
+  setup, bars, variant = "setup",
 }: {
   setup: Setup;
   bars?: Bar[];
   variant?: "setup" | "breakout";
-  href?: string;
 }) {
   const ohlc = setup.ohlc;
   const rows = variant === "breakout" ? breakoutRows(setup) : setupRows(setup);
@@ -32,9 +30,9 @@ export function StockCard({
       <header className="between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <div className="row">
-            <Link href={href ?? `/stocks/${setup.symbol}`} style={{ fontWeight: 500 }}>
+            <TickerLink symbol={setup.symbol} style={{ fontWeight: 500 }}>
               {setup.name}
-            </Link>
+            </TickerLink>
             <WatchStar symbol={setup.symbol} />
           </div>
           <div className="num dim footnote">{setup.symbol}</div>

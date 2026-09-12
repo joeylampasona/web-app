@@ -243,6 +243,15 @@ def cmd_backtest(args) -> int:
     result = engine.run(market, config, earnings)
     summary = metrics.summarise(result)
 
+    if getattr(args, "as_json", False):
+        import json
+        path = settings.out_dir() / "backtest" / "presets" / f"{config.hash()}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(summary, default=str), encoding="utf-8")
+        print(json.dumps(summary, default=str))
+        store.finish_run(conn, run, "ok", f"{len(summary['trades'])} trades")
+        return 0
+
     _banner(f"Backtest — {SCREENS[config.screen].name}")
     print(f"  enter {config.enter} · {config.positions} positions · stop "
           f"{config.stop_pct:g}% · {config.exit_rule} · risk {config.risk_pct:g}% · "
