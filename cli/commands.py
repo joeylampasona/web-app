@@ -269,3 +269,83 @@ def cmd_backtest(args) -> int:
         print(f"  … and {len(summary['trades']) - 25} more")
     store.finish_run(conn, run, "ok", f"{len(summary['trades'])} trades")
     return 0
+
+
+def _pipeline(conn, with_backtests: bool = True):
+    """The nightly sequence, shared by `publish` and `all`."""
+    from backtest import engine, metrics
+    from backtest.settings import BacktestSettings
+    from catalysts import events as ev, iv as ivmod
+    from data.adapters import get_adapter
+    from data.market import load
+    from patterns import scan
+    from patterns.params import SCREEN_KEYS
+    from rankings import rs
+
+    market = load(conn, include_all=True)
+    bundle = rs.Bundle(market)
+    result = scan.run(market, bundle)
+    changes = scan.diff(conn, result)
+    adapter = get_adapter()
+
+    population = sorted({s.symbol for s in result.all_setups()})
+    calendar = ev.build(market, population, adapter)
+    ev.attach(calendar, result.all_setups())
+    names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
+    iv_rows = ivmod.compute(calendar, population, names, adapter)
+
+    backtests: dict[str, dict] = {}
+    if with_backtests:
+        earnings = {s: e.date for s in market.universe
+                    if (e := calendar.next_earnings(s)) is not None}
+        timeline = engine._rs_timeline(market)             # noqa: SLF001 - shared cache
+        for screen in SCREEN_KEYS:
+            config = BacktestSettings.parse({"screen": screen})
+            run_out = engine.run(market, config, earnings, timeline)
+            backtests[config.hash()] = metrics.summarise(run_out)
+    return market, bundle, result, changes, calendar, iv_rows, backtests
+
+
+def cmd_publish(args) -> int:
+    from publish import schema, writer
+    conn = _conn()
+    run = store.start_run(conn, "publish")
+    market, bundle, result, changes, calendar, iv_rows, backtests = _pipeline(conn)
+    written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests)
+
+    out = settings.out_dir()
+    _banner(f"Published — {len(written)} files under {out}")
+    tree = {}
+    for path in written:
+        rel = path.relative_to(out)
+        key = rel.parts[0] if len(rel.parts) > 1 else "(root)"
+        tree[key] = tree.get(key, 0) + 1
+    for key in sorted(tree):
+        print(f"  {key:<16}{tree[key]:>5} file(s)")
+
+    import json
+    meta = json.loads((out / "meta.json").read_text())
+    problems = schema.validate(meta)
+    _banner("meta.json")
+    print(f"  as of {meta['as_of']}   provider {meta['provider']}"
+          f"   data source {meta['data_source']}")
+    print(f"  universe {meta['universe_count']:,}"
+          f"   survivorship safe: {str(meta['survivorship_safe']).lower()}")
+    for row in meta["screens"]:
+        print(f"  {row['name']:<28}{row['total']:>5}  {row['stages']}")
+    print()
+    print("  schema: VALID" if not problems else "  schema: INVALID")
+    for problem in problems:
+        print(f"    - {problem}")
+    store.finish_run(conn, run, "ok" if not problems else "failed", f"{len(written)} files")
+    return 0 if not problems else 1
+
+
+def cmd_all(args) -> int:
+    from types import SimpleNamespace
+    from data import universe
+    conn = _conn()
+    funnel = universe.refresh(conn)
+    _banner("Universe")
+    print(funnel.render())
+    return cmd_publish(SimpleNamespace())

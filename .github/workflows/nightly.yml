@@ -1,0 +1,119 @@
+name: Nightly scan
+
+# 6:30pm ET on weekdays. GitHub cron is UTC only and does not follow US daylight
+# saving, so both candidate hours are scheduled and the job checks the real
+# Eastern hour before doing any work.
+on:
+  schedule:
+    - cron: "30 22 * * 1-5"
+    - cron: "30 23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run even if it is not 6pm in New York"
+        type: boolean
+        default: true
+
+concurrency:
+  group: nightly-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+      EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Is it 6pm in New York?
+        id: gate
+        run: |
+          hour=$(TZ=America/New_York date +%H)
+          if [ "${{ inputs.force }}" = "true" ] || [ "$hour" = "18" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Eastern hour is $hour — this is the other cron slot. Skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -r requirements.txt
+
+      - name: Restore the database
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: var
+          key: market-db-${{ github.run_id }}
+          restore-keys: market-db-
+
+      # Each stage is its own step so a failure names itself in the Discord post.
+      - name: Fetch grouped daily and update the universe
+        id: universe
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli universe --refresh
+
+      - name: Rank
+        id: rank
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli rank
+
+      - name: Scan
+        id: scan
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli scan
+
+      - name: Catalysts and implied volatility
+        id: catalysts
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli catalysts
+
+      - name: Precompute default backtests and publish
+        id: publish
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli publish
+
+      - name: Upload the artefacts
+        if: steps.gate.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: out
+          path: out
+          retention-days: 14
+
+      - name: Tell Discord it broke
+        if: failure() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          stage=unknown
+          [ "${{ steps.universe.outcome }}"  = failure ] && stage=universe
+          [ "${{ steps.rank.outcome }}"      = failure ] && stage=rank
+          [ "${{ steps.scan.outcome }}"      = failure ] && stage=scan
+          [ "${{ steps.catalysts.outcome }}" = failure ] && stage=catalysts
+          [ "${{ steps.publish.outcome }}"   = failure ] && stage=publish
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          STAGE="$stage" RUN_URL="$run_url" python - <<'PY'
+          import json, os, urllib.request
+
+          body = {"content": f"Nightly scan failed at stage **{os.environ['STAGE']}**.\n"
+                             f"{os.environ['RUN_URL']}"}
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(request, timeout=20)
+          PY
+
+# Deployment is deliberately not scheduled here.
