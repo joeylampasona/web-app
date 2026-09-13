@@ -74,7 +74,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
           position: "sticky", top: 0, zIndex: 30,
           background: "var(--surface-0)",
           borderBottom: "0.5px solid var(--border)",
-          padding: "var(--pad-md) var(--pad-lg)",
+          // The viewport is viewportFit: "cover", so the page runs underneath
+          // the status bar and the Dynamic Island. Without this the header sits
+          // under them and its buttons cannot be tapped at all. The bottom nav
+          // has always had the matching inset; the top never did.
+          paddingTop: "calc(var(--pad-md) + env(safe-area-inset-top))",
+          paddingBottom: "var(--pad-md)",
+          paddingLeft: "calc(var(--pad-lg) + env(safe-area-inset-left))",
+          paddingRight: "calc(var(--pad-lg) + env(safe-area-inset-right))",
         }}
       >
         <div className="between" style={{ maxWidth: 780, margin: "0 auto" }}>
@@ -124,6 +131,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           borderTop: "0.5px solid var(--border)",
           display: "grid", gridTemplateColumns: "repeat(5, 1fr)",
           paddingBottom: "env(safe-area-inset-bottom)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
         }}
       >
         {TABS.map((tab) => {
