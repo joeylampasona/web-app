@@ -80,8 +80,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: var
-          key: market-db-${{ github.run_id }}
-          restore-keys: market-db-
+          # Scoped by provider. An unscoped key let a fixture run's database be
+          # restored into a live one, where the provenance check correctly
+          # refused to mix one provider's prices with another's tickers.
+          key: market-db-${{ env.DATA_PROVIDER }}-${{ github.run_id }}
+          restore-keys: market-db-${{ env.DATA_PROVIDER }}-
 
       # Each stage is its own step so a failure names itself in the Discord post.
       - name: Fetch grouped daily and update the universe
