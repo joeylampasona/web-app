@@ -97,10 +97,31 @@ Python engine and Vercel's Node runtime has no Python. It returns a clear
 message; the precomputed default per screen is served from JSON and works. A
 separate worker would fix it if the feature turns out to matter.
 
+## Answered: does free Basic serve grouped daily aggregates?
+
+**Yes, with a roughly two-year history limit.** A recent session returns twelve
+thousand tickers; a date beyond the window returns 403 on that date, not on the
+endpoint. The backfill bisects for the oldest session the plan will serve and
+starts there.
+
+The cost of that limit is the multi-year screen. It looks for lids that have held
+52+ weeks inside a 104-week window, and two years of history leaves no room for a
+breakout to have happened after a year-long base — the first live run returned 42
+setups, every one of them `forming`, zero breakouts. Either shorten that screen's
+lookback to about 78 weeks, or get deeper history from Stooq, whose adapter is
+already stubbed for the purpose.
+
 ## Still open, and worth deciding before launch
 
-1. **Verify the Polygon grouped daily endpoint on the free tier yourself.** It
-   could not be confirmed from here and the whole free-tier premise rests on it.
-2. **Pick the auth provider.** Four surfaces are waiting behind the seam.
-3. **Decide the share payload.** PNG or link.
-4. **Legal review of the copy.** Especially the two deviations above.
+1. **Pick the auth provider.** Four surfaces are waiting behind the seam in
+   `web/lib/auth.tsx`.
+2. **Decide the share payload.** PNG or link.
+3. **Legal review of the copy.** Especially the two deviations above.
+4. **Custom backtest runs on the live site.** The API route shells out to the
+   Python engine, and Vercel's Node runtime has no Python, so a visitor can read
+   the precomputed default for each screen but cannot move a dial and re-run.
+   The route now declines with an accurate message rather than a guess. Fixing it
+   means a small worker somewhere that does have Python — worth doing only if the
+   feature turns out to matter to anyone.
+5. **The multi-year screen.** See above; it is currently thin by construction,
+   not by accident.
