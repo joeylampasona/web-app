@@ -93,6 +93,7 @@ export interface StockFile {
   primary_setup: Setup | null;
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
+  news: Headline[];
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
@@ -212,4 +213,8 @@ export interface InsiderSummary {
   /** Awards, exercises, gifts and tax withholding — counted, never mixed in. */
   mechanics: number;
   recent: InsiderTrade[];
+}
+
+export interface Headline {
+  published_at: string; title: string; publisher: string; url: string;
 }

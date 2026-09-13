@@ -67,6 +67,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             backtests: dict[str, dict] | None = None,
             follow: dict | None = None,
             insiders: dict[str, dict] | None = None,
+            news: dict[str, list[dict]] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -159,7 +160,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         limit = bar_limit
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
-                                             calendar, limit, insiders)))
+                                             calendar, limit, insiders, news)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -300,7 +301,8 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
 
 def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    setups_by_symbol: dict, calendar: ev.Calendar, bar_limit: int,
-                   insiders: dict[str, dict] | None = None) -> dict:
+                   insiders: dict[str, dict] | None = None,
+                   news: dict[str, list[dict]] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -346,5 +348,6 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "base_history": primary.base_history if primary else [],
         "catalyst_roadmap": [e.to_json(market.as_of) for e in events],
         "insiders": (insiders or {}).get(symbol),
+        "news": (news or {}).get(symbol) or [],
         "peers": {"industry": peer_rows(same_industry), "theme": peer_rows(same_theme)},
     }

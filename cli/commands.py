@@ -219,6 +219,14 @@ def cmd_catalysts(args) -> int:
         # section. Neither is worth failing a nightly run over.
         print(f"  → Insider filings skipped: {exc}", flush=True)
 
+    # Headlines, market-wide. Fetched once for everyone rather than per ticker:
+    # five calls a minute would be three hours one name at a time.
+    from catalysts import news as newsmod
+    rows = newsmod.fetch(conn, notice=lambda m: print(f"  → {m}", flush=True))
+    dropped = newsmod.prune(conn)
+    print(f"  → {rows:,} headline rows written, {dropped:,} stale ones dropped.",
+          flush=True)
+
     _banner(f"Upcoming events — {len(population)} tickers on a screen")
     upcoming = sorted(
         (e for rows in calendar.by_ticker.values() for e in rows
@@ -357,8 +365,10 @@ def _pipeline(conn, with_backtests: bool = True):
     # Fetching is limited to names on a screen, because each one costs SEC
     # requests. Reading is not: a name that has left a screen still has the
     # filings we already read, and its page should still show them.
+    from catalysts import news as news_mod
     from data import insiders as insiders_mod
     insider_rows = insiders_mod.summary(conn, market.universe)
+    news_rows = news_mod.by_symbol(conn, market.universe)
     if with_backtests:
         earnings = {s: e.date for s in market.universe
                     if (e := calendar.next_earnings(s)) is not None}
@@ -381,7 +391,7 @@ def _pipeline(conn, with_backtests: bool = True):
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
     return (market, bundle, result, changes, calendar, iv_rows, backtests,
-            follow, insider_rows)
+            follow, insider_rows, news_rows)
 
 
 def cmd_publish(args) -> int:
@@ -389,9 +399,10 @@ def cmd_publish(args) -> int:
     conn = _conn()
     run = store.start_run(conn, "publish")
     (market, bundle, result, changes, calendar, iv_rows, backtests,
-     follow, insider_rows) = _pipeline(conn)
+     follow, insider_rows, news_rows) = _pipeline(conn)
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
-                             follow=follow, insiders=insider_rows)
+                             follow=follow, insiders=insider_rows,
+                             news=news_rows)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")
