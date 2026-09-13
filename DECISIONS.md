@@ -185,3 +185,21 @@ accumulated enough days that it is meaningfully shorter than the history.
    fix is Next 16, whose Turbopack rejects this project's `../out/**` tracing
    glob. The override should come out when Next ships a version that carries a
    patched postcss itself.
+
+
+## Noted, not fixed: fractional share volume
+
+Polygon returns fractional volume for recent sessions — 140 of the 180 bars
+published per stock, starting at exactly 2026-02-23, identically across every
+ticker. Older bars are whole numbers. We do not touch the value: the adapter
+takes `v` from the grouped daily response and stores it.
+
+A shared boundary date rules out split adjustment, which would fall on a
+different date for each ticker. Beyond that the cause is unknown, and cannot be
+established without querying Polygon directly for a single date and comparing.
+
+Left alone because the effect on everything computed from it is about two parts
+in a billion: the 20-day average dollar volume that drives the liquidity filter
+differs by 0.0000002%, and the volume dry-up ratio the VCP detector uses is a
+ratio, so the fractions very nearly cancel. Fractional share trading is real and
+does reach the consolidated tape, so this may simply be what the data is.

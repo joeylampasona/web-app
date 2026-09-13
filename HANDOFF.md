@@ -1,57 +1,46 @@
 # Where things stand
 
-Written 13 September 2026, while nightly run #6 was still backfilling.
-Read this first when you come back.
+Written 13 September 2026. Read this first when you come back.
 
 ---
 
-## The one thing to know
+## Where this got to
 
-**The `data` branch is currently holding demo data, not real prices.**
+**The nightly works and the data branch is carrying real market data.**
+Run #7, 2,129 names, live prices, every screen populated. Vercel is no
+longer blocked — you can connect it whenever you like.
 
-Nightly run #1 finished in 65 seconds, reported success, and pushed a
-fixture. The runs after it failed on a poisoned cache. Run #6 is the
-first one that can actually work, and it takes about two and a half
-hours because it backfills 900 days from nothing.
+It took seven runs. Run #1 published a fixture in 65 seconds and called
+it a success. Runs #2 to #5 died on a poisoned cache. Run #6 fetched
+prices for 1h49m, built a universe of *zero* because SEC refused every
+share-count request, published an empty site and went green. Run #7,
+with a contactable `EDGAR_USER_AGENT`, worked.
 
-So: **do not connect Vercel until a nightly run has finished green.** If
-you connect it now, the public site will serve invented tickers with
-invented prices. The site labels them honestly — every page carries a
-"Demo data" banner — but that is not what you want strangers to see.
+Three guards now stand where those went wrong, and all three were added
+because something reported success while doing the wrong thing:
 
-There is now a check that stops this happening again. Before the nightly
-pushes anything, it reads what it built and refuses to publish unless
-the file says `live`. See "Nightly" below.
+- `cli universe` exits non-zero when nothing survives the funnel, instead
+  of printing a suggestion and returning 0.
+- SEC being unreachable raises rather than returning an empty dict behind
+  a log line nobody prints. One company with no filed share count is
+  ordinary and still degrades quietly; SEC refusing everything is not.
+- Before the nightly publishes, it reads what it built: provenance, schema
+  validity, **and** whether there is actually anything in it. A universe
+  under 500 names or an empty set of screens stops the run.
 
----
-
-## How to check the nightly
-
-Open <https://github.com/joeylampasona/web-app/actions>.
-
-Run #6 is the one to watch. Three outcomes:
-
-**Green, and it took hours.** That is the real thing. Verify it:
+### To check any future run
 
 ```
-curl -s https://raw.githubusercontent.com/joeylampasona/web-app/data/meta.json | head -c 400
+curl -s https://raw.githubusercontent.com/joeylampasona/web-app/data/meta.json | head -c 300
 ```
 
-You want `"data_source":"live"` and a `universe_count` in the low
-thousands — about 2,100. If you see `"synthetic_demo"` or a count near
-500, it is still the fixture.
+`"data_source":"live"` and a `universe_count` near 2,100. A run that
+finishes in about a minute did not do the work — check this before
+believing a green tick.
 
-**Green in about a minute.** Something is wrong. A real run cannot be
-that fast. Check `meta.json` as above before believing it.
-
-**Red.** Open the run and find the step with the X. The steps are named
-so the failure names itself: `universe`, `rank`, `scan`, `catalysts`,
-`publish`, `verify-output`, `data-branch`.
-
-Once one run is green, every run after it is incremental — a few minutes,
-because the price database is cached between runs.
-
----
+How long a run takes depends on what is cached. Prices cache between
+runs; share counts and industries cache for 30 days. A normal night is a
+few minutes. The first run after a month is closer to half an hour.
 
 ## What was built since we last spoke
 
@@ -108,20 +97,9 @@ looking for an icon that did not exist.
 
 ## What you need to do
 
-### Now, while the nightly runs
+### Connect Vercel
 
-Nothing. Let it finish.
-
-### When the nightly is green
-
-**Step 1 — verify it is real.** The `curl` command above. Look for
-`"data_source":"live"`.
-
-**Step 2 — merge this branch.** On GitHub, open a pull request from
-`claude/build-blhvg3` into `main` and merge it. That brings in the share
-image, accounts, and the publish guard.
-
-**Step 3 — connect Vercel.**
+Nothing blocks this any more.
 
 1. Go to <https://vercel.com> and sign in with GitHub.
 2. **Add New → Project**, pick `joeylampasona/web-app`.
@@ -134,7 +112,7 @@ branch and then builds the site. If the data branch is missing or empty
 the build fails loudly with instructions rather than shipping an empty
 site.
 
-**Step 4 — make the nightly refresh the live site.**
+### Make the nightly refresh the live site
 
 Pushing to the data branch does not redeploy on its own, so without this
 the site would serve one night's numbers forever.
