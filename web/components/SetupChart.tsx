@@ -25,7 +25,7 @@ function token(name: string, fallback = "transparent"): string {
 }
 
 export function SetupChart({
-  bars, pivot, contractions, breakoutDate, flags, symbol, height = 210,
+  bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
 }: {
   bars: Bar[];
   pivot: number;
@@ -34,6 +34,8 @@ export function SetupChart({
   flags: string[];
   symbol: string;
   height?: number;
+  /** Hands back a screenshot function so a card can put the chart in an image. */
+  onReady?: (screenshot: (() => HTMLCanvasElement | null) | null) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [overlay, setOverlay] = useState<{ boxes: (Box & { x1: number; x2: number; y1: number; y2: number })[]; width: number }>(
@@ -138,6 +140,13 @@ export function SetupChart({
       if (markers.length) candles.setMarkers(markers as never);
 
       chart.timeScale().fitContent();
+      onReady?.(() => {
+        try {
+          return chart.takeScreenshot();
+        } catch {
+          return null;
+        }
+      });
 
       const project = () => {
         const width = element.clientWidth;
@@ -164,6 +173,7 @@ export function SetupChart({
       observer.observe(element);
 
       cleanup = () => {
+        onReady?.(null);
         observer.disconnect();
         chart.remove();
       };
@@ -173,7 +183,7 @@ export function SetupChart({
       disposed = true;
       cleanup();
     };
-  }, [bars, pivot, boxes, breakoutDate, flags, height]);
+  }, [bars, pivot, boxes, breakoutDate, flags, height, onReady]);
 
   return (
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>

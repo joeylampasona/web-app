@@ -1,3 +1,6 @@
+"use client";
+
+import { useCallback, useRef } from "react";
 import type { Bar, Setup } from "@/lib/types";
 import { copy } from "@/lib/copy";
 import {
@@ -24,6 +27,14 @@ export function StockCard({
 }) {
   const ohlc = setup.ohlc;
   const rows = variant === "breakout" ? breakoutRows(setup) : setupRows(setup);
+
+  // The chart hands its canvas up so Share can put the real thing in the image
+  // rather than redrawing an approximation of it.
+  const chartRef = useRef<(() => HTMLCanvasElement | null) | null>(null);
+  const handleChartReady = useCallback(
+    (screenshot: (() => HTMLCanvasElement | null) | null) => {
+      chartRef.current = screenshot;
+    }, []);
 
   return (
     <article className="card stack" style={{ gap: "var(--gap-md)" }}>
@@ -65,6 +76,7 @@ export function StockCard({
           breakoutDate={setup.breakout_date}
           flags={setup.flags}
           symbol={setup.symbol}
+          onReady={handleChartReady}
         />
       )}
 
@@ -107,6 +119,14 @@ export function StockCard({
         <ShareButton
           symbol={setup.symbol}
           name={setup.name}
+          close={setup.close}
+          changePct={ohlc?.change_pct ?? null}
+          stage={setup.stage}
+          rs={setup.rs_rating}
+          rows={rows.map((row) => ({
+            label: row.label, value: row.value, tone: row.tone,
+          }))}
+          getChart={() => chartRef.current?.() ?? null}
           text={`${setup.symbol} — ${setup.stage.replace("_", " ")}, pivot ${price(
             setup.pivot,
           )}, RS ${rsText(setup.rs_rating)}`}
