@@ -25,6 +25,9 @@ jobs:
     permissions:
       contents: write
     env:
+      # settings.local.yaml is gitignored, so CI states its own choices here.
+      DATA_PROVIDER: polygon
+      BACKFILL_DAYS: "900"
       POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -52,6 +55,25 @@ jobs:
       - name: Install dependencies
         if: steps.gate.outputs.run == 'true'
         run: pip install -r requirements.txt
+
+      - name: Check this run will use real data
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          if [ -z "${POLYGON_API_KEY}" ]; then
+            echo "POLYGON_API_KEY is not set. Add it under Settings ->"
+            echo "Secrets and variables -> Actions. Refusing to publish a"
+            echo "fixture to the data branch."
+            exit 1
+          fi
+          python - <<'PY'
+          from data import settings
+          provider = settings.get("data.provider")
+          print(f"provider: {provider}")
+          if provider != "polygon":
+              raise SystemExit(
+                  f"data.provider resolved to {provider!r}, not 'polygon'. "
+                  "A nightly run must not publish fixture data.")
+          PY
 
       - name: Restore the database
         if: steps.gate.outputs.run == 'true'

@@ -38,8 +38,30 @@ def settings() -> dict[str, Any]:
     base = _read("settings.yaml")
     local_path = CONFIG_DIR / "settings.local.yaml"
     if local_path.exists():
-        return _merge(base, _read("settings.local.yaml"))
-    return base
+        base = _merge(base, _read("settings.local.yaml"))
+    return _apply_env(base)
+
+
+# CI has no settings.local.yaml — it is gitignored, which is the whole point of
+# it — so the few settings that differ between a laptop and the nightly job are
+# also readable from the environment.
+_ENV_OVERRIDES = {
+    "DATA_PROVIDER": ("data", "provider", str),
+    "BACKFILL_DAYS": ("data", "backfill_days", int),
+    "OUT_DIR": ("publish", "out_dir", str),
+}
+
+
+def _apply_env(config: dict[str, Any]) -> dict[str, Any]:
+    for name, (section, key, cast) in _ENV_OVERRIDES.items():
+        raw = os.environ.get(name)
+        if raw is None or raw == "":
+            continue
+        try:
+            config.setdefault(section, {})[key] = cast(raw)
+        except (TypeError, ValueError):
+            continue
+    return config
 
 
 @functools.lru_cache(maxsize=1)
