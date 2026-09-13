@@ -24,6 +24,12 @@ edgar:
   default_user_agent: "base-and-breakout-site (contact: operator@example.com)"
   shares_cache_days: 30        # share counts move quarterly; do not refetch nightly
 
+# Signals ingested from the Market Desk repository. Both must be set for any of
+# it to happen; without them the site runs exactly as it did before.
+marketdesk:
+  repo: joeylampasona/redesigned-system
+  token_env: MARKET_DESK_TOKEN
+
 universe:
   min_price: 5.0
   min_market_cap: 300000000

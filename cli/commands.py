@@ -197,7 +197,26 @@ def cmd_catalysts(args) -> int:
     population = sorted({s.symbol for s in result.all_setups()})
     adapter = get_adapter()
 
-    calendar = ev.build(market, population, adapter)
+    # The Market Desk sweeps the whole market overnight for filings, insider
+    # clusters, tape anomalies and earnings dates. Ingested before the calendar
+    # is built so its dates take precedence over our scraped fallback.
+    from data import marketdesk
+    desk_dates: dict = {}
+    if marketdesk.enabled():
+        try:
+            marketdesk.ingest(conn, market.as_of,
+                              notice=lambda m: print(f"  → {m}", flush=True))
+            desk_dates = marketdesk.earnings_dates(conn)
+        except marketdesk.DeskSchemaChanged as exc:
+            # Loud, because it means someone changed the contract and the site
+            # would otherwise quietly carry on with yesterday's signals.
+            print(f"  → Market Desk NOT ingested: {exc}", flush=True)
+        except marketdesk.DeskUnavailable as exc:
+            print(f"  → Market Desk unavailable: {exc}", flush=True)
+    else:
+        print("  → Market Desk not configured; skipping.", flush=True)
+
+    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates)
     ev.attach(calendar, result.all_setups())
 
     # Form 4s for the names on a screen. Filings never change once filed, so
@@ -354,7 +373,26 @@ def _pipeline(conn, with_backtests: bool = True):
     adapter = get_adapter()
 
     population = sorted({s.symbol for s in result.all_setups()})
-    calendar = ev.build(market, population, adapter)
+    # The Market Desk sweeps the whole market overnight for filings, insider
+    # clusters, tape anomalies and earnings dates. Ingested before the calendar
+    # is built so its dates take precedence over our scraped fallback.
+    from data import marketdesk
+    desk_dates: dict = {}
+    if marketdesk.enabled():
+        try:
+            marketdesk.ingest(conn, market.as_of,
+                              notice=lambda m: print(f"  → {m}", flush=True))
+            desk_dates = marketdesk.earnings_dates(conn)
+        except marketdesk.DeskSchemaChanged as exc:
+            # Loud, because it means someone changed the contract and the site
+            # would otherwise quietly carry on with yesterday's signals.
+            print(f"  → Market Desk NOT ingested: {exc}", flush=True)
+        except marketdesk.DeskUnavailable as exc:
+            print(f"  → Market Desk unavailable: {exc}", flush=True)
+    else:
+        print("  → Market Desk not configured; skipping.", flush=True)
+
+    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates)
     ev.attach(calendar, result.all_setups())
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
     iv_rows = ivmod.compute(calendar, population, names, adapter)
@@ -367,6 +405,9 @@ def _pipeline(conn, with_backtests: bool = True):
     # filings we already read, and its page should still show them.
     from catalysts import news as news_mod
     from data import insiders as insiders_mod
+    from data import marketdesk as desk_mod
+    desk_rows = desk_mod.by_symbol(conn, market.universe)
+    desk_run = desk_mod.latest_run(conn)
     insider_rows = insiders_mod.summary(conn, market.universe)
     news_rows = news_mod.by_symbol(conn, market.universe)
     if with_backtests:
@@ -391,7 +432,7 @@ def _pipeline(conn, with_backtests: bool = True):
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
     return (market, bundle, result, changes, calendar, iv_rows, backtests,
-            follow, insider_rows, news_rows)
+            follow, insider_rows, news_rows, desk_rows, desk_run)
 
 
 def cmd_publish(args) -> int:
@@ -399,10 +440,10 @@ def cmd_publish(args) -> int:
     conn = _conn()
     run = store.start_run(conn, "publish")
     (market, bundle, result, changes, calendar, iv_rows, backtests,
-     follow, insider_rows, news_rows) = _pipeline(conn)
+     follow, insider_rows, news_rows, desk_rows, desk_run) = _pipeline(conn)
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
-                             news=news_rows)
+                             news=news_rows, desk=desk_rows, desk_run=desk_run)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

@@ -68,6 +68,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             follow: dict | None = None,
             insiders: dict[str, dict] | None = None,
             news: dict[str, list[dict]] | None = None,
+            desk: dict[str, list[dict]] | None = None,
+            desk_run: dict | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -160,7 +162,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         limit = bar_limit
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
-                                             calendar, limit, insiders, news)))
+                                             calendar, limit, insiders, news, desk)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -253,6 +255,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "Tickers and company names are invented." if provider == "synthetic" else ""),
         "universe_count": len(market.universe),
         "survivorship_safe": bool(settings.get("backtest.survivorship_safe", False)),
+        # Which of the desk's scanners worked. An empty signal set means
+        # nothing at all if the scanner that produces it failed.
+        "desk_run": desk_run,
         "benchmark": market.benchmark,
         "market_wide_breakouts": int(next(
             (c["value"] for c in breadth_payload.get("cards", [])
@@ -302,7 +307,8 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
 def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    setups_by_symbol: dict, calendar: ev.Calendar, bar_limit: int,
                    insiders: dict[str, dict] | None = None,
-                   news: dict[str, list[dict]] | None = None) -> dict:
+                   news: dict[str, list[dict]] | None = None,
+                   desk: dict[str, list[dict]] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -349,5 +355,6 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "catalyst_roadmap": [e.to_json(market.as_of) for e in events],
         "insiders": (insiders or {}).get(symbol),
         "news": (news or {}).get(symbol) or [],
+        "desk_signals": (desk or {}).get(symbol) or [],
         "peers": {"industry": peer_rows(same_industry), "theme": peer_rows(same_theme)},
     }

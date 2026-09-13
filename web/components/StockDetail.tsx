@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
+import { DeskSignals } from "./DeskSignals";
 import { InsiderPanel } from "./InsiderPanel";
 import { NewsPanel } from "./NewsPanel";
 import { SetupChart } from "./SetupChart";
@@ -10,7 +11,7 @@ import { StockCard } from "./StockCard";
 import { XRayChart } from "./XRayChart";
 import { QuadrantBadge } from "./Badges";
 import { compactMoney, rsText } from "@/lib/format";
-import type { StockFile } from "@/lib/types";
+import type { DeskRun, StockFile } from "@/lib/types";
 
 /** Reads plainly, and never says what the stock is going to do next. */
 function plainRead(stock: StockFile): string {
@@ -31,7 +32,12 @@ function plainRead(stock: StockFile): string {
     `Its relative strength rating is ${rank}.`;
 }
 
-export function StockDetail({ stock }: { stock: StockFile }) {
+export function StockDetail({ stock, run }: {
+  stock: StockFile;
+  /** Which of the market sweep's scanners worked — so an empty signal
+   *  set can be told apart from a scanner that did not run. */
+  run?: DeskRun | null;
+}) {
   const setup = stock.primary_setup;
   return (
     <div className="stack" style={{ gap: "var(--pad-xl)" }}>
@@ -126,6 +132,11 @@ export function StockDetail({ stock }: { stock: StockFile }) {
       <section>
         <div className="eyebrow">Catalyst roadmap</div>
         <CatalystTimeline events={stock.catalyst_roadmap} />
+      </section>
+
+      <section>
+        <div className="eyebrow">Flagged by the market sweep</div>
+        <DeskSignals signals={stock.desk_signals} run={run} />
       </section>
 
       <section>

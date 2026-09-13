@@ -72,6 +72,8 @@ export interface Meta {
   version: number; generated_at: string; as_of: string; provider: string;
   data_source: "live" | "synthetic_demo"; data_source_note?: string;
   universe_count: number; survivorship_safe: boolean; benchmark: string;
+  /** Which of the Market Desk's scanners worked on the run we ingested. */
+  desk_run?: DeskRun | null;
   market_wide_breakouts: number;
   screens: { key: string; name: string; total: number; stages: Record<string, number> }[];
   themes: { slug: string; name: string }[];
@@ -94,6 +96,7 @@ export interface StockFile {
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
   news: Headline[];
+  desk_signals: DeskSignal[];
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
@@ -154,7 +157,8 @@ export interface BacktestSummary {
   settings: Record<string, unknown>;
   hash: string;
   provisional: boolean; provisional_line: string;
-  survivorship_safe: boolean; survivorship_line: string;
+  survivorship_safe: boolean;
+  survivorship_line: string;
   notes: string[];
   starting_capital: number; ending_capital: number; multiple: number | null;
   years: number;
@@ -217,4 +221,18 @@ export interface InsiderSummary {
 
 export interface Headline {
   published_at: string; title: string; publisher: string; url: string;
+}
+
+export interface DeskSignal {
+  as_of: string; source: string; reason: string; detail: string;
+  magnitude: number | null; url: string;
+  /** The desk believes this reading is a corporate action, not a real move. */
+  suspect: boolean;
+}
+
+export interface DeskRun {
+  as_of: string; generated_at: string; universe_size: number | null;
+  /** Per scanner: "ok" | "failed" | "missing". An empty signal set means
+   *  nothing at all if the scanner that produces it did not run. */
+  stage_status: Record<string, string>;
 }

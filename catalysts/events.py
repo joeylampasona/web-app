@@ -142,8 +142,19 @@ def index_changes(symbols: Sequence[str], as_of: dt.date) -> list[Event]:
     return []
 
 
+# What the desk's `hour` field means, said plainly. An empty hour is unknown,
+# and unknown is not "after the close" — that guess is what this replaces.
+_HOUR_NOTE = {
+    "bmo": "Reports before the open.",
+    "amc": "Reports after the close.",
+    "": "The company has not said whether it reports before the open or after "
+        "the close, so treat both ends of that session as exposed.",
+}
+
+
 def build(market: Market, symbols: Sequence[str],
-          adapter: DataAdapter | None = None) -> Calendar:
+          adapter: DataAdapter | None = None,
+          desk_earnings: dict[str, tuple[dt.date, str]] | None = None) -> Calendar:
     adapter = adapter or get_adapter()
     as_of = market.as_of
     calendar = Calendar(as_of=as_of)
@@ -158,7 +169,26 @@ def build(market: Market, symbols: Sequence[str],
         log.warning("earnings ingestion failed: %s", exc)
         earnings = {}
 
+    # The Market Desk is authoritative where it has a date: it reads them from a
+    # dedicated source and carries the session half, where our own fallback is
+    # scraped and has to assume. It covers only the small share of the market
+    # reporting in any three-week window, though, so this is precedence and not
+    # replacement — and a symbol absent from it is not a symbol with no earnings
+    # coming, which is what its own schema says too.
+    desk = desk_earnings or {}
+    for symbol, (date, hour) in desk.items():
+        if symbol in set(symbols) and as_of <= date <= horizon:
+            # "confirmed", not True: this field is a three-way string and a bool
+            # would render as a status nothing on the site knows how to read.
+            # The desk takes its dates from a dedicated source, so confirmed is
+            # the honest value where it has one.
+            calendar.add(Event(symbol, EARNINGS, date, "confirmed",
+                               "Quarterly earnings",
+                               _HOUR_NOTE.get(hour, _HOUR_NOTE[""])))
+
     for symbol, rows in earnings.items():
+        if symbol in desk:
+            continue                # already dated by a better source
         for row in rows:
             if not (as_of <= row.date <= horizon):
                 continue

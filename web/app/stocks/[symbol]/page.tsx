@@ -50,7 +50,7 @@ export default async function StockPage({
   return (
     <div className="page">
       <DataBanner meta={getMeta()} />
-      <StockDetail stock={stock} />
+      <StockDetail stock={stock} run={getMeta()?.desk_run} />
     </div>
   );
 }
