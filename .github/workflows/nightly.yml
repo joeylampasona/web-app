@@ -113,6 +113,30 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: python -m cli publish
 
+      - name: Check what was actually built before publishing it
+        id: verify
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+
+          # The guard above checks intent, before any work. This checks the
+          # artefact. The very first nightly run passed its settings check and
+          # still pushed a fixture to the data branch, because the settings were
+          # not what the pipeline ended up using. Whatever out/ actually says it
+          # is, is what counts.
+          meta = json.loads(pathlib.Path("out/meta.json").read_text())
+          source = meta.get("data_source")
+          print(f"data_source: {source}  provider: {meta.get('provider')}  "
+                f"as_of: {meta.get('as_of')}  universe: {meta.get('universe_count')}")
+          if source != "live":
+              sys.exit(f"out/ was built from {source!r}, not live data. "
+                       "Refusing to publish it to the data branch.")
+          if not meta.get("schema_valid"):
+              sys.exit("out/ did not validate against its own schema. "
+                       "Refusing to publish it to the data branch.")
+          PY
+
       - name: Publish the data branch
         id: data
         if: steps.gate.outputs.run == 'true'
@@ -161,6 +185,7 @@ jobs:
           [ "${{ steps.scan.outcome }}"      = failure ] && stage=scan
           [ "${{ steps.catalysts.outcome }}" = failure ] && stage=catalysts
           [ "${{ steps.publish.outcome }}"   = failure ] && stage=publish
+          [ "${{ steps.verify.outcome }}"    = failure ] && stage=verify-output
           [ "${{ steps.data.outcome }}"      = failure ] && stage=data-branch
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           STAGE="$stage" RUN_URL="$run_url" python - <<'PY'
