@@ -13,7 +13,9 @@ export interface WatchRow {
 }
 
 export function WatchlistPanel({ rows }: { rows: WatchRow[] }) {
-  const { signedIn, symbols } = useWatchlist();
+  const { signedIn, ready, symbols, loading, error } = useWatchlist();
+
+  if (!ready) return null;
 
   if (!signedIn) {
     return (
@@ -24,6 +26,10 @@ export function WatchlistPanel({ rows }: { rows: WatchRow[] }) {
                 pinned to the top.`}
       />
     );
+  }
+
+  if (loading) {
+    return <p className="muted footnote">Fetching your list.</p>;
   }
 
   const held = rows.filter((row) => symbols.includes(row.symbol));
@@ -38,6 +44,11 @@ export function WatchlistPanel({ rows }: { rows: WatchRow[] }) {
 
   return (
     <div className="stack">
+      {error && (
+        <p className="footnote" style={{ color: "var(--warn)" }}>
+          Your list could not be read just now: {error}
+        </p>
+      )}
       <div className="grid-2">
         <div className="card">
           <div className="footnote muted">Average RS</div>

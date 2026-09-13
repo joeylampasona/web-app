@@ -10,7 +10,10 @@ export function AuthGate({
   blurb: string;
   children?: React.ReactNode;
 }) {
-  const { signedIn, requireSignUp } = useAuth();
+  const { ready, signedIn, requireSignUp } = useAuth();
+  // Until the stored session has been read, neither answer is true yet, and
+  // flashing "account needed" at someone who is signed in reads as a fault.
+  if (!ready) return null;
   if (signedIn) return <>{children}</>;
   return (
     <div className="card stack" style={{ alignItems: "flex-start" }}>

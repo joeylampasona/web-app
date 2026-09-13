@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { copy } from "@/lib/copy";
+import { downloadCsv, toCsv } from "@/lib/exportCsv";
 import { isRanked, price, ratio, rsText, signed } from "@/lib/format";
 import type { Bar, ScreenFile, Setup } from "@/lib/types";
 import { STAGE_COLOURS, StageBadge } from "./Badges";
@@ -28,7 +29,7 @@ export function ScreenBrowser({
   file: ScreenFile;
   bars: Record<string, Bar[]>;
 }) {
-  const { requireSignUp } = useAuth();
+  const { signedIn, requireSignUp } = useAuth();
   const [stage, setStage] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("rs_rating");
   const [descending, setDescending] = useState(true);
@@ -135,7 +136,14 @@ export function ScreenBrowser({
         <button
           type="button"
           className="control"
-          onClick={() => requireSignUp("Export this screen")}
+          onClick={() => {
+            if (!signedIn) {
+              requireSignUp("Export this screen");
+              return;
+            }
+            const scope = stage ? `${file.screen}-${stage}` : file.screen;
+            downloadCsv(`${scope}-${file.as_of}.csv`, toCsv(setups));
+          }}
           title={copy("screens.export")}
         >
           Export

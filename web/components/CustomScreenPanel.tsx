@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useSavedScreens } from "@/lib/useSavedScreens";
 import { isRanked } from "@/lib/format";
 import type { Bar, LearnFile, ParamSpec, ScreenFile, Setup } from "@/lib/types";
 import { StockCard } from "./StockCard";
@@ -29,7 +30,10 @@ export function CustomScreenPanel({
   files: ScreenFile[];
   bars: Record<string, Bar[]>;
 }) {
-  const { requireSignUp } = useAuth();
+  const { signedIn, requireSignUp } = useAuth();
+  const saved = useSavedScreens();
+  const [name, setName] = useState("");
+  const [naming, setNaming] = useState(false);
   const [screen, setScreen] = useState(learn[0]?.screen ?? "vcp");
   const spec = learn.find((l) => l.screen === screen) ?? learn[0];
   const file = files.find((f) => f.screen === screen);
@@ -123,8 +127,17 @@ export function CustomScreenPanel({
       </div>
 
       <div className="row wrap" style={{ gap: "var(--gap-sm)" }}>
-        <button type="button" className="control primary"
-                onClick={() => requireSignUp("Save this screen")}>
+        <button
+          type="button"
+          className="control primary"
+          onClick={() => {
+            if (!signedIn) {
+              requireSignUp("Save this screen");
+              return;
+            }
+            setNaming(true);
+          }}
+        >
           Save this screen
         </button>
         <button type="button" className="control"
@@ -132,6 +145,78 @@ export function CustomScreenPanel({
           Reset to defaults
         </button>
       </div>
+
+      {naming && signedIn && (
+        <form
+          className="card row wrap"
+          style={{ gap: "var(--gap-sm)" }}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const ok = await saved.save(name, screen, values);
+            if (ok) { setName(""); setNaming(false); }
+          }}
+        >
+          <input
+            className="control grow"
+            placeholder={`My ${spec.name} screen`}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            aria-label="Name this screen"
+            autoFocus
+          />
+          <button type="submit" className="control primary">Save</button>
+          <button type="button" className="control" onClick={() => setNaming(false)}>
+            Cancel
+          </button>
+        </form>
+      )}
+
+      {saved.error && (
+        <p className="footnote" style={{ color: "var(--warn)", margin: 0 }}>{saved.error}</p>
+      )}
+
+      {signedIn && saved.screens.length > 0 && (
+        <section className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <div className="eyebrow">Your screens</div>
+          {saved.screens.map((entry) => (
+            <div key={entry.id} className="card between"
+                 style={{ padding: "var(--pad-md) var(--pad-lg)" }}>
+              <button
+                type="button"
+                className="grow"
+                style={{ background: "none", border: "none", textAlign: "left",
+                         cursor: "pointer", color: "inherit", padding: 0 }}
+                onClick={() => {
+                  const target = learn.find((l) => l.screen === entry.screen);
+                  if (!target) return;
+                  setScreen(entry.screen);
+                  // Keys the detector has since dropped are ignored rather than
+                  // resetting the whole screen; keys it has gained take their
+                  // published default.
+                  const base = initial(target.params);
+                  for (const key of Object.keys(base)) {
+                    if (key in entry.values) base[key] = entry.values[key];
+                  }
+                  setValues(base);
+                }}
+              >
+                <div>{entry.name}</div>
+                <div className="caption dim">
+                  {learn.find((l) => l.screen === entry.screen)?.name ?? entry.screen}
+                </div>
+              </button>
+              <button
+                type="button"
+                className="control footnote"
+                onClick={() => void saved.remove(entry.id)}
+                aria-label={`Delete ${entry.name}`}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
 
       <p className="footnote muted">
         {setups.length} of {file?.total ?? 0} published {spec.name} setups still pass

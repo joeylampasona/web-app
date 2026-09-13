@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Drawer } from "vaul";
 import { LEGAL, TAGLINE } from "@/lib/copy";
-import { useAuth } from "@/lib/auth";
+import { AccountButton } from "./AccountButton";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface Destination {
@@ -62,7 +62,6 @@ const TABS: {
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { requireSignUp } = useAuth();
   const [openTab, setOpenTab] = useState<string | null>(null);
   const active = TABS.find((t) => pathname.startsWith(t.match))?.key ?? "screens";
 
@@ -92,14 +91,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="row" style={{ gap: "var(--gap-sm)" }}>
             <ThemeToggle />
-            <button
-              type="button"
-              className="control primary footnote"
-              style={{ minHeight: 36 }}
-              onClick={() => requireSignUp("Sign up")}
-            >
-              Sign up
-            </button>
+            <AccountButton />
           </div>
         </div>
       </header>

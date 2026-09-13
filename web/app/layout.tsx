@@ -7,6 +7,9 @@ export const metadata: Metadata = {
   title: "Base & Breakout",
   description: TAGLINE,
   manifest: "/manifest.webmanifest",
+  // Without this the browser guesses at /favicon.ico, which does not exist,
+  // and every page load carries a 404 that hides real ones in the console.
+  icons: { icon: "/icon.svg", apple: "/icon-maskable.svg" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Base & Breakout" },
   other: { "apple-mobile-web-app-capable": "yes" },
 };
