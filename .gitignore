@@ -229,3 +229,6 @@ web/tsconfig.tsbuildinfo
 
 # Machine-specific settings, layered over config/settings.yaml
 config/settings.local.yaml
+
+# Data fetched at build time on Vercel
+web/out/

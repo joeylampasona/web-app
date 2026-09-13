@@ -58,6 +58,16 @@ Then export your key and set `data.provider` to `polygon` in
 export POLYGON_API_KEY=your_key_here
 ```
 
+Machine-specific settings belong in `config/settings.local.yaml`, which is
+gitignored and layered over `config/settings.yaml`. Put your provider choice
+there and pulling a change to the tracked file will never collide with it:
+
+```
+data:
+  provider: polygon
+  backfill_days: 900
+```
+
 Out of the box the provider is `synthetic`: a deterministic offline fixture so
 every command below runs without credentials. It invents its own tickers and
 company names rather than putting fabricated prices under a real company's
@@ -148,6 +158,36 @@ the brief left a gap, and the two places this build deviates from it.
 
 ---
 
+## Deployment
+
+The site is a Next.js app that reads the JSON tree and nothing else. It has no
+database, so hosting it is just hosting static-ish files plus a couple of
+server routes.
+
+**How the data gets there.** The nightly Action force-pushes `out/` to a branch
+called `data` as a single commit, so that branch never accumulates history and
+a few megabytes of JSON a night never grows the repository. At build time,
+`web/scripts/fetch-data.sh` downloads that branch into `web/out`. The repository
+is public, so no credentials are involved anywhere in that path.
+
+**Vercel setup**, once the nightly job has run at least once:
+
+| Setting | Value |
+|---|---|
+| Framework | Next.js (detected) |
+| Root directory | `web` |
+| Build command | leave default — `vercel-build` in package.json is picked up |
+| Environment variables | none required |
+
+Pushing to the branch redeploys the site. The nightly job pushing to `data`
+does not, so add a Vercel deploy hook to the workflow if you want the site to
+refresh itself every night rather than on your next code change.
+
+**One thing does not work on Vercel:** a custom backtest run shells out to the
+Python engine, and Vercel's Node runtime has no Python. That route returns a
+clear message saying so. The precomputed default for each screen is served from
+the JSON and works normally.
+
 ## Scheduling
 
 `.github/workflows/nightly.yml` runs weekdays at 6:30pm Eastern and posts to
@@ -156,8 +196,19 @@ UTC only and does not follow US daylight saving, so both candidate hours are
 scheduled and the job checks the real Eastern hour before doing any work.
 Deployment is deliberately not scheduled.
 
-Secrets it expects: `POLYGON_API_KEY`, optionally `EDGAR_USER_AGENT` and
-`DISCORD_WEBHOOK_URL`.
+Secrets it expects, set under Settings → Secrets and variables → Actions:
+
+- `POLYGON_API_KEY` — required
+- `EDGAR_USER_AGENT` — a contactable address, e.g. `Your Name you@example.com`.
+  SEC throttles anonymous callers hard.
+- `DISCORD_WEBHOOK_URL` — optional, for failure alerts
+
+Trigger it by hand the first time: Actions → Nightly scan → Run workflow, with
+"Run even if it is not 6pm in New York" left on.
+
+The job caches the SQLite database between runs. If that cache is ever evicted
+the backfill starts over, which is about 100 minutes — the run will still
+succeed, it will just take longer.
 
 ---
 

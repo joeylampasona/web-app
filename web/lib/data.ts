@@ -8,7 +8,23 @@ import type {
 
 // The web layer reads static JSON the pipeline wrote. It never queries a
 // database. The one exception is a custom backtest run, which hits an API route.
-const OUT = path.resolve(process.cwd(), "..", "out");
+//
+// Two locations, in order: web/out when the build fetched it there (Vercel puts
+// nothing above the project root into the deployment), then the repository's
+// own out/ for local development.
+function resolveOut(): string {
+  const candidates = [
+    process.env.DATA_DIR,
+    path.join(process.cwd(), "out"),
+    path.resolve(process.cwd(), "..", "out"),
+  ].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, "meta.json"))) return candidate;
+  }
+  return candidates[candidates.length - 1];
+}
+
+const OUT = resolveOut();
 
 function read<T>(relative: string): T | null {
   try {

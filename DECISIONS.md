@@ -82,6 +82,21 @@ largest name in a theme emits read-throughs.
 
 ---
 
+## Decided since
+
+**Where `out/` lives in production: committed to a `data` branch, repository
+public.** The tree was 54MB extrapolated, almost all of it bars stored as JSON
+objects; as rows, and only for stocks actually on a screen, it is roughly 11MB.
+The nightly job force-pushes it as a single commit so the branch carries no
+history. A public repository means the Vercel build fetches it with no
+credentials at all, which also ends the recurring git authentication problem.
+Cloudflare R2 remains the escape hatch if the tree ever outgrows this.
+
+**Custom backtest runs do not work on Vercel.** The route shells out to the
+Python engine and Vercel's Node runtime has no Python. It returns a clear
+message; the precomputed default per screen is served from JSON and works. A
+separate worker would fix it if the feature turns out to matter.
+
 ## Still open, and worth deciding before launch
 
 1. **Verify the Polygon grouped daily endpoint on the free tier yourself.** It

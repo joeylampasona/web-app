@@ -21,7 +21,9 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    permissions:
+      contents: write
     env:
       POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
@@ -85,7 +87,28 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: python -m cli publish
 
-      - name: Upload the artefacts
+      - name: Publish the data branch
+        id: data
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A fresh repository inside out/ every night, force-pushed as a single
+          # commit. The data branch never accumulates history, so a few megabytes
+          # of JSON a night does not grow the repository forever.
+          cd out
+          rm -rf .git
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Data for $(date -u +%F)"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            HEAD:refs/heads/data
+          echo "Pushed $(find . -name '*.json' | wc -l | tr -d ' ') files to the data branch."
+
+      - name: Keep a copy as a run artefact
         if: steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +126,7 @@ jobs:
           [ "${{ steps.scan.outcome }}"      = failure ] && stage=scan
           [ "${{ steps.catalysts.outcome }}" = failure ] && stage=catalysts
           [ "${{ steps.publish.outcome }}"   = failure ] && stage=publish
+          [ "${{ steps.data.outcome }}"      = failure ] && stage=data-branch
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           STAGE="$stage" RUN_URL="$run_url" python - <<'PY'
           import json, os, urllib.request
