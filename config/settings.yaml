@@ -46,7 +46,8 @@ rankings:
   rs_windows:      { m3: 63, m6: 126, m12: 252 }
   rs_weights:      { m3: 0.40, m6: 0.30, m12: 0.30 }
   rs_min_history: 200          # sessions; below this the rating is "not ranked yet"
-  min_group_members: 10
+  min_group_members: 10        # industries: below this an average means little
+  min_theme_members: 4         # themes are curated; Quantum genuinely has five names
   leader_rs: 80
   breadth_series_days: 20
   near_high_pct: 5.0           # within 5% of the 52-week high counts as "near high"

@@ -32,7 +32,7 @@ def display_name(kind: str, slug: str, market: Market) -> str:
         return classify.theme_names().get(slug, slug.replace("-", " ").title())
     for symbol, industry in market.industries.items():
         if classify.slugify(industry) == slug:
-            return industry
+            return classify.pretty_industry(industry)
     return slug.replace("-", " ").title()
 
 
@@ -42,8 +42,15 @@ def aggregate(market: Market, bundle: Bundle, kind: str,
     """One row per group with 10+ members: RS, leaders, fresh breakouts, deltas."""
     breakouts = set(breakout_symbols)
     leader_rs = int(settings.get("rankings.leader_rs", 80))
-    floor = int(settings.get("rankings.min_group_members", 10)
-                if min_members is None else min_members)
+    if min_members is not None:
+        floor = int(min_members)
+    elif kind == "theme":
+        # A curated theme is allowed to be small. Quantum Computing has about
+        # five public names, and that is the point of it being a theme rather
+        # than an industry — the industry floor would simply delete it.
+        floor = int(settings.get("rankings.min_theme_members", 4))
+    else:
+        floor = int(settings.get("rankings.min_group_members", 10))
 
     groups = membership(market, kind)
     raw: dict[str, float] = {}
