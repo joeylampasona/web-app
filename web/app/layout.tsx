@@ -3,9 +3,32 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { TAGLINE } from "@/lib/copy";
 
+/**
+ * The address the site is served from, so relative preview-image URLs resolve.
+ * Vercel supplies VERCEL_URL per deployment; the explicit variable wins so a
+ * custom domain can override it, and localhost is the fallback for development.
+ */
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "Base & Breakout",
   description: TAGLINE,
+  // A pasted link used to render as a grey rectangle with a domain in it.
+  openGraph: {
+    type: "website",
+    siteName: "Base & Breakout",
+    title: "Base & Breakout",
+    description: TAGLINE,
+  },
+  twitter: { card: "summary_large_image", title: "Base & Breakout",
+             description: TAGLINE },
   manifest: "/manifest.webmanifest",
   // Without this the browser guesses at /favicon.ico, which does not exist,
   // and every page load carries a 404 that hides real ones in the console.
