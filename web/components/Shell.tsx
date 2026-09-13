@@ -35,6 +35,7 @@ const TABS: {
     key: "market", label: "Market", glyph: "◳", match: "/market",
     destinations: [
       { href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
+      { href: "/market/followthrough", title: "Did it work?", blurb: "What happened to the breakouts we showed." },
       { href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
       { href: "/market/rotation", title: "Rotation", blurb: "Strength now against momentum since last month." },
       { href: "/market/sectors", title: "Sector strength", blurb: "Strongest and weakest, heating and cooling." },

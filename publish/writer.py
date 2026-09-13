@@ -65,6 +65,7 @@ def _bars_for(market: Market, symbol: str, limit: int) -> list[list]:
 def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             calendar: ev.Calendar, iv_rows: list, diff_payload: dict,
             backtests: dict[str, dict] | None = None,
+            follow: dict | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -232,6 +233,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                "as_of": market.as_of.isoformat() if market.as_of else None,
                                "presets": {key: payload.get("settings", {})
                                            for key, payload in backtests.items()}}))
+
+    # ---- what happened to the breakouts we showed ---------------------
+    if follow:
+        written.append(_write(out / "breakouts" / "followthrough.json", follow))
 
     # ---- meta ---------------------------------------------------------
     provider = settings.get("data.provider", "polygon")

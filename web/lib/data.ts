@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type {
-  BacktestSummary, BreadthCard, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
+  BacktestSummary, BreadthCard, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
   ScreenFile, StockFile,
 } from "./types";
 
@@ -185,6 +185,10 @@ export function getBreakouts(date: string) {
     date: string; count: number; metric_set: string[];
     setups: import("./types").Setup[];
   }>(`breakouts/${date}.json`);
+}
+
+export function getFollowThrough() {
+  return read<FollowThroughFile>("breakouts/followthrough.json");
 }
 
 export function getBacktestOptions() {

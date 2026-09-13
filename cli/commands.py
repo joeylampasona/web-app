@@ -316,7 +316,7 @@ def _pipeline(conn, with_backtests: bool = True):
     from catalysts import events as ev, iv as ivmod
     from data.adapters import get_adapter
     from data.market import load
-    from patterns import scan
+    from patterns import followthrough, scan
     from patterns.params import SCREEN_KEYS
     from rankings import rs
 
@@ -333,6 +333,7 @@ def _pipeline(conn, with_backtests: bool = True):
     iv_rows = ivmod.compute(calendar, population, names, adapter)
 
     backtests: dict[str, dict] = {}
+    follow: dict = {}
     if with_backtests:
         earnings = {s: e.date for s in market.universe
                     if (e := calendar.next_earnings(s)) is not None}
@@ -349,15 +350,21 @@ def _pipeline(conn, with_backtests: bool = True):
             backtests[config.hash()] = summary
             print(f"    {index}/{len(SCREEN_KEYS)}  {screen} — "
                   f"{len(summary.get('trades', []))} trades", flush=True)
-    return market, bundle, result, changes, calendar, iv_rows, backtests
+        print("  → Checking what happened to recent breakouts.", flush=True)
+        follow = followthrough.compute(market, timeline)
+        for key, row in follow["screens"].items():
+            print(f"    {key} — {row['settled']} settled, {row['up']} up, "
+                  f"{row['failed_fast']} failed fast", flush=True)
+    return market, bundle, result, changes, calendar, iv_rows, backtests, follow
 
 
 def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()
     run = store.start_run(conn, "publish")
-    market, bundle, result, changes, calendar, iv_rows, backtests = _pipeline(conn)
-    written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests)
+    market, bundle, result, changes, calendar, iv_rows, backtests, follow = _pipeline(conn)
+    written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
+                             follow=follow)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

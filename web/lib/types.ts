@@ -169,3 +169,26 @@ export interface BacktestSummary {
     gross_return_pct: number; r_multiple: number; exit_reason: string; pnl: number;
   }[];
 }
+
+export interface BreakoutOutcome {
+  symbol: string; name: string; breakout_date: string; sessions_since: number;
+  breakout_close: number; pivot: number; last_close: number;
+  now_pct: number; peak_pct: number; worst_pct: number;
+  failed_fast: boolean; now_below_pivot: boolean;
+  rs_at_breakout: number | null;
+}
+
+export interface FollowThroughScreen {
+  screen: string; name: string; window_days: number;
+  total: number; settled: number; too_soon: number;
+  up: number; down: number; failed_fast: number; below_pivot: number;
+  median_now_pct: number | null; median_peak_pct: number | null;
+  share_up_pct: number | null; share_failed_pct: number | null;
+  breakouts: BreakoutOutcome[];
+}
+
+export interface FollowThroughFile {
+  as_of: string | null;
+  window_days: number;
+  screens: Record<string, FollowThroughScreen>;
+}
