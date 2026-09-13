@@ -17,9 +17,29 @@ def _read(name: str) -> dict[str, Any]:
         return yaml.safe_load(fh) or {}
 
 
+def _merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base)
+    for key, value in (overlay or {}).items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
 @functools.lru_cache(maxsize=1)
 def settings() -> dict[str, Any]:
-    return _read("settings.yaml")
+    """settings.yaml, with settings.local.yaml layered on top if it exists.
+
+    The local file is gitignored. Machine-specific choices — which provider,
+    how much history — belong there, so pulling a change to the tracked file
+    never collides with them.
+    """
+    base = _read("settings.yaml")
+    local_path = CONFIG_DIR / "settings.local.yaml"
+    if local_path.exists():
+        return _merge(base, _read("settings.local.yaml"))
+    return base
 
 
 @functools.lru_cache(maxsize=1)

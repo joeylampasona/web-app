@@ -88,7 +88,7 @@ export interface StockFile {
   list_date: string | null; as_of: string;
   rs_rating: Rating; rs_change_m1: number | null; market_cap: number | null;
   quadrant: string | null;
-  bars: Bar[];
+  bars: Bar[];          // expanded from compact rows by lib/data
   setups: Setup[];
   primary_setup: Setup | null;
   base_history: BaseStructure[];

@@ -127,8 +127,25 @@ export function getAllLearn(): LearnFile[] {
   return SCREEN_KEYS.map(getLearn).filter((l): l is LearnFile => l !== null);
 }
 
+/** The pipeline writes bars as rows to keep the tree small. Expand at this
+ *  boundary so every component keeps seeing plain objects. */
+function expandBars(raw: unknown): import("./types").Bar[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[]).map((row) => {
+    if (Array.isArray(row)) {
+      const [time, open, high, low, close, volume] = row as [
+        string, number, number, number, number, number,
+      ];
+      return { time, open, high, low, close, volume };
+    }
+    return row as import("./types").Bar;
+  });
+}
+
 export function getStock(symbol: string): StockFile | null {
-  return read<StockFile>(`stocks/${symbol.toUpperCase()}.json`);
+  const file = read<StockFile>(`stocks/${symbol.toUpperCase()}.json`);
+  if (!file) return null;
+  return { ...file, bars: expandBars(file.bars as unknown) };
 }
 
 export function listStocks(): string[] {
@@ -186,22 +203,11 @@ export interface SearchRow {
   themes: string[];
 }
 
-let searchCache: SearchRow[] | null = null;
-
 export function getSearchIndex(): SearchRow[] {
-  if (searchCache) return searchCache;
-  const rows: SearchRow[] = [];
-  for (const symbol of listStocks()) {
-    const stock = getStock(symbol);
-    if (!stock) continue;
-    rows.push({
-      symbol: stock.symbol, name: stock.name, industry: stock.industry,
-      rs_rating: stock.rs_rating, themes: stock.themes,
-    });
-  }
-  rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
-  searchCache = rows;
-  return rows;
+  // One file, written by the pipeline. This used to open every stock file on
+  // the first keystroke and hold the lot in memory for the life of the process.
+  const file = read<{ rows: SearchRow[] }>("search.json");
+  return file?.rows ?? [];
 }
 
 /** Trimmed bars for a set of symbols, for the charts on a card list. */
@@ -209,7 +215,7 @@ export function barsFor(symbols: string[], limit = 90): Record<string, import(".
   const out: Record<string, import("./types").Bar[]> = {};
   for (const symbol of symbols) {
     const stock = getStock(symbol);
-    if (stock) out[symbol] = stock.bars.slice(-limit);
+    if (stock?.bars?.length) out[symbol] = stock.bars.slice(-limit);
   }
   return out;
 }

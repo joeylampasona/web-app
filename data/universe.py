@@ -296,16 +296,25 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
         priced.append((r, close, adv))
     funnel.add(f"price > ${min_price:,.0f}", len(priced), len(quoted))
 
+    # Share counts move once a quarter, so a cached one is as good as a fresh
+    # one and saves the nightly job twenty minutes of SEC requests.
     wanted = [r["symbol"] for r, _, _ in priced]
+    cache_days = int(settings.get("edgar.shares_cache_days", 30))
+    shares = {s: v for s, v in store.get_shares(conn, cache_days).items() if s in set(wanted)}
+    stale = [s for s in wanted if s not in shares]
     if notice:
-        notice(f"Asking SEC EDGAR for shares outstanding on {len(wanted):,} "
-               f"companies. Rate-limited, so expect 15-30 minutes.")
+        notice(f"Shares outstanding: {len(shares):,} cached, {len(stale):,} to fetch"
+               + (f" from SEC — roughly {max(1, len(stale) // 350)} minutes." if stale
+                  else "."))
 
     def edgar_progress(done: int, total: int, found: int) -> None:
         if notice:
             notice(f"  EDGAR {done:,}/{total:,} — {found:,} share counts so far")
 
-    shares = shares_outstanding(wanted, progress=edgar_progress)
+    if stale:
+        fetched = shares_outstanding(stale, progress=edgar_progress)
+        store.set_shares(conn, fetched)
+        shares.update(fetched)
     capped: list[tuple[sqlite3.Row, float, float, float]] = []
     for r, close, adv in priced:
         sh = shares.get(r["symbol"])

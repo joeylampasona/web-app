@@ -48,9 +48,17 @@ def _write(path: pathlib.Path, payload: Any) -> pathlib.Path:
     return path
 
 
-def _bars_for(market: Market, symbol: str, limit: int) -> list[dict]:
-    return [{"time": b.date.isoformat(), "open": b.open, "high": b.high,
-             "low": b.low, "close": b.close, "volume": b.volume}
+# Bars are the whole weight of this tree: as objects they were 24KB a stock and
+# 54MB overall, which is not something you commit every weeknight. As rows they
+# are under half that, and the web layer expands them back at its own boundary
+# so no component knows the difference.
+BAR_FORMAT = ["time", "open", "high", "low", "close", "volume"]
+
+
+def _bars_for(market: Market, symbol: str, limit: int) -> list[list]:
+    if limit <= 0:          # [-0:] is the whole list, not none of it
+        return []
+    return [[b.date.isoformat(), b.open, b.high, b.low, b.close, b.volume]
             for b in (market.series.get(symbol) or [])[-limit:]]
 
 
@@ -139,11 +147,27 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                               _group_payload(row, setups_by_symbol, market, bundle)))
 
     # ---- stocks -------------------------------------------------------
-    bar_limit = int(settings.get("publish.stocks_bars", 260))
+    bar_limit = int(settings.get("publish.stocks_bars", 180))
     for symbol in market.universe:
+        # Only a stock on a screen has a chart to draw, so only it needs bars.
+        limit = bar_limit if setups_by_symbol.get(symbol) else 0
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
-                                             calendar, bar_limit)))
+                                             calendar, limit)))
+
+    # One search index, so the web layer never opens two thousand files to
+    # answer a keystroke.
+    written.append(_write(out / "search.json", {
+        "as_of": as_of.isoformat(),
+        "rows": [{
+            "symbol": symbol,
+            "name": market.refs[symbol].name if symbol in market.refs else symbol,
+            "industry": classify.pretty_industry(market.industries.get(symbol, "")),
+            "rs_rating": bundle.now.get(symbol),
+            "themes": market.themes.get(symbol, []),
+            "on_screen": sorted({s.screen for s in setups_by_symbol.get(symbol, [])}),
+        } for symbol in market.universe],
+    }))
 
     # ---- catalysts ----------------------------------------------------
     upcoming = sorted((e for rows in calendar.by_ticker.values() for e in rows
@@ -296,6 +320,7 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                      rotation.quadrant_for(bundle.now.get(symbol)
                                            if isinstance(bundle.now.get(symbol), int) else None,
                                            bundle.change(symbol, "m1"))),
+        "bars_format": BAR_FORMAT,
         "bars": _bars_for(market, symbol, bar_limit),
         "setups": [s.to_json() for s in setups],
         "primary_setup": primary.to_json() if primary else None,

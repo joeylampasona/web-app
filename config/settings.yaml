@@ -22,6 +22,7 @@ edgar:
   # SEC asks for a contactable UA. Override with EDGAR_USER_AGENT.
   user_agent_env: EDGAR_USER_AGENT
   default_user_agent: "base-and-breakout-site (contact: operator@example.com)"
+  shares_cache_days: 30        # share counts move quarterly; do not refetch nightly
 
 universe:
   min_price: 5.0
@@ -96,4 +97,4 @@ backtest:
 publish:
   out_dir: out
   breakouts_retained: 30
-  stocks_bars: 260             # sessions of bars written per stock file
+  stocks_bars: 180             # sessions per stock; only stocks on a screen get any

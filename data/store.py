@@ -83,6 +83,26 @@ def upsert_bars(conn: sqlite3.Connection, bars: Iterable[Bar]) -> int:
     return len(rows)
 
 
+def get_shares(conn: sqlite3.Connection, max_age_days: int = 30) -> dict[str, float]:
+    """Cached share counts still inside their freshness window."""
+    rows = conn.execute(
+        "SELECT symbol, shares_outstanding FROM fundamentals"
+        " WHERE shares_outstanding IS NOT NULL"
+        " AND fetched_at > datetime('now', ?)", (f"-{int(max_age_days)} days",))
+    return {r["symbol"]: float(r["shares_outstanding"]) for r in rows}
+
+
+def set_shares(conn: sqlite3.Connection, mapping: dict[str, float]) -> int:
+    conn.executemany(
+        "INSERT INTO fundamentals(symbol, shares_outstanding, fetched_at)"
+        " VALUES (?,?,datetime('now'))"
+        " ON CONFLICT(symbol) DO UPDATE SET shares_outstanding=excluded.shares_outstanding,"
+        " fetched_at=datetime('now')",
+        [(symbol, value) for symbol, value in mapping.items() if value])
+    conn.commit()
+    return len(mapping)
+
+
 def set_industries(conn: sqlite3.Connection, mapping: dict[str, str]) -> int:
     conn.executemany(
         "UPDATE tickers SET industry=?, updated_at=datetime('now') WHERE symbol=?",

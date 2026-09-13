@@ -226,3 +226,6 @@ web/out/
 
 # TypeScript incremental build cache
 web/tsconfig.tsbuildinfo
+
+# Machine-specific settings, layered over config/settings.yaml
+config/settings.local.yaml
