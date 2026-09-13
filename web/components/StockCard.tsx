@@ -31,6 +31,9 @@ export function StockCard({
   const ohlc = setup.ohlc;
   const lazy = useLazyBars(setup.symbol, !bars);
   const drawn = bars ?? lazy.bars;
+  // Eager cards (above the fold) always draw. The rest draw only while they
+  // are near the viewport, so the page never holds hundreds of live charts.
+  const show = bars ? true : lazy.visible;
   const rows = variant === "breakout" ? breakoutRows(setup) : setupRows(setup);
 
   // The chart hands its canvas up so Share can put the real thing in the image
@@ -73,10 +76,10 @@ export function StockCard({
         {"   "}RS {rsText(setup.rs_rating)}
       </div>
 
-      {/* Holds the card's height steady while the chart is on its way, so a
-          list does not jump about as charts land. */}
-      <div ref={lazy.ref} style={{ minHeight: drawn?.length ? undefined : 210 }}>
-        {drawn && drawn.length > 0 && (
+      {/* Holds the card's height steady whether or not the chart is mounted, so
+          the list does not jump about as charts appear and are torn down. */}
+      <div ref={lazy.ref} style={{ minHeight: 210 }}>
+        {show && drawn && drawn.length > 0 && (
         <SetupChart
           bars={drawn}
           pivot={setup.pivot}

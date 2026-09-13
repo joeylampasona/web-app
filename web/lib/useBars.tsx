@@ -77,32 +77,47 @@ export function BarsProvider({
   return <BarsContext.Provider value={value}>{children}</BarsContext.Provider>;
 }
 
-/** Bars for one symbol, fetched once the element is near the viewport. */
+/**
+ * Bars for one symbol, and whether this card should currently draw a chart.
+ *
+ * `visible` goes both ways on purpose. A chart is a live object holding canvas
+ * buffers, and a screen holds up to three hundred cards; scrolling through them
+ * all built three hundred chart instances that were never torn down, and iOS
+ * Safari killed the tab — "a problem repeatedly occurred" — long before the
+ * bottom of the list. Charts are unmounted once they are well off screen, which
+ * runs their cleanup and frees the canvas.
+ *
+ * The bars themselves stay cached, so scrolling back redraws instantly and
+ * fetches nothing.
+ */
 export function useLazyBars(symbol: string, enabled = true) {
   const context = useContext(BarsContext);
   const ref = useRef<HTMLDivElement>(null);
-  const [near, setNear] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!enabled || near) return;
+    if (!enabled) return;
     const element = ref.current;
     if (!element) return;
-    // No IntersectionObserver (old browser, or a test runner) means draw it
+    // No IntersectionObserver (an old browser, or a test runner) means draw it
     // rather than leave a permanent hole.
-    if (typeof IntersectionObserver === "undefined") { setNear(true); return; }
+    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
     const observer = new IntersectionObserver(
-      (entries) => { if (entries.some((e) => e.isIntersecting)) setNear(true); },
-      // Start fetching before the card is on screen, so scrolling finds the
-      // chart already there rather than watching it appear.
-      { rootMargin: "600px 0px" },
+      (entries) => {
+        const entry = entries[entries.length - 1];
+        if (entry) setVisible(entry.isIntersecting);
+      },
+      // Generous enough that the chart is already drawn before the card is on
+      // screen, and that mounting and unmounting both happen well out of sight.
+      { rootMargin: "800px 0px" },
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [enabled, near]);
+  }, [enabled]);
 
   useEffect(() => {
-    if (near && context) context.request(symbol);
-  }, [near, symbol, context]);
+    if (visible && context) context.request(symbol);
+  }, [visible, symbol, context]);
 
-  return { ref, bars: context?.get(symbol) };
+  return { ref, visible, bars: context?.get(symbol) };
 }
