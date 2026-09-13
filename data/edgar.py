@@ -33,7 +33,8 @@ def _ticker_to_cik(session: requests.Session) -> dict[str, str]:
     return out
 
 
-def shares_outstanding(symbols: Iterable[str]) -> dict[str, float]:
+def shares_outstanding(symbols: Iterable[str],
+                       progress=None) -> dict[str, float]:
     """Latest reported shares outstanding per symbol. Missing symbols are absent.
 
     With the synthetic provider this returns deterministic fixture counts
@@ -54,7 +55,12 @@ def shares_outstanding(symbols: Iterable[str]) -> dict[str, float]:
         return {}
 
     out: dict[str, float] = {}
-    for sym in symbols:
+    total = len(symbols)
+    for index, sym in enumerate(symbols, 1):
+        # One request per company at SEC's rate limit is minutes of silence
+        # otherwise, which is indistinguishable from a hang.
+        if progress and (index % 100 == 0 or index == total):
+            progress(index, total, len(out))
         cik = cik_map.get(sym)
         if not cik:
             continue

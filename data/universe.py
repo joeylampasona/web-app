@@ -247,7 +247,8 @@ def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str])
     return not any(frag.upper() in name for frag in fragments)
 
 
-def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funnel:
+def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
+          notice=None) -> Funnel:
     cfg = settings.get("universe", {}) or {}
     allowed = [t.upper() for t in cfg.get("allowed_types", ["CS"])]
     fragments = cfg.get("exclude_name_fragments", []) or []
@@ -270,6 +271,9 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funne
     funnel.add("US common stocks only", len(commons), total)
 
     symbols = [r["symbol"] for r in commons]
+    if notice:
+        notice(f"Loading bars for {len(symbols):,} names out of the database — "
+               f"a minute or two, no output while it works.")
     series = store.load_many(conn, symbols)
 
     # Having a bar on the latest session is its own stage. Folded into the price
@@ -292,7 +296,16 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funne
         priced.append((r, close, adv))
     funnel.add(f"price > ${min_price:,.0f}", len(priced), len(quoted))
 
-    shares = shares_outstanding([r["symbol"] for r, _, _ in priced])
+    wanted = [r["symbol"] for r, _, _ in priced]
+    if notice:
+        notice(f"Asking SEC EDGAR for shares outstanding on {len(wanted):,} "
+               f"companies. Rate-limited, so expect 15-30 minutes.")
+
+    def edgar_progress(done: int, total: int, found: int) -> None:
+        if notice:
+            notice(f"  EDGAR {done:,}/{total:,} — {found:,} share counts so far")
+
+    shares = shares_outstanding(wanted, progress=edgar_progress)
     capped: list[tuple[sqlite3.Row, float, float, float]] = []
     for r, close, adv in priced:
         sh = shares.get(r["symbol"])
@@ -330,4 +343,4 @@ def refresh(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     check_provenance(conn, adapter.name)
     refresh_reference(conn, adapter)
     backfill(conn, adapter, progress=progress, notice=notice)
-    return build(conn, adapter)
+    return build(conn, adapter, notice=notice)
