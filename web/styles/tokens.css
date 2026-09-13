@@ -1,0 +1,153 @@
+/* Ink & Amber — the design system. Generated from DESIGN_SYSTEM_ink_amber.md.
+ *
+ * Three rules this file exists to enforce:
+ *   1. Brand amber never appears in price data. Green and red never appear in
+ *      chrome. If a button is green the eye cannot separate interface from P&L.
+ *   2. Gain and loss are never encoded with colour alone. Every price change
+ *      carries a ▲ or ▼ glyph and an explicit + or −. The glyph is not
+ *      decorative and must not be removed for visual cleanliness.
+ *   3. One accent, sparingly. Amber is the primary button, the active nav item,
+ *      the pivot line and the current base fill. Nowhere else.
+ *
+ * No component may write a raw hex value. Reference these by name.
+ */
+
+:root {
+  /* Surfaces — dark (default) */
+  --surface-0:        #0C0D12;  /* page canvas */
+  --surface-1:        #12131A;  /* card */
+  --surface-2:        #1A1C25;  /* raised card, sheet */
+  --surface-3:        #232530;  /* popover, dropdown */
+
+  /* Text */
+  --text-primary:     #FAF9F6;
+  --text-secondary:   #A8AAB8;
+  --text-muted:       #6E7180;
+  --text-disabled:    #4A4D59;
+
+  /* Borders */
+  --border:           #24262F;
+  --border-strong:    #2E3039;
+  --border-stronger:  #3A3D48;
+
+  /* Brand */
+  --brand:            #F5A524;
+  --brand-hover:      #FFB944;
+  --brand-muted:      rgba(245,165,36,0.14);
+  --brand-border:     #4A3410;
+  --on-brand:         #2B1A02;  /* text on a solid amber fill */
+
+  /* Price semantics — DATA ONLY */
+  --gain:             #16A34A;
+  --gain-muted:       rgba(22,163,74,0.12);
+  --loss:             #DC2626;
+  --loss-muted:       rgba(220,38,38,0.12);
+  --flat:             #6E7180;
+
+  /* Chart semantics — constant across every chart on the site */
+  --chart-pivot:      #F5A524;  /* dashed */
+  --chart-base-fill:  rgba(245,165,36,0.14);
+  --chart-base-line:  #F5A524;
+  --chart-prior-base: #4A4D59;  /* dashed, prior contractions */
+  --chart-ma-50:      #38BDF8;
+  --chart-ma-200:     #A78BFA;
+  --chart-vol-up:     rgba(22,163,74,0.55);
+  --chart-vol-down:   rgba(220,38,38,0.45);
+  --chart-grid:       #1E202A;
+  --chart-axis:       #6E7180;
+
+  /* Status — chrome, never price */
+  --warn:             #EAB308;  /* earnings proximity, squat, failed poke */
+  --warn-bg:          rgba(234,179,8,0.12);
+  --warn-border:      #5C4708;
+  --info:             #38BDF8;
+  --provisional:      #EAB308;
+
+  /* Stage colours — Screens page buckets */
+  --stage-forming:    #A8AAB8;
+  --stage-breakout:   #16A34A;
+  --stage-climbing:   #38BDF8;
+  --stage-playedout:  #6E7180;
+
+  /* Quadrant colours — rotation scatter */
+  --q-powering:       #16A34A;
+  --q-turning:        #38BDF8;
+  --q-cooling:        #F5A524;
+  --q-falling:        #DC2626;
+
+  /* Typography */
+  --font-sans:        'Inter', system-ui, sans-serif;
+  --font-mono:        'JetBrains Mono', ui-monospace, monospace;
+
+  --size-caption:     11px;
+  --size-footnote:    12px;
+  --size-body:        14px;
+  --size-lead:        16px;
+  --size-h3:          18px;
+  --size-h2:          22px;
+  --size-h1:          28px;
+  --size-hero:        40px;  /* backtest end-capital only */
+
+  --weight-regular:   400;
+  --weight-medium:    500;
+
+  /* Layout */
+  --radius:           8px;
+  --radius-card:      12px;
+  --radius-pill:      999px;
+
+  --pad-sm:           8px;
+  --pad-md:           12px;
+  --pad-lg:           16px;
+  --pad-xl:           24px;
+
+  --gap-xs:           4px;
+  --gap-sm:           8px;
+  --gap-md:           12px;
+  --gap-lg:           16px;
+  --gap-xl:           24px;
+
+  --h-control:        44px;  /* minimum tap target, do not go below */
+}
+
+[data-theme="light"] {
+  --surface-0:        #F5F4F0;
+  --surface-1:        #FAF9F6;
+  --surface-2:        #FFFFFF;
+  --surface-3:        #FFFFFF;
+
+  --text-primary:     #14151A;
+  --text-secondary:   #55585F;
+  --text-muted:       #82858E;
+  --text-disabled:    #B0B2B8;
+
+  --border:           #E2E0DA;
+  --border-strong:    #D0CEC7;
+  --border-stronger:  #B8B6AE;
+
+  --brand:            #B8791A;   /* darkened for contrast on light */
+  --brand-hover:      #9A6414;
+  --brand-muted:      rgba(184,121,26,0.12);
+  --brand-border:     #E8C88A;
+  --on-brand:         #FFFFFF;
+
+  --gain:             #15803D;
+  --loss:             #B91C1C;
+
+  --chart-pivot:      #B8791A;
+  --chart-base-fill:  rgba(184,121,26,0.12);
+  --chart-base-line:  #B8791A;
+  --chart-prior-base: #B0B2B8;
+  --chart-grid:       #E8E6E0;
+  --chart-ma-50:      #0284C7;
+  --chart-ma-200:     #7C3AED;
+
+  --warn:             #A16207;
+  --warn-bg:          rgba(161,98,7,0.10);
+  --warn-border:      #E0C48A;
+
+  --stage-forming:    #55585F;
+  --stage-climbing:   #0284C7;
+  --q-turning:        #0284C7;
+  --q-cooling:        #B8791A;
+}

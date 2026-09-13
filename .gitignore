@@ -8,18 +8,18 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -216,3 +216,19 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project artefacts
+var/
+out/
+web/node_modules/
+web/.next/
+web/out/
+
+# TypeScript incremental build cache
+web/tsconfig.tsbuildinfo
+
+# Machine-specific settings, layered over config/settings.yaml
+config/settings.local.yaml
+
+# Data fetched at build time on Vercel
+web/out/
