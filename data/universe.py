@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from data import classify, settings, store
 from data.adapters import DataAdapter, get_adapter
-from data.edgar import shares_outstanding
+from data.edgar import industries as edgar_industries, shares_outstanding
 from data.types import Bar
 
 log = logging.getLogger(__name__)
@@ -321,17 +321,41 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     funnel.add(f"{lookback}-day avg $ volume > ${min_adv/1e6:,.0f}M", len(liquid), len(capped))
     funnel.final = len(liquid)
 
+    # Industry, for the survivors that do not have one yet. Polygon's ticker list
+    # endpoint carries no industry at all, which left every name Unclassified and
+    # silently emptied the industry table, the treemap, sector strength and most
+    # of the themes. Cached in the tickers table, so this costs nothing tomorrow.
+    missing = [r["symbol"] for r, _, _, _ in liquid if not (r["industry"] or "").strip()]
+    if missing:
+        if notice:
+            notice(f"{len(missing):,} names have no industry yet — asking SEC. "
+                   f"About four minutes, and only on the first run.")
+
+        def industry_progress(done: int, total: int, found: int) -> None:
+            if notice:
+                notice(f"  industries {done:,}/{total:,} — {found:,} classified")
+
+        found = edgar_industries(missing, progress=industry_progress)
+        store.set_industries(conn, found)
+        if notice:
+            notice(f"Classified {len(found):,} of {len(missing):,}.")
+    else:
+        found = {}
+
+    def industry_of(row: sqlite3.Row) -> str:
+        return (found.get(row["symbol"]) or row["industry"] or "").strip() or "Unclassified"
+
     conn.execute("DELETE FROM universe")
     conn.executemany(
         "INSERT INTO universe(symbol, as_of, price, market_cap, adv20, industry, passed)"
         " VALUES (?,?,?,?,?,?,1)",
-        [(r["symbol"], as_of.isoformat(), close, cap, adv, r["industry"] or "Unclassified")
+        [(r["symbol"], as_of.isoformat(), close, cap, adv, industry_of(r))
          for r, close, adv, cap in liquid],
     )
     conn.commit()
 
     classify.write_theme_members(
-        conn, [(r["symbol"], r["industry"] or "", cap) for r, _, _, cap in liquid])
+        conn, [(r["symbol"], industry_of(r), cap) for r, _, _, cap in liquid])
     return funnel
 
 

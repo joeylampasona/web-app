@@ -23,13 +23,20 @@ def _user_agent() -> str:
                         cfg.get("default_user_agent", "base-and-breakout-site"))
 
 
+_CIK_CACHE: dict[str, str] | None = None
+
+
 def _ticker_to_cik(session: requests.Session) -> dict[str, str]:
+    global _CIK_CACHE
+    if _CIK_CACHE is not None:
+        return _CIK_CACHE
     url = "https://www.sec.gov/files/company_tickers.json"
     resp = session.get(url, headers={"User-Agent": _user_agent()}, timeout=30)
     resp.raise_for_status()
     out: dict[str, str] = {}
     for row in json.loads(resp.text).values():
         out[str(row["ticker"]).upper()] = f"CIK{int(row['cik_str']):010d}"
+    _CIK_CACHE = out
     return out
 
 
@@ -78,4 +85,56 @@ def shares_outstanding(symbols: Iterable[str],
             out[sym] = float(latest["val"])
         except Exception as exc:                   # noqa: BLE001
             log.debug("EDGAR lookup failed for %s: %s", sym, exc)
+    return out
+
+
+def industries(symbols: Iterable[str], progress=None) -> dict[str, str]:
+    """Standard industry description per symbol, from SEC's submissions file.
+
+    Polygon's ticker *list* endpoint does not carry an industry — only the
+    per-ticker details endpoint does, and 2,000 of those at five calls a minute
+    is seven hours. SEC allows ten requests a second, so the same coverage takes
+    about four minutes.
+
+    Anything missing is simply absent from the result, which leaves the caller
+    with the same "Unclassified" it would have had anyway.
+    """
+    symbols = [s.upper() for s in symbols]
+    if settings.get("data.provider") == "synthetic":
+        return {}
+
+    base = (settings.get("edgar.base_url") or "https://data.sec.gov").rstrip("/")
+    session = requests.Session()
+    try:
+        cik_map = _ticker_to_cik(session)
+    except Exception as exc:                      # noqa: BLE001
+        log.warning("EDGAR ticker map unavailable: %s", exc)
+        return {}
+
+    out: dict[str, str] = {}
+    total = len(symbols)
+    for index, sym in enumerate(symbols, 1):
+        if progress and (index % 100 == 0 or index == total):
+            progress(index, total, len(out))
+        cik = cik_map.get(sym)
+        if not cik:
+            continue
+        try:
+            resp = session.get(f"{base}/submissions/{cik}.json",
+                               headers={"User-Agent": _user_agent()}, timeout=30)
+            time.sleep(0.11)                       # stay under 10 req/s
+            if resp.status_code != 200:
+                continue
+            payload = resp.json()
+            # Field name defended rather than assumed.
+            label = (payload.get("sicDescription")
+                     or payload.get("sic_description")
+                     or "")
+            if not label:
+                code = payload.get("sic") or payload.get("sicCode")
+                label = f"SIC {code}" if code else ""
+            if label:
+                out[sym] = str(label).strip().title()
+        except Exception as exc:                   # noqa: BLE001
+            log.debug("EDGAR industry lookup failed for %s: %s", sym, exc)
     return out

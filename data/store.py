@@ -83,6 +83,14 @@ def upsert_bars(conn: sqlite3.Connection, bars: Iterable[Bar]) -> int:
     return len(rows)
 
 
+def set_industries(conn: sqlite3.Connection, mapping: dict[str, str]) -> int:
+    conn.executemany(
+        "UPDATE tickers SET industry=?, updated_at=datetime('now') WHERE symbol=?",
+        [(industry, symbol) for symbol, industry in mapping.items() if industry])
+    conn.commit()
+    return len(mapping)
+
+
 def set_kv(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.execute(
         "INSERT INTO kv(key,value) VALUES (?,?)"

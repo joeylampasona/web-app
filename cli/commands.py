@@ -31,7 +31,10 @@ def cmd_universe(args) -> int:
             funnel = universe.refresh(conn, progress=progress, notice=notice,
                                       reset=getattr(args, "reset", False))
         else:
-            funnel = universe.build(conn)
+            def notice(text: str) -> None:
+                print(f"  → {text}")
+
+            funnel = universe.build(conn, notice=notice)
     except universe.ProviderMismatch as exc:
         store.finish_run(conn, run, "failed", str(exc))
         _banner("Stopped — provider mismatch")
