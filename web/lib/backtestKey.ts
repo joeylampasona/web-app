@@ -3,7 +3,7 @@ import type { BacktestSummary } from "./types";
 /** Every setting the engine accepts, allow-listed. Nothing outside these sets
  *  reaches a shell or a workflow input. Mirrors backtest/settings.py OPTIONS. */
 export const ALLOWED = {
-  screen: ["vcp", "blue_sky", "multi_year", "ipo"],
+  screen: ["vcp", "blue_sky", "multi_year", "ipo", "flat_base", "cup_and_handle"],
   enter: ["breakout_close", "at_pivot"],
   exit_rule: ["trail_50d", "trail_30w", "take_25"],
   positions: [3, 5, 8, 10],

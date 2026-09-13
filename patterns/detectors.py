@@ -305,6 +305,109 @@ def _tightening(series: Series, params: Params, structure: bases.Structure) -> b
             and 1.0 / dry <= float(params.max_second_half_volume_ratio))
 
 
+def _flat(series: Series, params: Params, structure: bases.Structure) -> bool:
+    """A flat base is a shallow, level shelf — not merely a short one.
+
+    Two things separate it from any other pause. It is shallow, which the depth
+    parameter already covers. And it is *level*: a base that drifts steadily
+    downward through its own span is a decline, not a shelf, however shallow.
+    So the second half's lows must not sit materially below the first half's.
+    """
+    bars = series.bars
+    start, end = structure.start_idx, structure.end_idx
+    span = end - start + 1
+    if span < 10:
+        return False
+    mid = start + span // 2
+    first_low = min(b.low for b in bars[start:mid])
+    second_low = min(b.low for b in bars[mid:end + 1])
+    if first_low <= 0:
+        return False
+    drift_pct = 100.0 * (first_low - second_low) / first_low
+    return drift_pct <= float(params.max_downward_drift_pct)
+
+
+def _cup_and_handle(series: Series, params: Params,
+                    structure: bases.Structure) -> bool:
+    """A rounded bottom with a small pause below the lid, in that order.
+
+    Four things have to be true. Each rules out a shape that would otherwise
+    pass, and three of them were added because a shape did pass:
+
+    1. The low sits in the middle of the base. A low at the left edge is a
+       recovery; a low at the right edge is still a fall.
+    2. It is *round*, not a V. A V also has its low in the middle — that check
+       alone let a sharp fall and an equally sharp bounce through. What tells
+       them apart is time spent near the bottom: a cup lingers there, a V passes
+       through it in a few sessions.
+    3. Both rims come back to a similar height, or the stock is still climbing
+       back to where it was rather than rounding out.
+    4. The handle is short, shallow and high in the cup. Its length is measured
+       from where it actually began — the last touch of the right rim — because
+       looking at a fixed window at the end made a three-month slide look like a
+       three-week pause.
+    """
+    bars = series.bars
+    start, end = structure.start_idx, structure.end_idx
+    span = end - start + 1
+    if span < 25:
+        return False
+    segment = bars[start:end + 1]
+    lows = [b.low for b in segment]
+    highs = [b.high for b in segment]
+    depth = structure.pivot - structure.low
+    if depth <= 0:
+        return False
+
+    # 1. The low belongs in the middle.
+    low_idx = lows.index(min(lows))
+    if not (0.25 <= low_idx / max(1, span - 1) <= 0.75):
+        return False
+
+    # 2. Round, not V. How many sessions were spent in the bottom of the range?
+    floor = structure.low + depth * 0.4
+    time_low = sum(1 for b in segment if b.close <= floor) / span
+    if time_low < float(params.min_time_at_lows):
+        return False
+
+    # 3. Both rims within reach of the lid.
+    edge = max(2, span // 10)
+    tolerance = 1 - float(params.max_rim_gap_pct) / 100.0
+    if max(highs[:edge]) < structure.pivot * tolerance:
+        return False
+    if max(highs[-edge:]) < structure.pivot * tolerance:
+        return False
+
+    # 4. The handle, measured from where it started rather than a fixed window.
+    after_low = highs[low_idx:]
+    rim_idx = low_idx + after_low.index(max(after_low))
+    handle = segment[rim_idx:]
+    if len(handle) < 3:
+        return False
+    if len(handle) > int(params.max_handle_weeks) * 5:
+        return False
+    handle_high = max(b.high for b in handle)
+    handle_low = min(b.low for b in handle)
+    if handle_high <= 0:
+        return False
+    if 100.0 * (handle_high - handle_low) / handle_high > float(params.max_handle_depth_pct):
+        return False
+    # Its low must sit high in the cup, not back down at the bottom.
+    return (handle_low - structure.low) / depth >= float(params.min_handle_position)
+
+
+def detect_flat_base(series: Series, params: Params) -> Setup | None:
+    return _detect(series, params,
+                   extra_now=[_above_ma(50), _near_52w_high],
+                   extra_always=[_flat])
+
+
+def detect_cup_and_handle(series: Series, params: Params) -> Setup | None:
+    return _detect(series, params,
+                   extra_now=[_above_ma(50)],
+                   extra_always=[_cup_and_handle])
+
+
 def detect_vcp(series: Series, params: Params) -> Setup | None:
     return _detect(series, params,
                    extra_now=[_above_ma(50), _above_ma(200), _near_52w_high],
@@ -329,4 +432,6 @@ DETECTORS = {
     "blue_sky": detect_blue_sky,
     "multi_year": detect_multi_year,
     "ipo": detect_ipo,
+    "flat_base": detect_flat_base,
+    "cup_and_handle": detect_cup_and_handle,
 }

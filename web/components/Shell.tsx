@@ -25,6 +25,8 @@ const TABS: {
       { href: "/screens/blue_sky", title: "Blue sky", blurb: "Resting at the highest price it has ever traded." },
       { href: "/screens/multi_year", title: "Multi-year / deep comeback", blurb: "A lid that has held for a year or more." },
       { href: "/screens/ipo", title: "IPO base", blurb: "A recent listing building its first real base." },
+      { href: "/screens/flat_base", title: "Flat base", blurb: "A shallow, level shelf near the highs." },
+      { href: "/screens/cup_and_handle", title: "Cup and handle", blurb: "A rounded bottom, then a small pause below the lid." },
       { href: "/screens/combine", title: "Combine screens", blurb: "Tick several and see the union." },
       { href: "/screens/custom", title: "Create your own", blurb: "Move every dial yourself." },
       { href: "/learn", title: "How the screens work", blurb: "The shape, the concepts and the funnel." },

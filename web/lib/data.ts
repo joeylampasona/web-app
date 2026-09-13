@@ -44,7 +44,8 @@ function list(folder: string): string[] {
   }
 }
 
-export const SCREEN_KEYS = ["vcp", "blue_sky", "multi_year", "ipo"] as const;
+export const SCREEN_KEYS = ["vcp", "blue_sky", "multi_year", "ipo",
+                            "flat_base", "cup_and_handle"] as const;
 export type ScreenKey = (typeof SCREEN_KEYS)[number];
 
 export function hasData(): boolean {

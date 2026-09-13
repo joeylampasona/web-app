@@ -366,6 +366,157 @@ SCREENS: dict[str, ScreenSpec] = {
                                 "trailing line.", "climbing"),
         ],
     ),
+
+    "flat_base": ScreenSpec(
+        key="flat_base",
+        name="Flat base",
+        shape="A shallow, level shelf near the highs — the tightest kind of pause.",
+        description="This screen looks for a stock that has gone sideways in a narrow "
+                    "band, close to its highs, without giving much back. A flat base is "
+                    "the shallowest of the pauses on this site: the whole point is that "
+                    "very little happened. It has to be level as well as shallow — a "
+                    "shelf that drifts steadily lower through its own span is a slow "
+                    "decline, not a rest, so that is measured separately and excluded. "
+                    "As with every screen here, the shape is a way of describing and "
+                    "timing a stock, not a forecast.",
+        params=[
+            _MIN_RS,
+            _base_lookback(26, 104),
+            ParamSpec(key="min_base_weeks", label="Shortest shelf we'll accept",
+                      kind="integer", default=5, minimum=3, maximum=40, step=1,
+                      unit="weeks",
+                      funnel_title="Long enough to be a shelf",
+                      funnel_text="It has gone sideways for at least {value} weeks.",
+                      help="Fewer than three weeks is a quiet patch, not a base."),
+            ParamSpec(key="max_base_depth_pct", label="Deepest shelf we'll accept",
+                      kind="percent", default=15, minimum=5, maximum=30, step=1,
+                      unit="%",
+                      funnel_title="Shallow",
+                      funnel_text="From the top of the shelf it never fell more "
+                                  "than {value}%.",
+                      help="Shallowness is the whole point. Past about 15% it is an "
+                           "ordinary base rather than a flat one."),
+            ParamSpec(key="max_downward_drift_pct",
+                      label="Most it may sag across the shelf", kind="percent",
+                      default=4, minimum=0, maximum=15, step=1, unit="%",
+                      funnel_title="Level, not sagging",
+                      funnel_text="The second half's lows sit no more than {value}% "
+                                  "below the first half's.",
+                      help="A shelf that steps quietly lower the whole way through is "
+                           "a decline in slow motion. This is what tells them apart."),
+            ParamSpec(key="require_above_50ma", label="Must be above its 50-day line",
+                      kind="boolean", default=True,
+                      funnel_title="Above its 50-day line",
+                      funnel_text="Price is above the average of the last 50 days.",
+                      help="The average closing price of the last 50 sessions."),
+            ParamSpec(key="max_from_52w_high_pct",
+                      label="Furthest below its 52-week high", kind="percent",
+                      default=20, minimum=5, maximum=60, step=1, unit="%",
+                      funnel_title="Near its highs",
+                      funnel_text="Within {value}% of its highest price in a year.",
+                      help="A flat base far below the highs is a stock that has "
+                           "stopped falling, which is a different thing."),
+            _NEAR_PIVOT, _SWING, _FRESH,
+        ],
+        concepts=[
+            Concept("A shelf", "Weeks of going sideways in a narrow band instead of "
+                               "up or down.", "base"),
+            Concept("Shallow", "It never fell far from the top of that band.", "depth"),
+            Concept("Level", "The second half sits at much the same height as the "
+                             "first, rather than stepping lower.", "drift"),
+            Concept("The pivot", "The top of the shelf.", "pivot"),
+            Concept("Breakout", "A close above the top of the shelf.", "breakout"),
+            Concept("Climbing", "It cleared the pivot earlier and is still above its "
+                                "trailing line.", "climbing"),
+        ],
+    ),
+
+    "cup_and_handle": ScreenSpec(
+        key="cup_and_handle",
+        name="Cup and handle",
+        shape="A rounded bottom, then a small pause just below the lid.",
+        description="This screen looks for a stock that fell away, curved back up over "
+                    "several weeks, and then paused briefly near the top of that curve. "
+                    "The curve is the cup and the pause is the handle. Three things are "
+                    "checked rather than assumed: the low sits in the middle of the "
+                    "base and not at either edge, because a low at the left edge is a "
+                    "recovery and a low at the right edge is still a fall; both sides "
+                    "come back to a similar height; and the pause near the end is "
+                    "shallow and sits high in the cup, because a deep late drop is a "
+                    "second leg down. It is the most recognisable shape here and, like "
+                    "the others, it is a description rather than a forecast.",
+        params=[
+            _MIN_RS,
+            _base_lookback(40, 104),
+            ParamSpec(key="min_base_weeks", label="Shortest cup we'll accept",
+                      kind="integer", default=7, minimum=5, maximum=60, step=1,
+                      unit="weeks",
+                      funnel_title="Long enough to round out",
+                      funnel_text="The cup has taken at least {value} weeks.",
+                      help="A curve needs time. Anything faster is a dip, and it "
+                           "cannot round."),
+            _MAX_DEPTH,
+            ParamSpec(key="min_time_at_lows",
+                      label="How much of the cup is spent near the bottom",
+                      kind="percent", default=0.18, minimum=0.05, maximum=0.5,
+                      step=0.01, unit="",
+                      funnel_title="Rounded, not a V",
+                      funnel_text="At least {value} of the sessions closed in the "
+                                  "lower part of the cup.",
+                      help="A V has its low in the middle too. What separates them is "
+                           "time: a cup lingers near the bottom, a V passes through it "
+                           "in a few days."),
+            ParamSpec(key="max_rim_gap_pct", label="Furthest a rim may sit below the lid",
+                      kind="percent", default=8, minimum=2, maximum=25, step=1, unit="%",
+                      funnel_title="Both rims near the lid",
+                      funnel_text="Neither side of the cup sits more than {value}% "
+                                  "below the top.",
+                      help="If the left side is far lower, the stock is still climbing "
+                           "back to where it was rather than rounding out."),
+            ParamSpec(key="max_handle_weeks", label="Longest handle we'll accept",
+                      kind="integer", default=4, minimum=1, maximum=12, step=1,
+                      unit="weeks",
+                      funnel_title="A brief handle",
+                      funnel_text="The pause at the end lasted no more than "
+                                  "{value} weeks.",
+                      help="A pause that runs for months is not a handle, it is "
+                           "another base."),
+            ParamSpec(key="max_handle_depth_pct", label="Deepest handle we'll accept",
+                      kind="percent", default=15, minimum=5, maximum=35, step=1,
+                      unit="%",
+                      funnel_title="A shallow handle",
+                      funnel_text="The pause gave back no more than {value}% of its "
+                                  "own range.",
+                      help="A deep drop at the end is a second leg down, not a rest."),
+            ParamSpec(key="min_handle_position",
+                      label="How high in the cup the handle must sit", kind="percent",
+                      default=0.5, minimum=0.2, maximum=0.9, step=0.05, unit="",
+                      funnel_title="High in the cup",
+                      funnel_text="The handle's low sits at least {value} of the way "
+                                  "up from the bottom of the cup.",
+                      help="0.5 means the handle never dipped below the middle of the "
+                           "cup. Back at the bottom, it is not a handle."),
+            ParamSpec(key="require_above_50ma", label="Must be above its 50-day line",
+                      kind="boolean", default=True,
+                      funnel_title="Above its 50-day line",
+                      funnel_text="Price is above the average of the last 50 days.",
+                      help="The average closing price of the last 50 sessions."),
+            _NEAR_PIVOT, _SWING, _FRESH,
+        ],
+        concepts=[
+            Concept("The cup", "A fall and a gradual curve back up over several "
+                               "weeks.", "base"),
+            Concept("Rounded, not V-shaped", "The low sits in the middle of the span, "
+                                             "so it curved rather than snapped back.",
+                    "rounding"),
+            Concept("The rims", "The two sides of the cup, both near the same "
+                                "height.", "rim"),
+            Concept("The handle", "A short, shallow pause near the top of the cup "
+                                  "before it tries to clear it.", "handle"),
+            Concept("The pivot", "The top of the cup.", "pivot"),
+            Concept("Breakout", "A close above that lid.", "breakout"),
+        ],
+    ),
 }
 
 SCREEN_KEYS = list(SCREENS.keys())

@@ -53,12 +53,22 @@ create table if not exists public.saved_screens (
   user_id     uuid not null references auth.users (id) on delete cascade,
   name        text not null check (length(trim(name)) between 1 and 60),
   -- Which detector the dials belong to. Dials are not portable between them.
-  screen      text not null check (screen in ('vcp', 'blue_sky', 'multi_year', 'ipo')),
+  -- The allowed list is set below rather than inline, so that adding a screen
+  -- is a re-run of this file rather than a hand-written ALTER.
+  screen      text not null,
   -- The dial positions, exactly as the panel holds them.
   values      jsonb not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
   unique (user_id, name)
 );
+
+-- Named, dropped and re-added, so running this file again after a screen is
+-- added widens the constraint instead of failing on "already exists". An
+-- existing project picks up new screens by re-running this file, nothing else.
+alter table public.saved_screens drop constraint if exists saved_screens_screen_check;
+alter table public.saved_screens add constraint saved_screens_screen_check
+  check (screen in ('vcp', 'blue_sky', 'multi_year', 'ipo',
+                    'flat_base', 'cup_and_handle'));
 
 create index if not exists saved_screens_user_created_idx
   on public.saved_screens (user_id, created_at desc);
