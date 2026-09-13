@@ -30,6 +30,9 @@ jobs:
       BACKFILL_DAYS: "900"
       POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+      # Read-only, scoped to the Market Desk repository. Absent, the desk is
+      # skipped and the site runs on its own data exactly as before.
+      MARKET_DESK_TOKEN: ${{ secrets.MARKET_DESK_TOKEN }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
@@ -75,6 +78,17 @@ jobs:
                   f"data.provider resolved to {provider!r}, not 'polygon'. "
                   "A nightly run must not publish fixture data.")
           PY
+
+      - name: Say which optional sources are switched on
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          # Each of these adds a section to the site and none is required. A
+          # missing section should be explained here rather than looking like a
+          # fault on the page.
+          on_off() { [ -n "$1" ] && echo "on" || echo "off — that section will be empty"; }
+          echo "Market Desk signals: $(on_off "$MARKET_DESK_TOKEN")"
+          echo "Discord report:      $(on_off "$DISCORD_WEBHOOK_URL")"
+          echo "Vercel refresh:      $(on_off "$VERCEL_DEPLOY_HOOK")"
 
       - name: Restore the database
         if: steps.gate.outputs.run == 'true'
