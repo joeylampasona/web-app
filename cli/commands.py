@@ -200,6 +200,25 @@ def cmd_catalysts(args) -> int:
     calendar = ev.build(market, population, adapter)
     ev.attach(calendar, result.all_setups())
 
+    # Form 4s for the names on a screen. Filings never change once filed, so
+    # this only ever fetches ones we have not read; the first run is the slow
+    # one and every run after it is nearly free.
+    from data import insiders
+    from data.edgar import EdgarUnavailable
+    try:
+        def insider_progress(done: int, total: int, added: int) -> None:
+            print(f"  → insider filings {done:,}/{total:,} — {added:,} new", flush=True)
+
+        print(f"  → Reading insider filings for {len(population):,} names. "
+              f"The first run takes a while; later ones read only what is new.",
+              flush=True)
+        added = insiders.fetch(conn, population, progress=insider_progress)
+        print(f"  → {added:,} new Form 4 filings read.", flush=True)
+    except EdgarUnavailable as exc:
+        # A missing industry is a worse page; missing insider data is a missing
+        # section. Neither is worth failing a nightly run over.
+        print(f"  → Insider filings skipped: {exc}", flush=True)
+
     _banner(f"Upcoming events — {len(population)} tickers on a screen")
     upcoming = sorted(
         (e for rows in calendar.by_ticker.values() for e in rows
@@ -334,6 +353,12 @@ def _pipeline(conn, with_backtests: bool = True):
 
     backtests: dict[str, dict] = {}
     follow: dict = {}
+    # Read from the cache the catalysts stage fills; publish never fetches.
+    # Fetching is limited to names on a screen, because each one costs SEC
+    # requests. Reading is not: a name that has left a screen still has the
+    # filings we already read, and its page should still show them.
+    from data import insiders as insiders_mod
+    insider_rows = insiders_mod.summary(conn, market.universe)
     if with_backtests:
         earnings = {s: e.date for s in market.universe
                     if (e := calendar.next_earnings(s)) is not None}
@@ -355,16 +380,18 @@ def _pipeline(conn, with_backtests: bool = True):
         for key, row in follow["screens"].items():
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
-    return market, bundle, result, changes, calendar, iv_rows, backtests, follow
+    return (market, bundle, result, changes, calendar, iv_rows, backtests,
+            follow, insider_rows)
 
 
 def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()
     run = store.start_run(conn, "publish")
-    market, bundle, result, changes, calendar, iv_rows, backtests, follow = _pipeline(conn)
+    (market, bundle, result, changes, calendar, iv_rows, backtests,
+     follow, insider_rows) = _pipeline(conn)
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
-                             follow=follow)
+                             follow=follow, insiders=insider_rows)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

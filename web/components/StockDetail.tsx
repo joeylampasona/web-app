@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
+import { InsiderPanel } from "./InsiderPanel";
 import { SetupChart } from "./SetupChart";
 import { StockCard } from "./StockCard";
 import { XRayChart } from "./XRayChart";
@@ -124,6 +125,11 @@ export function StockDetail({ stock }: { stock: StockFile }) {
       <section>
         <div className="eyebrow">Catalyst roadmap</div>
         <CatalystTimeline events={stock.catalyst_roadmap} />
+      </section>
+
+      <section>
+        <div className="eyebrow">Insiders</div>
+        <InsiderPanel insiders={stock.insiders} />
       </section>
 
       <section>

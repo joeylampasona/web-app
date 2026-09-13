@@ -92,6 +92,7 @@ export interface StockFile {
   setups: Setup[];
   primary_setup: Setup | null;
   base_history: BaseStructure[];
+  insiders: InsiderSummary | null;
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
@@ -191,4 +192,24 @@ export interface FollowThroughFile {
   as_of: string | null;
   window_days: number;
   screens: Record<string, FollowThroughScreen>;
+}
+
+export interface InsiderTrade {
+  traded_at: string; owner: string; role: string; code: string;
+  what: string;
+  /** True only for an open-market buy or sell — someone's decision. Awards,
+   *  option exercises and tax withholding are mechanics, not decisions. */
+  decision: boolean;
+  shares: number | null; price: number | null; value: number | null;
+  direction: "buy" | "sell";
+}
+
+export interface InsiderSummary {
+  symbol: string; window_days: number;
+  buys: number; sells: number;
+  buy_value: number; sell_value: number;
+  buyers: string[]; sellers: string[];
+  /** Awards, exercises, gifts and tax withholding — counted, never mixed in. */
+  mechanics: number;
+  recent: InsiderTrade[];
 }
