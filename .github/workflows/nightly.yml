@@ -31,6 +31,7 @@ jobs:
       POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
       EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
       - name: Is it 6pm in New York?
         id: gate
@@ -132,6 +133,15 @@ jobs:
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
             HEAD:refs/heads/data
           echo "Pushed $(find . -name '*.json' | wc -l | tr -d ' ') files to the data branch."
+
+      - name: Tell Vercel to rebuild
+        # Pushing to the data branch does not trigger a deployment on its own,
+        # so the site would serve last night's numbers forever. Inert until the
+        # hook is set, so this does nothing before there is a site to refresh.
+        if: steps.gate.outputs.run == 'true' && env.VERCEL_DEPLOY_HOOK != ''
+        run: |
+          curl -sS -X POST "$VERCEL_DEPLOY_HOOK" \
+            -o /dev/null -w 'Vercel deploy hook: HTTP %{http_code}\n'
 
       - name: Keep a copy as a run artefact
         if: steps.gate.outputs.run == 'true'
