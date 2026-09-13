@@ -150,8 +150,12 @@ backtest/    the configurable replay engine and its metrics
 publish/     the out/ writer and the meta.json schema
 cli/         python -m cli
 web/         Next.js App Router, TypeScript
+supabase/    the account tables and their privacy rules
 .github/     the nightly workflow
 ```
+
+**Picking this up after a break: start with `HANDOFF.md`.** It says what state
+the deployment is in, what to check, and what to do next, in order.
 
 `PLAN.md` is the Phase 0 plan. `DECISIONS.md` records every choice made where
 the brief left a gap, and the two places this build deviates from it.
@@ -160,9 +164,16 @@ the brief left a gap, and the two places this build deviates from it.
 
 ## Deployment
 
-The site is a Next.js app that reads the JSON tree and nothing else. It has no
-database, so hosting it is just hosting static-ish files plus a couple of
-server routes.
+The site is a Next.js app that reads the JSON tree for every number it shows.
+Nothing about a stock, a screen or a backtest comes from a database — hosting it
+is hosting static-ish files plus a couple of server routes.
+
+Accounts are the exception, and they are optional. With a Supabase project
+configured, watchlists and saved screens live in two tables behind row-level
+security. With no project configured the site runs exactly as it did before
+accounts existed and those features stay gated, so the build never depends on a
+private project. `HANDOFF.md` has the setup steps; `supabase/schema.sql` is the
+schema.
 
 **How the data gets there.** The nightly Action force-pushes `out/` to a branch
 called `data` as a single commit, so that branch never accumulates history and
@@ -177,11 +188,17 @@ is public, so no credentials are involved anywhere in that path.
 | Framework | Next.js (detected) |
 | Root directory | `web` |
 | Build command | leave default — `vercel-build` in package.json is picked up |
-| Environment variables | none required |
+| Environment variables | none, unless you want accounts |
 
-Pushing to the branch redeploys the site. The nightly job pushing to `data`
-does not, so add a Vercel deploy hook to the workflow if you want the site to
-refresh itself every night rather than on your next code change.
+For accounts, add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+— the anon key, never the service-role key, which bypasses every privacy rule
+and would be compiled into the pages. `web/.env.example` says the same thing next
+to the variables themselves.
+
+Pushing to the branch redeploys the site. The nightly job pushing to `data` does
+not, so the workflow calls a deploy hook after it publishes. Create one in Vercel
+and store it as the `VERCEL_DEPLOY_HOOK` secret; the step does nothing while the
+secret is unset, so nothing breaks before you get to it.
 
 **One thing does not work on Vercel:** a custom backtest run shells out to the
 Python engine, and Vercel's Node runtime has no Python. That route returns a

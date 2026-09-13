@@ -111,17 +111,64 @@ setups, every one of them `forming`, zero breakouts. Either shorten that screen'
 lookback to about 78 weeks, or get deeper history from Stooq, whose adapter is
 already stubbed for the purpose.
 
+## Answered: the auth provider
+
+**Supabase, magic link.** Chosen by the owner over Clerk. It carries identity and
+storage on one free account, and all four gated features need storage, so a
+provider that only did identity would have meant standing up a database beside it
+anyway. A magic link means no password for this app to store, forget or leak.
+
+`@supabase/supabase-js` is the one dependency this added, and it was added on an
+explicit choice rather than a judgement call, which is why it is here and not on
+the stop list.
+
+The two environment variables are absent in the repository, and that is a
+supported state rather than a broken one: with no project configured the client
+is null, the four features stay gated, and the sign-up sheet says accounts are
+not switched on instead of collecting an address it cannot mail. A build must not
+depend on a private project.
+
+Row-level security carries the whole privacy model (`supabase/schema.sql`). Every
+policy is `auth.uid() = user_id`, so the public anon key compiled into the pages
+reads and writes one person's rows and nobody else's. The 50-ticker and 20-screen
+limits are database triggers as well as UI, because a limit that only exists in
+the client is not a limit. No service-role key is needed anywhere in this project.
+
+## Answered: the share payload
+
+**A PNG, composed in the browser.** A link renders on a phone as a grey rectangle
+with a domain in it, which hides the only thing worth sharing. The image carries
+the header line, a screenshot of the chart already on screen, the metric rows and
+the disclaimer, and it falls back to a download, then a link, then the clipboard.
+
+No new dependency: it is canvas plus `lightweight-charts`' own `takeScreenshot()`.
+Building it now rather than later was cheaper than it looked, because the chart
+component had to expose that handle either way.
+
+## Answered: the multi-year screen
+
+**Left thin, deliberately.** The lookback moved 104 → 78 weeks, which is as far
+as it can go while still meaning "multi-year". At 104 the last live run returned
+42 setups, every one `forming`, because two years of history left exactly one
+valid window position and no room for a breakout to sit after a year-long base.
+Whether 78 is enough has not been measured on live data yet — no real run has
+finished since the change. The detector is right either way; the history is
+short, and it lengthens on its own as the nightly accumulates days. Deeper
+history is a paid Polygon tier, which is on the stop list.
+
 ## Still open, and worth deciding before launch
 
-1. **Pick the auth provider.** Four surfaces are waiting behind the seam in
-   `web/lib/auth.tsx`.
-2. **Decide the share payload.** PNG or link.
-3. **Legal review of the copy.** Especially the two deviations above.
-4. **Custom backtest runs on the live site.** The API route shells out to the
+1. **Legal review of the copy.** Especially the two deviations above. Every page
+   carries the disclaimer and no page uses banned language, but that is care, not
+   a lawyer's sign-off.
+2. **Custom backtest runs on the live site.** The API route shells out to the
    Python engine, and Vercel's Node runtime has no Python, so a visitor can read
    the precomputed default for each screen but cannot move a dial and re-run.
    The route now declines with an accurate message rather than a guess. Fixing it
    means a small worker somewhere that does have Python — worth doing only if the
    feature turns out to matter to anyone.
-5. **The multi-year screen.** See above; it is currently thin by construction,
-   not by accident.
+3. **`postcss` is pinned through an `overrides` entry**, past GHSA-qx2v-qp2m-jg93
+   and three siblings. It arrives under Next.js, and npm's only other route to a
+   fix is Next 16, whose Turbopack rejects this project's `../out/**` tracing
+   glob. The override should come out when Next ships a version that carries a
+   patched postcss itself.
