@@ -72,6 +72,9 @@ class RunOutput:
     total_sessions: int = 0
     benchmark_return_pct: float | None = None
     notes: list[str] = field(default_factory=list)
+    # Which session's data produced this. A result that cannot say what it was
+    # computed from cannot be told apart from yesterday's when it is cached.
+    as_of: dt.date | None = None
 
 
 # ---------------------------------------------------------------- candidates
@@ -233,10 +236,11 @@ def run(market: Market, config: BacktestSettings,
         year = int(config.period)
         calendar = [d for d in calendar if d.year == year]
     if not calendar:
-        return RunOutput(settings=config, notes=["no sessions in the selected period"])
+        return RunOutput(settings=config, as_of=market.as_of,
+                         notes=["no sessions in the selected period"])
 
     cost = float(cfg.get("backtest.cost_bps_round_trip", 10)) / 10_000.0
-    out = RunOutput(settings=config)
+    out = RunOutput(settings=config, as_of=market.as_of)
     cash = float(config.starting_capital)
     open_positions: list[Position] = []
     next_earnings = next_earnings or {}

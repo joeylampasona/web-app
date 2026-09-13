@@ -1,0 +1,123 @@
+name: Custom backtest
+
+# Vercel's runtime has no Python, and the engine needs the whole price
+# database to re-detect setups historically — not the 180 bars a stock ships
+# with. So the site asks this workflow to run one, and reads the answer back
+# off the `backtests` branch.
+#
+# Results are keyed by the settings and the session they were computed for, so
+# the same combination is only ever computed once a day, and a result from
+# before tonight's data is never mistaken for a fresh one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:              { description: "Result filename", required: true, type: string }
+      screen:           { required: true, type: string }
+      enter:            { required: true, type: string }
+      positions:        { required: true, type: string }
+      stop_pct:         { required: true, type: string }
+      exit_rule:        { required: true, type: string }
+      risk_pct:         { required: true, type: string }
+      period:           { required: true, type: string }
+      starting_capital: { required: true, type: string }
+      skip_weak_markets: { required: true, type: string }
+      skip_earnings_7d:  { required: true, type: string }
+
+# Runs queue rather than pile up, but a queued run is never cancelled: someone
+# is waiting on each one.
+concurrency:
+  group: custom-backtest
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      DATA_PROVIDER: polygon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Restore only. This job must never write a cache: it does not fetch
+      # anything, and saving one here would let a partial database outlive the
+      # nightly's complete one.
+      - name: Restore the nightly's database
+        id: db
+        uses: actions/cache/restore@v4
+        with:
+          path: var
+          key: market-db-polygon-
+          restore-keys: market-db-polygon-
+
+      - name: Check there is a database to test against
+        run: |
+          if [ ! -f var/market.db ]; then
+            echo "No price database in the Actions cache. A custom backtest"
+            echo "replays years of prices, so it needs the database the nightly"
+            echo "builds. Run the nightly scan once, then try again."
+            exit 1
+          fi
+          echo "Database restored: $(du -h var/market.db | cut -f1)"
+
+      - name: Run it
+        id: run
+        run: |
+          set -o pipefail
+          flag() { [ "$2" = "true" ] && echo "--$1" || echo "--no-$1"; }
+          mkdir -p result
+          python -m cli backtest --json \
+            --screen   "${{ inputs.screen }}" \
+            --enter    "${{ inputs.enter }}" \
+            --positions "${{ inputs.positions }}" \
+            --stop     "${{ inputs.stop_pct }}" \
+            --exit-rule "${{ inputs.exit_rule }}" \
+            --risk     "${{ inputs.risk_pct }}" \
+            --capital  "${{ inputs.starting_capital }}" \
+            --period   "${{ inputs.period }}" \
+            $(flag skip-weak-markets "${{ inputs.skip_weak_markets }}") \
+            $(flag skip-earnings     "${{ inputs.skip_earnings_7d }}") \
+            > result/payload.json
+          python -c "
+          import json, pathlib, sys
+          d = json.loads(pathlib.Path('result/payload.json').read_text())
+          if 'metrics' not in d:
+              sys.exit('The engine produced no metrics.')
+          print(f\"{len(d.get('trades', []))} trades, {d.get('years', 0):.2f} years\")
+          "
+
+      # The site polls the raw file on this branch, so publishing the answer is
+      # how the run reports back. A branch of its own: the nightly force-pushes
+      # `data` as a single commit and would wipe these every evening.
+      - name: Publish the answer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          as_of=$(python -c "import json;print(json.load(open('result/payload.json'))['as_of'])")
+          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          rm -rf pub && mkdir pub && cd pub
+          git init -q -b backtests
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Keep what is already there for today; drop everything older, so the
+          # branch does not accumulate results for data nobody is looking at.
+          if git fetch -q --depth 1 "$remote" backtests 2>/dev/null; then
+            git checkout -q FETCH_HEAD -- . 2>/dev/null || true
+            find . -mindepth 1 -maxdepth 1 -type d ! -name ".git" ! -name "$as_of" -exec rm -rf {} +
+          fi
+          mkdir -p "$as_of"
+          cp ../result/payload.json "$as_of/${{ inputs.key }}.json"
+          git add -A
+          git commit -q -m "Backtest ${{ inputs.key }} for $as_of"
+          git push -q --force "$remote" HEAD:refs/heads/backtests
+          echo "Published $as_of/${{ inputs.key }}.json"

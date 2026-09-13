@@ -120,6 +120,9 @@ def summarise(result: RunOutput) -> dict:
     return {
         "settings": config.to_json(),
         "hash": config.hash(),
+        # The session this was computed against. A cached result for yesterday's
+        # data must be recognisable as such rather than served as today's.
+        "as_of": result.as_of.isoformat() if result.as_of else None,
         "provisional": provisional,
         "provisional_line": PROVISIONAL_LINE if provisional else "",
         "survivorship_safe": survivorship_safe,

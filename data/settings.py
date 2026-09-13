@@ -92,4 +92,16 @@ def out_dir() -> pathlib.Path:
 
 
 def env(name: str, default: str = "") -> str:
-    return os.environ.get(name, default)
+    """A credential, from the environment or from the gitignored local settings.
+
+    The environment wins, because that is how CI supplies these. But a shell
+    export only lasts as long as the tab it was typed into, and losing a key by
+    opening a new terminal is a trap rather than a security measure. So a
+    `secrets:` block in config/settings.local.yaml — which is gitignored, and is
+    where a laptop's overrides already live — works too, and survives.
+    """
+    from_env = os.environ.get(name)
+    if from_env:
+        return from_env
+    stored = (get("secrets", {}) or {}).get(name)
+    return str(stored) if stored else default

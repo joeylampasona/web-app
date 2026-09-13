@@ -55,6 +55,7 @@ const TABS: {
       { href: "/learn", title: "How it works", blurb: "The anatomy of a breakout, screen by screen." },
       { href: "/learn/backtest", title: "Backtest", blurb: "Settings, result and the trades." },
       { href: "/learn/reading", title: "Reading", blurb: "Guides and case studies." },
+      { href: "/legal", title: "Disclaimer", blurb: "What the numbers mean, and what they do not." },
     ],
   },
 ];
@@ -105,9 +106,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           paddingBottom: 120,
         }}
       >
-        <p className="caption dim" style={{ maxWidth: 780, margin: "0 auto" }}>
-          {LEGAL}
-        </p>
+        <div className="stack" style={{ maxWidth: 780, margin: "0 auto",
+                                        gap: "var(--gap-xs)" }}>
+          <p className="caption dim" style={{ margin: 0 }}>{LEGAL}</p>
+          <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
+            What that means, in full
+          </Link>
+        </div>
       </footer>
 
       <nav

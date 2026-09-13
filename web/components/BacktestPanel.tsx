@@ -33,6 +33,8 @@ export function BacktestPanel({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [yearFilter, setYearFilter] = useState<number | null>(null);
+  // Non-zero once a run has been handed to the runner rather than run here.
+  const [queued, setQueued] = useState(0);
 
   const periodOptions = useMemo(
     () => [{ value: "all", label: "All" },
@@ -47,9 +49,47 @@ export function BacktestPanel({
     return stop > 0 ? (capital * risk) / stop : 0;
   }, [settings]);
 
+  const land = (payload: BacktestSummary) => {
+    setResult(payload);
+    setYearFilter(null);
+    setTab("result");
+  };
+
+  /**
+   * Where there is no Python — the live site — the engine runs on a GitHub
+   * Actions runner that has the price database, and publishes its answer for
+   * this page to collect. That takes a couple of minutes, so the reply to the
+   * first request is a receipt rather than a result, and this waits on it.
+   *
+   * Backs off from two seconds to ten so a long wait is not a tight loop, and
+   * gives up after six minutes with a sentence that says what to do next rather
+   * than spinning for ever.
+   */
+  const waitFor = async (key: string) => {
+    const deadline = Date.now() + 6 * 60_000;
+    let delay = 2000;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 1.4, 10_000);
+      const response = await fetch(`/api/backtest/status?key=${encodeURIComponent(key)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Checking on the run failed.");
+      if (payload.status === "ready") {
+        land(payload.result as BacktestSummary);
+        return;
+      }
+      setQueued((n) => n + 1);
+    }
+    throw new Error(
+      "That run is taking longer than expected. It may still finish — try the " +
+      "same settings again in a few minutes and the answer will be waiting.",
+    );
+  };
+
   const runScan = async () => {
     setRunning(true);
     setError("");
+    setQueued(0);
     try {
       const response = await fetch("/api/backtest", {
         method: "POST",
@@ -59,13 +99,13 @@ export function BacktestPanel({
       const payload = await response.json();
       if (!response.ok) {
         setError(payload.error ?? "That run did not complete.");
+      } else if (payload.status === "queued") {
+        await waitFor(payload.key as string);
       } else {
-        setResult(payload as BacktestSummary);
-        setYearFilter(null);
-        setTab("result");
+        land(payload as BacktestSummary);
       }
-    } catch {
-      setError("That run did not complete.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "That run did not complete.");
     } finally {
       setRunning(false);
     }
@@ -173,8 +213,15 @@ export function BacktestPanel({
 
           <button type="button" className="control primary" onClick={runScan}
                   disabled={running}>
-            {running ? "Running…" : "Run scan"}
+            {running ? (queued ? "Waiting on the run…" : "Running…") : "Run scan"}
           </button>
+          {running && queued > 0 && (
+            <p className="footnote muted" style={{ margin: 0 }}>
+              This combination has not been run against tonight&rsquo;s data yet, so it
+              is being replayed over years of prices on a machine that has them. Usually
+              a couple of minutes. You can leave this page open.
+            </p>
+          )}
           <p className="footnote muted" style={{ margin: 0 }}>
             At {String(settings.risk_pct)}% risk with a {String(settings.stop_pct)}% stop,
             each position is about <span className="num">{money(positionSize)}</span>.

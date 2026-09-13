@@ -149,8 +149,12 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # ---- stocks -------------------------------------------------------
     bar_limit = int(settings.get("publish.stocks_bars", 180))
     for symbol in market.universe:
-        # Only a stock on a screen has a chart to draw, so only it needs bars.
-        limit = bar_limit if setups_by_symbol.get(symbol) else 0
+        # Every name in the universe gets its price history, not only the ones
+        # currently on a screen. Search reaches all of them, and a page reached
+        # by searching for a company and then showing no chart reads as broken —
+        # the stock still has a price, it just has no pivot drawn over it. This
+        # was the other way round, and it cost about 27MB to put right.
+        limit = bar_limit
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit)))
@@ -216,10 +220,18 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     for key, payload in (backtests or {}).items():
         written.append(_write(out / "backtest" / "presets" / f"{key}.json", payload))
     if backtests:
+        # The settings of every preset, not just its hash. A custom run on a host
+        # without Python has to know whether the combination it was asked for has
+        # already been computed, and it cannot recompute this hash to find out —
+        # that would be a second implementation of the key, in another language,
+        # free to drift. Matching on the settings themselves cannot drift.
         written.append(_write(out / "backtest" / "presets" / "index.json",
                               {"default_by_screen": {
                                   s: BacktestSettings.parse({"screen": s}).hash()
-                                  for s in param_module.SCREEN_KEYS}}))
+                                  for s in param_module.SCREEN_KEYS},
+                               "as_of": market.as_of.isoformat() if market.as_of else None,
+                               "presets": {key: payload.get("settings", {})
+                                           for key, payload in backtests.items()}}))
 
     # ---- meta ---------------------------------------------------------
     provider = settings.get("data.provider", "polygon")

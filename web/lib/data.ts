@@ -200,7 +200,14 @@ export function getBacktestOptions() {
 }
 
 export function getBacktestPresetIndex() {
-  return read<{ default_by_screen: Record<string, string> }>("backtest/presets/index.json");
+  return read<{
+    default_by_screen: Record<string, string>;
+    /** The session these were computed against. */
+    as_of?: string | null;
+    /** Hash to the exact settings it was run with, so a request can be matched
+     *  against what is already computed without recomputing the hash here. */
+    presets?: Record<string, Record<string, unknown>>;
+  }>("backtest/presets/index.json");
 }
 
 export function getBacktestPreset(hash: string): BacktestSummary | null {

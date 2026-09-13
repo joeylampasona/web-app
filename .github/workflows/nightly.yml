@@ -188,6 +188,38 @@ jobs:
           path: out
           retention-days: 14
 
+      - name: Tell Discord how it went
+        # Only worth a message when something moved. A night where nothing broke
+        # out and nothing new formed is a normal night, and a bot that says so
+        # every evening is a bot people mute.
+        if: success() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, urllib.request
+
+          meta = json.loads(pathlib.Path("out/meta.json").read_text())
+          diff = {}
+          path = pathlib.Path("out/breakouts/today.json")
+          if path.exists():
+              diff = json.loads(path.read_text())
+          fresh = sum(s["stages"].get("fresh_breakout", 0) for s in meta["screens"])
+          lines = [f"**{meta['as_of']}** — {meta['universe_count']:,} names scanned."]
+          for screen in meta["screens"]:
+              stages = screen["stages"]
+              lines.append(
+                  f"  {screen['name']}: {screen['total']} "
+                  f"({stages.get('fresh_breakout', 0)} fresh, "
+                  f"{stages.get('forming', 0)} forming)")
+          if fresh == 0:
+              lines.append("_Nothing broke out today. That is a reading, not a fault._")
+
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps({"content": "\n".join(lines)[:1900]}).encode(),
+              headers={"Content-Type": "application/json"})
+          urllib.request.urlopen(request, timeout=20)
+          PY
+
       - name: Tell Discord it broke
         if: failure() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
         shell: bash

@@ -336,11 +336,19 @@ def _pipeline(conn, with_backtests: bool = True):
     if with_backtests:
         earnings = {s: e.date for s in market.universe
                     if (e := calendar.next_earnings(s)) is not None}
+        # Four backtests over years of prices, and nothing to show for the best
+        # part of a minute. Silence that long is indistinguishable from a hang,
+        # so say what is happening and tick as each one lands.
+        print(f"  → Replaying {len(SCREEN_KEYS)} default backtests over "
+              f"{len(market.calendar):,} sessions. A minute or so.", flush=True)
         timeline = engine.rs_timeline(market)      # computed once, reused per screen
-        for screen in SCREEN_KEYS:
+        for index, screen in enumerate(SCREEN_KEYS, 1):
             config = BacktestSettings.parse({"screen": screen})
             run_out = engine.run(market, config, earnings, timeline)
-            backtests[config.hash()] = metrics.summarise(run_out)
+            summary = metrics.summarise(run_out)
+            backtests[config.hash()] = summary
+            print(f"    {index}/{len(SCREEN_KEYS)}  {screen} — "
+                  f"{len(summary.get('trades', []))} trades", flush=True)
     return market, bundle, result, changes, calendar, iv_rows, backtests
 
 
