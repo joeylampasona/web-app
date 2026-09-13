@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import type { Bar, Setup } from "@/lib/types";
+import { useLazyBars } from "@/lib/useBars";
 import { copy } from "@/lib/copy";
 import {
   change, decimal, longDate, price, ratio, rsText, shortDate, signed, tone, volume,
@@ -22,10 +23,14 @@ export function StockCard({
   setup, bars, variant = "setup",
 }: {
   setup: Setup;
+  /** Passed only for the handful of cards above the fold. The rest fetch their
+   *  own chart when they come into view — see lib/useBars. */
   bars?: Bar[];
   variant?: "setup" | "breakout";
 }) {
   const ohlc = setup.ohlc;
+  const lazy = useLazyBars(setup.symbol, !bars);
+  const drawn = bars ?? lazy.bars;
   const rows = variant === "breakout" ? breakoutRows(setup) : setupRows(setup);
 
   // The chart hands its canvas up so Share can put the real thing in the image
@@ -68,9 +73,12 @@ export function StockCard({
         {"   "}RS {rsText(setup.rs_rating)}
       </div>
 
-      {bars && bars.length > 0 && (
+      {/* Holds the card's height steady while the chart is on its way, so a
+          list does not jump about as charts land. */}
+      <div ref={lazy.ref} style={{ minHeight: drawn?.length ? undefined : 210 }}>
+        {drawn && drawn.length > 0 && (
         <SetupChart
-          bars={bars}
+          bars={drawn}
           pivot={setup.pivot}
           contractions={setup.bases}
           breakoutDate={setup.breakout_date}
@@ -78,7 +86,8 @@ export function StockCard({
           symbol={setup.symbol}
           onReady={handleChartReady}
         />
-      )}
+        )}
+      </div>
 
       <div>
         {rows.map((row) => (

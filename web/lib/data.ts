@@ -253,6 +253,13 @@ export function getSearchIndex(): SearchRow[] {
 }
 
 /** Trimmed bars for a set of symbols, for the charts on a card list. */
+/**
+ * How many cards get their chart with the page itself. Enough to fill the first
+ * screenful on a phone with no flash; everything below fetches its own as it
+ * scrolls into view. Sending all of them made one screen a 5MB download.
+ */
+export const EAGER_CHARTS = 6;
+
 export function barsFor(symbols: string[], limit = 90): Record<string, import("./types").Bar[]> {
   const out: Record<string, import("./types").Bar[]> = {};
   for (const symbol of symbols) {

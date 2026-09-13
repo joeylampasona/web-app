@@ -4,7 +4,7 @@ import { FreshnessPill } from "@/components/FreshnessPill";
 import { ScreenBrowser } from "@/components/ScreenBrowser";
 import { WhatChanged } from "@/components/WhatChanged";
 import { RS_NOTE } from "@/lib/copy";
-import { SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, hasData } from "@/lib/data";
+import { EAGER_CHARTS, SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, hasData } from "@/lib/data";
 
 export function generateStaticParams() {
   return SCREEN_KEYS.map((screen) => ({ screen }));
@@ -21,7 +21,7 @@ export default async function ScreenPage({
   if (!file) notFound();
   const meta = getMeta();
   const symbols = Object.values(file.setups).flat().map((s) => s.symbol);
-  const bars = barsFor(symbols);
+  const bars = barsFor(symbols.slice(0, EAGER_CHARTS));
   const diff = getDiff()?.screens?.[screen];
 
   return (

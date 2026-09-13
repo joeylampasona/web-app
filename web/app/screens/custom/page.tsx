@@ -1,6 +1,6 @@
 import { CustomScreenPanel } from "@/components/CustomScreenPanel";
 import { DataBanner, NoData } from "@/components/DataBanner";
-import { barsFor, getAllLearn, getAllScreens, getMeta, hasData } from "@/lib/data";
+import { EAGER_CHARTS, barsFor, getAllLearn, getAllScreens, getMeta, hasData } from "@/lib/data";
 
 export default function CustomScreenPage() {
   if (!hasData()) return <NoData />;
@@ -17,7 +17,7 @@ export default function CustomScreenPage() {
         you see here is exactly what the code checks.
       </p>
       <CustomScreenPanel learn={getAllLearn()} files={files}
-                         bars={barsFor([...new Set(symbols)])} />
+                         bars={barsFor([...new Set(symbols)].slice(0, EAGER_CHARTS))} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { barsFor, getBreakouts } from "@/lib/data";
+import { EAGER_CHARTS, barsFor, getBreakouts } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,6 @@ export function GET(request: Request) {
   if (!file) return NextResponse.json({ setups: [], bars: {} });
   return NextResponse.json({
     setups: file.setups,
-    bars: barsFor(file.setups.map((s) => s.symbol)),
+    bars: barsFor(file.setups.map((s) => s.symbol).slice(0, EAGER_CHARTS)),
   });
 }

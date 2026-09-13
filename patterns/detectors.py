@@ -55,7 +55,14 @@ class Setup:
     ohlc: dict = field(default_factory=dict)
 
     def to_json(self) -> dict:
-        return asdict(self)
+        out = asdict(self)
+        # Every base this stock has ever built is for the X-ray, and the X-ray
+        # reads it from the top level of the stock file, where it is written
+        # once. Carried inside each setup as well it was 45% of every screen
+        # file — 396KB on the VCP screen alone — shipped to every reader of a
+        # page that does not contain the feature.
+        out.pop("base_history", None)
+        return out
 
 
 # ---------------------------------------------------------------- metrics

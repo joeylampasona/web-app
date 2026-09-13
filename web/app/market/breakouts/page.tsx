@@ -1,7 +1,7 @@
 import { BreakoutBrowser } from "@/components/BreakoutBrowser";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
-import { barsFor, getBreakoutDates, getBreakouts, getMeta, hasData } from "@/lib/data";
+import { EAGER_CHARTS, barsFor, getBreakoutDates, getBreakouts, getMeta, hasData } from "@/lib/data";
 
 export default function BreakoutsPage() {
   if (!hasData()) return <NoData />;
@@ -24,7 +24,7 @@ export default function BreakoutsPage() {
           dates={dates}
           initialDate={latest}
           setups={setups}
-          bars={barsFor(setups.map((s) => s.symbol))}
+          bars={barsFor(setups.map((s) => s.symbol).slice(0, EAGER_CHARTS))}
         />
       ) : (
         <div className="card muted footnote">No sessions published yet.</div>
