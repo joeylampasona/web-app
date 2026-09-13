@@ -108,9 +108,28 @@ def _serves(adapter: DataAdapter, day: dt.date) -> bool:
 
 
 def _weekday(day: dt.date) -> dt.date:
+    """Snap forward to a weekday. For the old end of a range."""
     while day.weekday() >= 5:
         day += dt.timedelta(days=1)
     return day
+
+
+def _latest_served(adapter: DataAdapter, latest: dt.date, attempts: int = 8) -> dt.date | None:
+    """The most recent session the plan will actually serve, walking backwards.
+
+    Three things make "today" the wrong probe: it can be a weekend, it can be a
+    holiday, and a delayed tier may not have published the last session yet.
+    Snapping forward to the next weekday — which is what this used to do — can
+    land on a date that has not happened, and the provider refuses it.
+    """
+    day = latest
+    for _ in range(attempts):
+        while day.weekday() >= 5:
+            day -= dt.timedelta(days=1)
+        if _serves(adapter, day):
+            return day
+        day -= dt.timedelta(days=1)
+    return None
 
 
 def find_history_horizon(adapter: DataAdapter, earliest: dt.date, latest: dt.date,
@@ -122,12 +141,13 @@ def find_history_horizon(adapter: DataAdapter, earliest: dt.date, latest: dt.dat
     Walking backwards a day at a time would burn hundreds of calls at five a
     minute, so bisect: about eleven calls covers four years.
     """
-    lo, hi = _weekday(earliest), _weekday(latest)
-    if not _serves(adapter, hi):
+    lo = _weekday(earliest)
+    hi = _latest_served(adapter, latest)
+    if hi is None:
         raise ProviderMismatch(
-            f"This plan will not serve grouped daily aggregates even for "
-            f"{hi}. That endpoint is the premise of this build — check the key "
-            f"and the plan before going further.")
+            f"This plan served grouped daily aggregates for none of the eight "
+            f"sessions before {latest}. That endpoint is the premise of this "
+            f"build — check the key and the plan before going further.")
     if _serves(adapter, lo):
         return lo
     if notice:
@@ -185,11 +205,23 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
                    f"there — about {(today - horizon).days * 5 // 7:,} sessions.")
         start = horizon
 
+    from data.adapters.polygon import PolygonError
+
     written = 0
     day = start
     while day <= today:
         if day.weekday() < 5:
-            bars: list[Bar] = adapter.get_grouped_daily(day)
+            try:
+                bars: list[Bar] = adapter.get_grouped_daily(day)
+            except PolygonError as exc:
+                # The most recent session may not be published on a delayed tier.
+                # That is a "come back tomorrow", not a failure of the run.
+                if getattr(exc, "status", None) == 403:
+                    if notice:
+                        notice(f"{day} is not available on this plan yet — stopping "
+                               f"here. Re-run tomorrow to pick it up.")
+                    break
+                raise
             if bars:
                 written += store.upsert_bars(conn, bars)
             store.set_kv(conn, key, day.isoformat())
