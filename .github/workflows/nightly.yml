@@ -135,6 +135,19 @@ jobs:
           if not meta.get("schema_valid"):
               sys.exit("out/ did not validate against its own schema. "
                        "Refusing to publish it to the data branch.")
+
+          # Provenance and schema were not enough. A run once published a tree
+          # that was live, valid, and completely empty — SEC had refused every
+          # share-count request, so no company had a market cap and the universe
+          # filtered down to zero. Both checks passed it. Substance is a
+          # separate question from provenance, so ask it separately.
+          count = meta.get("universe_count") or 0
+          if count < 500:
+              sys.exit(f"universe_count is {count}. A liquid US universe is a "
+                       "few thousand names; this few means a stage of the funnel "
+                       "dropped almost everything. Refusing to publish it.")
+          if not any(s.get("total") for s in meta.get("screens", [])):
+              sys.exit("Every screen is empty. Refusing to publish it.")
           PY
 
       - name: Publish the data branch

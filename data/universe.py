@@ -315,17 +315,18 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
         fetched = shares_outstanding(stale, progress=edgar_progress)
         store.set_shares(conn, fetched)
         shares.update(fetched)
-    capped: list[tuple[sqlite3.Row, float, float, float]] = []
-    for r, close, adv in priced:
-        sh = shares.get(r["symbol"])
-        if not sh:
-            continue
-        cap = sh * close
-        if cap <= min_cap:
-            continue
-        capped.append((r, close, adv, cap))
-    funnel.add(f"market cap > ${min_cap/1e6:,.0f}M", len(capped), len(priced))
+    # "We do not know this company's share count" and "this company is too small"
+    # are different answers and they get different lines. Folded together, an SEC
+    # outage reads as a market where nothing is big enough — which is how a
+    # nightly run published an empty universe and called it a success.
+    known = [(r, close, adv, shares[r["symbol"]])
+             for r, close, adv in priced if shares.get(r["symbol"])]
+    funnel.add("has a share count", len(known), len(priced))
 
+    capped = [row for row in known if row[3] * row[1] > min_cap]
+    funnel.add(f"market cap > ${min_cap/1e6:,.0f}M", len(capped), len(known))
+
+    capped = [(r, close, adv, sh * close) for r, close, adv, sh in capped]
     liquid = [row for row in capped if row[2] > min_adv]
     funnel.add(f"{lookback}-day avg $ volume > ${min_adv/1e6:,.0f}M", len(liquid), len(capped))
     funnel.final = len(liquid)

@@ -17,6 +17,8 @@ def _banner(title: str) -> None:
 
 
 def cmd_universe(args) -> int:
+    from data.edgar import EdgarUnavailable
+
     from data import universe
     conn = _conn()
     run = store.start_run(conn, "universe")
@@ -40,6 +42,15 @@ def cmd_universe(args) -> int:
         _banner("Stopped — provider mismatch")
         print(f"  {exc}")
         return 1
+    except EdgarUnavailable as exc:
+        store.finish_run(conn, run, "failed", str(exc))
+        _banner("Stopped — SEC would not answer")
+        print(f"  {exc}")
+        print()
+        print("  Every company's market cap is its share count times its price, so")
+        print("  without SEC there are no market caps and the whole universe filters")
+        print("  down to nothing. Stopping here rather than publishing an empty site.")
+        return 1
     except Exception as exc:                      # noqa: BLE001
         store.finish_run(conn, run, "failed", str(exc))
         raise
@@ -50,7 +61,13 @@ def cmd_universe(args) -> int:
     print(f"  provider: {settings.get('data.provider')}"
           f"    database: {settings.db_path()}")
     if funnel.final == 0:
-        print("\n  Nothing survived. Run with --refresh first.")
+        # Not a success. A run that ends with no universe produces empty screens,
+        # an empty market page and an empty search, and the stages above say
+        # which filter did it. Exit non-zero so a nightly job stops here instead
+        # of publishing that.
+        print("\n  Nothing survived — see which stage above dropped everything.")
+        print("  If every stage is 0, the database has no bars yet: run --refresh.")
+        return 1
     return 0
 
 
