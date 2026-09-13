@@ -223,7 +223,22 @@ export function getSearchIndex(): SearchRow[] {
   // One file, written by the pipeline. This used to open every stock file on
   // the first keystroke and hold the lot in memory for the life of the process.
   const file = read<{ rows: SearchRow[] }>("search.json");
-  return file?.rows ?? [];
+  if (file?.rows?.length) return file.rows;
+
+  // An out/ tree published before search.json existed. Rebuild from the stock
+  // files rather than returning nothing and letting the page tell the reader
+  // their ticker is not in the universe, which would be a lie.
+  const rows: SearchRow[] = [];
+  for (const symbol of listStocks()) {
+    const stock = getStock(symbol);
+    if (!stock) continue;
+    rows.push({
+      symbol: stock.symbol, name: stock.name, industry: stock.industry,
+      rs_rating: stock.rs_rating, themes: stock.themes,
+    });
+  }
+  rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  return rows;
 }
 
 /** Trimmed bars for a set of symbols, for the charts on a card list. */

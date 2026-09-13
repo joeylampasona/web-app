@@ -288,7 +288,12 @@ SCREENS: dict[str, ScreenSpec] = {
                       funnel_title="Turning up",
                       funnel_text="Price is back above the average of the last 200 days.",
                       help="The average closing price of the last 200 sessions."),
-            _base_lookback(104, 300),
+            # 78 rather than 104: the window has to be meaningfully shorter than
+            # the history available, or there is nowhere for a breakout to sit
+            # after a year-long base. On two years of data a 104-week window left
+            # exactly one valid position and the screen returned nothing but
+            # forming setups. Raise it again once the history goes deeper.
+            _base_lookback(78, 300),
             ParamSpec(key="min_base_weeks", label="Shortest base we'll accept",
                       kind="integer", default=52, minimum=26, maximum=200, step=1,
                       unit="weeks",

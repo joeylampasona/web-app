@@ -74,10 +74,18 @@ export function SearchPanel({
         </>
       )}
 
-      {query && results.length === 0 && (
+      {query && results.length === 0 && rows.length > 0 && (
         <p className="muted footnote">
           Nothing in the universe matches that. The universe is the liquid US common
           stocks only — under $5, under $300M, or thin, and a name never enters it.
+        </p>
+      )}
+
+      {rows.length === 0 && (
+        <p className="footnote" style={{ color: "var(--warn)" }}>
+          The search index is empty, so nothing can match — this is not a statement
+          about the ticker you typed. Run <code className="mono">python -m cli publish</code>{" "}
+          to write it.
         </p>
       )}
 
