@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 
 
 class PolygonError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class PolygonGroupedAdapter(DataAdapter):
@@ -52,13 +54,16 @@ class PolygonGroupedAdapter(DataAdapter):
             self.limiter.acquire()
             resp = self.session.get(url, params=params, timeout=self.timeout)
         if resp.status_code == 403:
+            # A 403 on grouped aggregates is almost always the plan's history
+            # window, not a missing endpoint: the same call for a recent date
+            # succeeds. The backfill treats it as a horizon and searches for the
+            # earliest date the plan will serve.
             raise PolygonError(
-                f"403 from {url.split('?')[0]} — this endpoint is not on the current plan. "
-                "Grouped daily aggregates on free Basic is the premise of this build; "
-                "verify it before going further."
-            )
+                f"403 from {url.split('?')[0]} — outside this plan's history window, "
+                f"or not included in it.", status=403)
         if not resp.ok:
-            raise PolygonError(f"{resp.status_code} from {url.split('?')[0]}: {resp.text[:200]}")
+            raise PolygonError(f"{resp.status_code} from {url.split('?')[0]}: "
+                               f"{resp.text[:200]}", status=resp.status_code)
         return resp.json()
 
     # ------------------------------------------------------------ interface

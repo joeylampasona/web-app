@@ -19,6 +19,11 @@ log = logging.getLogger(__name__)
 # skipped the entire backfill in silence.
 CURSOR_PREFIX = "backfill_cursor"
 BARS_PROVIDER_KEY = "bars_provider"
+HORIZON_PREFIX = "history_horizon"
+
+
+def horizon_key(provider: str) -> str:
+    return f"{HORIZON_PREFIX}:{provider}"
 
 
 def cursor_key(provider: str) -> str:
@@ -55,7 +60,9 @@ def clear_bars(conn: sqlite3.Connection) -> int:
     count = conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0]
     conn.execute("DELETE FROM bars")
     conn.execute("DELETE FROM universe")
-    conn.execute(f"DELETE FROM kv WHERE key LIKE '{CURSOR_PREFIX}%' OR key = '{BARS_PROVIDER_KEY}'")
+    conn.execute(
+        f"DELETE FROM kv WHERE key LIKE '{CURSOR_PREFIX}%' "
+        f"OR key LIKE '{HORIZON_PREFIX}%' OR key = '{BARS_PROVIDER_KEY}'")
     conn.commit()
     return int(count)
 
@@ -86,11 +93,62 @@ class Funnel:
         return "\n".join(lines)
 
 
+# ---------------------------------------------------------------- horizon
+
+def _serves(adapter: DataAdapter, day: dt.date) -> bool:
+    """Will the plan return this session at all? A 403 means it will not."""
+    from data.adapters.polygon import PolygonError
+    try:
+        adapter.get_grouped_daily(day)
+        return True
+    except PolygonError as exc:
+        if getattr(exc, "status", None) == 403:
+            return False
+        raise
+
+
+def _weekday(day: dt.date) -> dt.date:
+    while day.weekday() >= 5:
+        day += dt.timedelta(days=1)
+    return day
+
+
+def find_history_horizon(adapter: DataAdapter, earliest: dt.date, latest: dt.date,
+                         notice=None) -> dt.date:
+    """The oldest session this plan will serve.
+
+    Free tiers cap how far back grouped aggregates go, and the cap is a 403 on
+    the individual date rather than anything you can read off the account.
+    Walking backwards a day at a time would burn hundreds of calls at five a
+    minute, so bisect: about eleven calls covers four years.
+    """
+    lo, hi = _weekday(earliest), _weekday(latest)
+    if not _serves(adapter, hi):
+        raise ProviderMismatch(
+            f"This plan will not serve grouped daily aggregates even for "
+            f"{hi}. That endpoint is the premise of this build — check the key "
+            f"and the plan before going further.")
+    if _serves(adapter, lo):
+        return lo
+    if notice:
+        notice(f"{lo} is outside this plan's history window — finding the oldest "
+               f"session it will serve (about a dozen calls, three minutes).")
+    while (hi - lo).days > 1:
+        mid = _weekday(lo + dt.timedelta(days=(hi - lo).days // 2))
+        if mid >= hi:
+            break
+        if _serves(adapter, mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
+
+
 # ---------------------------------------------------------------- backfill
 
 def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
              days: int | None = None, resume: bool = True,
-             progress=None) -> int:
+             progress=None, notice=None) -> int:
     """One grouped-daily call per past session, resumable at the cursor."""
     adapter = adapter or get_adapter()
     days = days or int(settings.get("data.backfill_days", 520))
@@ -114,6 +172,18 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     cursor = store.get_kv(conn, key)
     if resume and cursor:
         start = max(start, dt.date.fromisoformat(cursor) + dt.timedelta(days=1))
+
+    # Respect the plan's history window rather than throwing 403s at it.
+    known = store.get_kv(conn, horizon_key(adapter.name))
+    horizon = dt.date.fromisoformat(known) if known else None
+    if horizon is None:
+        horizon = find_history_horizon(adapter, start, today, notice)
+        store.set_kv(conn, horizon_key(adapter.name), horizon.isoformat())
+    if horizon > start:
+        if notice:
+            notice(f"This plan serves history back to {horizon}. Backfilling from "
+                   f"there — about {(today - horizon).days * 5 // 7:,} sessions.")
+        start = horizon
 
     written = 0
     day = start
@@ -221,11 +291,11 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None) -> Funne
 
 
 def refresh(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
-            progress=None, reset: bool = False) -> Funnel:
+            progress=None, reset: bool = False, notice=None) -> Funnel:
     adapter = adapter or get_adapter()
     if reset:
         clear_bars(conn)
     check_provenance(conn, adapter.name)
     refresh_reference(conn, adapter)
-    backfill(conn, adapter, progress=progress)
+    backfill(conn, adapter, progress=progress, notice=notice)
     return build(conn, adapter)

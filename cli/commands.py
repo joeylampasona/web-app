@@ -25,7 +25,10 @@ def cmd_universe(args) -> int:
             def progress(day: dt.date, count: int) -> None:
                 if count:
                     print(f"  {day}  {count:,} bars")
-            funnel = universe.refresh(conn, progress=progress,
+            def notice(text: str) -> None:
+                print(f"  → {text}")
+
+            funnel = universe.refresh(conn, progress=progress, notice=notice,
                                       reset=getattr(args, "reset", False))
         else:
             funnel = universe.build(conn)
