@@ -11,6 +11,11 @@ import type { Contraction, Bar } from "@/lib/types";
  * failed poke, and a volume histogram tinted by direction underneath.
  *
  * A reader learns what the dashed amber line means once and never relearns it.
+ *
+ * A stock with no setup passes pivot null and no contractions, and gets the
+ * same chart without the overlays that would be a lie on it: no pivot line,
+ * because it has no pivot. The price and volume are the price and volume
+ * either way, and a searched stock deserves to see them.
  */
 
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
@@ -28,7 +33,8 @@ export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
 }: {
   bars: Bar[];
-  pivot: number;
+  /** Null when the stock is not on a screen: there is no pivot to draw. */
+  pivot: number | null;
   contractions: Contraction[];
   breakoutDate: string | null;
   flags: string[];
@@ -43,7 +49,7 @@ export function SetupChart({
   );
 
   const boxes = useMemo<Box[]>(() => {
-    if (!contractions.length) return [];
+    if (!contractions.length || pivot === null) return [];
     const base: Box = {
       from: contractions[0].start,
       to: contractions[contractions.length - 1].end,
@@ -112,14 +118,16 @@ export function SetupChart({
         })) as never,
       );
 
-      candles.createPriceLine({
-        price: pivot,
-        color: token("--chart-pivot"),
-        lineWidth: 1,
-        lineStyle: lw.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: "pivot",
-      });
+      if (pivot !== null) {
+        candles.createPriceLine({
+          price: pivot,
+          color: token("--chart-pivot"),
+          lineWidth: 1,
+          lineStyle: lw.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "pivot",
+        });
+      }
 
       const markers: { time: string; position: string; color: string; shape: string; text: string }[] = [];
       if (breakoutDate && bars.some((b) => b.time === breakoutDate)) {
@@ -128,7 +136,7 @@ export function SetupChart({
           shape: "arrowUp", text: "breakout",
         });
       }
-      if (flags.includes("failed_poke")) {
+      if (flags.includes("failed_poke") && pivot !== null) {
         const poke = [...bars].reverse().find((b) => b.high > pivot && b.close <= pivot);
         if (poke) {
           markers.push({

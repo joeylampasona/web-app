@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
+import { SetupChart } from "./SetupChart";
 import { StockCard } from "./StockCard";
 import { XRayChart } from "./XRayChart";
 import { QuadrantBadge } from "./Badges";
@@ -54,8 +55,23 @@ export function StockDetail({ stock }: { stock: StockFile }) {
       {setup ? (
         <StockCard setup={setup} bars={stock.bars.slice(-140)} />
       ) : (
-        <div className="card muted footnote">
-          Not on a screen at the moment. The chart and history below still apply.
+        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <div className="card muted footnote">
+            Not on a screen at the moment — no base, so no pivot to draw. The price
+            and volume are below.
+          </div>
+          {stock.bars.length > 0 && (
+            <div className="card" style={{ padding: "var(--pad-md)" }}>
+              <SetupChart
+                bars={stock.bars.slice(-140)}
+                pivot={null}
+                contractions={[]}
+                breakoutDate={null}
+                flags={[]}
+                symbol={stock.symbol}
+              />
+            </div>
+          )}
         </div>
       )}
 
