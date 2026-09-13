@@ -147,14 +147,27 @@ component had to expose that handle either way.
 
 ## Answered: the multi-year screen
 
-**Left thin, deliberately.** The lookback moved 104 → 78 weeks, which is as far
-as it can go while still meaning "multi-year". At 104 the last live run returned
-42 setups, every one `forming`, because two years of history left exactly one
-valid window position and no room for a breakout to sit after a year-long base.
-Whether 78 is enough has not been measured on live data yet — no real run has
-finished since the change. The detector is right either way; the history is
-short, and it lengthens on its own as the nightly accumulates days. Deeper
-history is a paid Polygon tier, which is on the stop list.
+**Shortened, and that fixed it.** The lookback moved 104 → 78 weeks, which is as
+far as it can go while still meaning "multi-year".
+
+Measured on live data, before and after:
+
+| | 104 weeks | 78 weeks |
+|---|---|---|
+| Total | 42 | 101 |
+| forming | 42 | 28 |
+| fresh_breakout | 0 | 2 |
+| climbing | 0 | 13 |
+| played_out | 0 | 58 |
+
+At 104 the window and the available history were nearly the same length, so
+there was one valid position and nowhere for a breakout to sit after a year-long
+base — every setup was `forming` because the screen could not see past the base
+it had just found. The detector was right; the window was wrong for the history.
+
+This does not remove the two-year limit, it just stops that limit from consuming
+the whole screen. Raise the window back toward 104 once the nightly has
+accumulated enough days that it is meaningfully shorter than the history.
 
 ## Still open, and worth deciding before launch
 

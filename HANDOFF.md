@@ -199,19 +199,28 @@ lawyer signing anything off. Before you take money, or before this grows
 past people you know, have a securities lawyer read the disclaimer and
 the Learn pages. I cannot do that part.
 
-**Multi-year screen is thin.** You chose option A: leave it. Polygon's
-free tier serves about two years of history, and this screen looks for a
-lid that has held a year or more, so there is barely room for a breakout
-to sit after the base. The last run on real data returned 42 setups,
-every one of them `forming`.
+**Multi-year screen — settled, it works now.** This was open; it is not
+any more. You chose option A, leave the screen alone, and the fix turned
+out to be one number rather than a redesign.
 
-I shortened the screen's window from 104 weeks to 78 — as far as it can
-go and still mean "multi-year". **Whether that is enough, I do not know
-yet**: no real run has finished since the change. Check this screen when
-the nightly goes green. If it still shows nothing but `forming`, that is
-the history being short, not the screen being broken, and it fixes
-itself as the nightly accumulates days. Getting it working sooner means
-a paid Polygon tier — your call, not one I will make.
+Shortening the window from 104 weeks to 78, measured on live data:
+
+| | 104 weeks | 78 weeks |
+|---|---|---|
+| Total | 42 | 101 |
+| forming | 42 | 28 |
+| fresh breakouts | 0 | 2 |
+| climbing | 0 | 13 |
+| played out | 0 | 58 |
+
+At 104 weeks the window was almost as long as all the history Polygon's
+free tier serves, so there was nowhere for a breakout to sit after a
+year-long base and everything stayed `forming` forever. At 78 there is
+room. Nothing about the screen's logic changed.
+
+The two-year history limit is still there — this stops it swallowing
+the whole screen, it does not remove it. The window can go back toward
+104 once the nightly has banked enough days.
 
 **Two years of history generally.** Confirmed by probing: Polygon's free
 Basic plan returns 403 for dates older than roughly two years. This
