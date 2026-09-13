@@ -203,6 +203,11 @@ jobs:
           retention-days: 14
 
       - name: Tell Discord how it went
+        # A notification that will not send is not a failed scan. This run did
+        # the whole job — universe, ranks, screens, filings, publish, deploy —
+        # and then reported Failure because a chat message got a 403, which
+        # also tripped the "it broke" step below into firing about itself.
+        continue-on-error: true
         # Only worth a message when something moved. A night where nothing broke
         # out and nothing new formed is a normal night, and a bot that says so
         # every evening is a bot people mute.
@@ -230,11 +235,15 @@ jobs:
           request = urllib.request.Request(
               os.environ["DISCORD_WEBHOOK_URL"],
               data=json.dumps({"content": "\n".join(lines)[:1900]}).encode(),
-              headers={"Content-Type": "application/json"})
+              # Discord's edge rejects the default Python-urllib agent with a
+              # 403. Naming ourselves is what it wants.
+              headers={"Content-Type": "application/json",
+                       "User-Agent": "base-and-breakout-nightly/1.0"})
           urllib.request.urlopen(request, timeout=20)
           PY
 
       - name: Tell Discord it broke
+        continue-on-error: true
         if: failure() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
         shell: bash
         run: |
@@ -255,7 +264,8 @@ jobs:
           request = urllib.request.Request(
               os.environ["DISCORD_WEBHOOK_URL"],
               data=json.dumps(body).encode(),
-              headers={"Content-Type": "application/json"})
+              headers={"Content-Type": "application/json",
+                       "User-Agent": "base-and-breakout-nightly/1.0"})
           urllib.request.urlopen(request, timeout=20)
           PY
 
