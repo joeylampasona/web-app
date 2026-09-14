@@ -97,15 +97,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setLinkState({ kind: "sending" });
-    const { error } = await supabase.auth.signInWithOtp({
-      email: address,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    setLinkState(
-      error
-        ? { kind: "error", message: error.message }
-        : { kind: "sent", email: address },
-    );
+    const callback = `${window.location.origin}/auth/callback`;
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: { emailRedirectTo: callback },
+      });
+      setLinkState(
+        error
+          ? { kind: "error", message: explain(error.message, callback) }
+          : { kind: "sent", email: address },
+      );
+    } catch {
+      // A network failure or a project that no longer answers. Without this the
+      // button sat on "Sending…" for ever, which reads as "working" and is not.
+      setLinkState({
+        kind: "error",
+        message: "Could not reach the accounts service. Check the connection and "
+          + "try again; if it keeps happening, open /auth/check.",
+      });
+    }
   }, []);
 
   const signOut = useCallback(async () => {
@@ -144,4 +155,38 @@ export function useAuth(): AuthState {
 
 function toUser(raw: { id: string; email?: string } | undefined) {
   return raw ? { id: raw.id, email: raw.email ?? "" } : null;
+}
+
+/**
+ * Supabase's refusals are accurate and unreadable. Each one here has a cause a
+ * reader or an operator can act on, so it is named rather than passed through.
+ * Anything unrecognised is shown as-is: a message we do not understand is still
+ * better than a message we have replaced with a guess.
+ */
+function explain(message: string, callback: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("redirect")) {
+    return `The accounts project will not send readers back to ${callback}. `
+      + "Add that exact address under Authentication → URL Configuration → "
+      + "Redirect URLs in Supabase.";
+  }
+  if (text.includes("rate limit") || text.includes("after") && text.includes("seconds")) {
+    return "Too many links have been requested in the last hour. Supabase's "
+      + "built-in mail server allows only a few, and resets hourly. Wait and "
+      + "try again, or connect a real mail provider under Authentication → "
+      + "Emails in Supabase.";
+  }
+  if (text.includes("signups not allowed") || text.includes("signup is disabled")) {
+    return "New accounts are switched off on the accounts project. Turn them on "
+      + "under Authentication → Sign In / Providers in Supabase.";
+  }
+  if (text.includes("invalid") && text.includes("email")) {
+    return "That address was refused as invalid. Check it for a typo.";
+  }
+  if (text.includes("error sending") || text.includes("smtp")) {
+    return "The accounts project accepted the request but could not send the "
+      + "email. Its mail settings need attention — see Authentication → Emails "
+      + "in Supabase.";
+  }
+  return message;
 }

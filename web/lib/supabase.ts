@@ -21,6 +21,10 @@ const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export const configured = Boolean(URL && ANON);
 
+/** The project address, for the accounts check page. Public by design — it
+ *  identifies the project, not a person. The key is never exported. */
+export const projectUrl = URL ?? null;
+
 let cached: SupabaseClient | null = null;
 
 export function client(): SupabaseClient | null {

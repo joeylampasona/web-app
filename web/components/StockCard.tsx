@@ -10,7 +10,7 @@ import {
 import { EarningsBadge, FlagBadge, QuadrantBadge, StageBadge } from "./Badges";
 import { MetricRow } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
-import { SetupChart } from "./SetupChart";
+import { MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
 import { TickerLink } from "./StockDrawer";
 import { WatchStar } from "./WatchStar";
@@ -20,13 +20,16 @@ import { WatchStar } from "./WatchStar";
  * breakouts view; everything else is identical wherever the card appears.
  */
 export function StockCard({
-  setup, bars, variant = "setup",
+  setup, bars, variant = "setup", chartHeight = 210,
 }: {
   setup: Setup;
   /** Passed only for the handful of cards above the fold. The rest fetch their
    *  own chart when they come into view — see lib/useBars. */
   bars?: Bar[];
   variant?: "setup" | "breakout";
+  /** Cards in a list keep the fixed height that makes the list scroll evenly.
+   *  The one card on a stock's own page sizes itself to the width it has. */
+  chartHeight?: number | "responsive";
 }) {
   const ohlc = setup.ohlc;
   const lazy = useLazyBars(setup.symbol, !bars);
@@ -78,7 +81,9 @@ export function StockCard({
 
       {/* Holds the card's height steady whether or not the chart is mounted, so
           the list does not jump about as charts appear and are torn down. */}
-      <div ref={lazy.ref} style={{ minHeight: 210 }}>
+      <div ref={lazy.ref} style={{
+        minHeight: chartHeight === "responsive" ? MIN_CHART_HEIGHT : chartHeight,
+      }}>
         {show && drawn && drawn.length > 0 && (
         <SetupChart
           bars={drawn}
@@ -87,6 +92,7 @@ export function StockCard({
           breakoutDate={setup.breakout_date}
           flags={setup.flags}
           symbol={setup.symbol}
+          height={chartHeight}
           onReady={handleChartReady}
         />
         )}

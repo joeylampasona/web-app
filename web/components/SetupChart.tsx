@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Contraction, Bar } from "@/lib/types";
+import type { MaPlan } from "@/lib/movingAverages";
 
 /**
  * The chart semantics are constant across every chart on the site: a dashed
@@ -20,18 +21,23 @@ import type { Contraction, Bar } from "@/lib/types";
 
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
 
-/** The same average the pipeline computes, on the bars already on screen.
- *  Null until there is enough history, so a line begins where its data does. */
-function simpleMovingAverage(values: number[], window: number): (number | null)[] {
-  const out: (number | null)[] = new Array(values.length).fill(null);
-  if (window <= 0 || values.length < window) return out;
-  let running = 0;
-  for (let i = 0; i < values.length; i++) {
-    running += values[i];
-    if (i >= window) running -= values[i - window];
-    if (i >= window - 1) out[i] = running / window;
-  }
-  return out;
+/** A chart asked to size itself picks a height from its own width, held
+ *  between these so it stays readable on a phone and does not run off the
+ *  bottom of a laptop screen. Rounded to a step so a slow drag across a few
+ *  hundred pixels does not rebuild the chart at every intermediate width. */
+const RESPONSIVE = { ratio: 0.52, min: 260, max: 460, step: 20 } as const;
+
+/** The stock page is server-rendered, where a layout effect has nothing to
+ *  measure and React rightly complains about one. Measuring before paint still
+ *  matters in the browser, so the hook is chosen per environment. */
+const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/** What a responsive chart reserves before it has measured itself. */
+export const MIN_CHART_HEIGHT = RESPONSIVE.min;
+
+function heightFor(width: number): number {
+  const raw = Math.min(RESPONSIVE.max, Math.max(RESPONSIVE.min, width * RESPONSIVE.ratio));
+  return Math.round(raw / RESPONSIVE.step) * RESPONSIVE.step;
 }
 
 // Colours are read from the tokens at paint time, so no component ever writes
@@ -54,16 +60,34 @@ export function SetupChart({
   breakoutDate: string | null;
   flags: string[];
   symbol: string;
-  height?: number;
+  /** A number fixes the height. "responsive" sizes the chart from its own
+   *  width, which is what a page given over to a single stock wants. */
+  height?: number | "responsive";
   /** Hands back a screenshot function so a card can put the chart in an image. */
   onReady?: (screenshot: (() => HTMLCanvasElement | null) | null) => void;
-  /** The published 200-day line. Passing it turns the moving averages on; the
-   *  9, 21 and 50 are derived here from the bars already on screen. Card charts
+  /** Which averages to draw, decided by `planMovingAverages` so this chart and
+   *  the key beneath it cannot disagree about what is on screen. Card charts
    *  leave it out and stay as they were — four extra lines on a chart the size
    *  of a business card is noise. */
-  movingAverages?: (number | null)[] | null;
+  movingAverages?: MaPlan | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
+  const responsive = height === "responsive";
+  const drawnHeight = responsive ? (measured ?? RESPONSIVE.min) : height;
+
+  // Measured before paint, so a responsive chart is built once at the right
+  // size rather than built small and then rebuilt.
+  useMeasureEffect(() => {
+    if (!responsive) return;
+    const element = container.current;
+    if (!element) return;
+    const apply = () => setMeasured(heightFor(element.clientWidth));
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [responsive]);
   const [overlay, setOverlay] = useState<{ boxes: (Box & { x1: number; x2: number; y1: number; y2: number })[]; width: number }>(
     { boxes: [], width: 0 },
   );
@@ -95,7 +119,7 @@ export function SetupChart({
       if (disposed || !container.current) return;
 
       const chart = lw.createChart(element, {
-        height,
+        height: drawnHeight,
         layout: {
           background: { color: "transparent" },
           textColor: token("--chart-axis"),
@@ -138,33 +162,22 @@ export function SetupChart({
         })) as never,
       );
 
-      // Moving averages, slowest drawn first so a fast line crossing a slow one
-      // is visible rather than hidden underneath it.
-      if (movingAverages && movingAverages.length === bars.length) {
-        const closes = bars.map((b) => b.close);
-        // Slowest first so a fast line crossing a slow one is visible rather
-        // than hidden under it, and heavier as the window lengthens so the four
-        // stay separable without depending on colour alone.
-        const lines: [number, (number | null)[], 1 | 2][] = [
-          [200, movingAverages, 2],
-          [50, simpleMovingAverage(closes, 50), 2],
-          [21, simpleMovingAverage(closes, 21), 1],
-          [9, simpleMovingAverage(closes, 9), 1],
-        ];
-        for (const [window, values, width] of lines) {
-          const points = bars
-            .map((b, i) => ({ time: b.time, value: values[i] }))
-            .filter((p) => p.value !== null && p.value !== undefined);
-          if (points.length < 2) continue;
-          const line = chart.addLineSeries({
-            color: token(`--chart-ma-${window}`),
-            lineWidth: width,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            crosshairMarkerVisible: false,
-          });
-          line.setData(points as never);
-        }
+      // Moving averages. The plan is already in slowest-first order, so a fast
+      // line crossing a slow one is drawn on top of it rather than hidden
+      // underneath, and each line is heavier as its window lengthens.
+      for (const { window, values, weight } of movingAverages?.drawn ?? []) {
+        const points = bars
+          .map((b, i) => ({ time: b.time, value: values[i] }))
+          .filter((p) => p.value !== null && p.value !== undefined);
+        if (points.length < 2) continue;
+        const line = chart.addLineSeries({
+          color: token(`--chart-ma-${window}`),
+          lineWidth: weight,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+        });
+        line.setData(points as never);
       }
 
       if (pivot !== null) {
@@ -240,15 +253,15 @@ export function SetupChart({
       disposed = true;
       cleanup();
     };
-  }, [bars, pivot, boxes, breakoutDate, flags, height, onReady, movingAverages]);
+  }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady, movingAverages]);
 
   return (
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>
-      <div ref={container} style={{ width: "100%", height }} />
+      <div ref={container} style={{ width: "100%", height: drawnHeight }} />
       <svg
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
         width="100%"
-        height={height}
+        height={drawnHeight}
         aria-hidden
       >
         {overlay.boxes.map((box, index) => {

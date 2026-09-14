@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Drawer } from "vaul";
 import { useAuth } from "@/lib/auth";
 
@@ -93,7 +94,12 @@ export function SignUpSheet() {
                   </div>
                   {linkState.kind === "error" && (
                     <p className="footnote" style={{ color: "var(--warn)", margin: 0 }}>
-                      {linkState.message}
+                      {linkState.message}{" "}
+                      <Link href="/auth/check" onClick={closePrompt}
+                            style={{ textDecoration: "underline" }}>
+                        Check the setup
+                      </Link>
+                      .
                     </p>
                   )}
                   <p className="caption dim" style={{ margin: 0 }}>
@@ -108,7 +114,12 @@ export function SignUpSheet() {
                   </div>
                   <p className="caption dim" style={{ marginTop: "var(--pad-md)", marginBottom: 0 }}>
                     Accounts are not switched on for this deploy, so there is nothing to
-                    sign up to yet.
+                    sign up to yet.{" "}
+                    <Link href="/auth/check" onClick={closePrompt}
+                          style={{ textDecoration: "underline" }}>
+                      What is missing
+                    </Link>
+                    .
                   </p>
                 </>
               )}

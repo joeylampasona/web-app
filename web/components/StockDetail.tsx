@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
@@ -12,6 +13,7 @@ import { StockCard } from "./StockCard";
 import { XRayChart } from "./XRayChart";
 import { QuadrantBadge } from "./Badges";
 import { compactMoney, rsText } from "@/lib/format";
+import { planMovingAverages } from "@/lib/movingAverages";
 import type { DeskRun, StockFile } from "@/lib/types";
 
 /** Reads plainly, and never says what the stock is going to do next. */
@@ -40,6 +42,22 @@ export function StockDetail({ stock, run }: {
   run?: DeskRun | null;
 }) {
   const setup = stock.primary_setup;
+
+  // One slice and one plan, shared by the chart and the key beneath it. Both
+  // are memoised because a fresh array on every render would rebuild the chart
+  // on every render.
+  const chartBars = useMemo(() => stock.bars.slice(-140), [stock.bars]);
+  const maPlan = useMemo(
+    () => planMovingAverages(
+      chartBars.map((b) => b.close),
+      // Absent and empty mean different things here — a file written before
+      // moving averages existed, versus a stock with under a year of history —
+      // so the distinction is passed through rather than flattened.
+      stock.sma200 ? stock.sma200.slice(-chartBars.length) : stock.sma200,
+    ),
+    [chartBars, stock.sma200],
+  );
+
   return (
     <div className="stack" style={{ gap: "var(--pad-xl)" }}>
       <div>
@@ -63,24 +81,25 @@ export function StockDetail({ stock, run }: {
 
       {setup ? (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <StockCard setup={setup} bars={stock.bars.slice(-140)} />
+          <StockCard setup={setup} bars={chartBars} chartHeight="responsive" />
           {/* Drawn only here, never on a card in a list: four lines on a chart
               the size of a business card is noise, and this is the page someone
               reached by looking one company up. */}
-          {stock.bars.length > 0 && (
+          {chartBars.length > 0 && (
             <div className="card stack" style={{ padding: "var(--pad-md)",
                                                  gap: "var(--gap-sm)" }}>
               <div className="eyebrow">Moving averages</div>
               <SetupChart
-                bars={stock.bars.slice(-140)}
+                bars={chartBars}
                 pivot={null}
                 contractions={[]}
                 breakoutDate={null}
                 flags={[]}
                 symbol={`${stock.symbol}-ma`}
-                movingAverages={stock.sma200?.slice(-140)}
+                height="responsive"
+                movingAverages={maPlan}
               />
-              <MovingAverageKey stacked={setup.trend?.stacked} />
+              <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} />
             </div>
           )}
         </div>
@@ -90,19 +109,20 @@ export function StockDetail({ stock, run }: {
             Not on a screen at the moment — no base, so no pivot to draw. The price
             and volume are below.
           </div>
-          {stock.bars.length > 0 && (
+          {chartBars.length > 0 && (
             <div className="card stack" style={{ padding: "var(--pad-md)",
                                                  gap: "var(--gap-sm)" }}>
               <SetupChart
-                bars={stock.bars.slice(-140)}
+                bars={chartBars}
                 pivot={null}
                 contractions={[]}
                 breakoutDate={null}
                 flags={[]}
                 symbol={stock.symbol}
-                movingAverages={stock.sma200?.slice(-140)}
+                height="responsive"
+                movingAverages={maPlan}
               />
-              <MovingAverageKey stacked={stock.primary_setup?.trend?.stacked} />
+              <MovingAverageKey plan={maPlan} />
             </div>
           )}
         </div>

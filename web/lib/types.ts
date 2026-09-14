@@ -99,8 +99,13 @@ export interface StockFile {
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are
-   *  derived in the browser from those same bars. */
-  sma200: (number | null)[];
+   *  derived in the browser from those same bars.
+   *
+   *  Optional on purpose: a file published before moving averages existed has
+   *  no such field, and that is a different fact from a stock with under a
+   *  year of history, whose field is present and empty. `planMovingAverages`
+   *  tells the reader which of the two applies. */
+  sma200?: (number | null)[];
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
