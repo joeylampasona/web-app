@@ -49,13 +49,22 @@
   --chart-base-fill:  rgba(245,165,36,0.14);
   --chart-base-line:  #F5A524;
   --chart-prior-base: #4A4D59;  /* dashed, prior contractions */
-  /* Fast to slow, spread across the hue wheel rather than four blues — and
-     drawn at increasing width, so the lines stay separable without relying on
-     colour, the same reason gain and loss carry glyphs. */
-  --chart-ma-9:       #2DD4BF;
-  --chart-ma-21:      #38BDF8;
-  --chart-ma-50:      #818CF8;
-  --chart-ma-200:     #C084FC;
+  /* Four lines, drawn at two widths: the 9 and 21 thin, the 50 and 200 thick.
+     A pair sharing a width has nothing but colour to separate it, so those two
+     pairs are the ones held furthest apart — measured as CIEDE2000, not judged
+     by eye. The first attempt put teal beside sky and indigo beside purple,
+     which read as two lines rather than four.
+
+       same width   9 vs 21   dE 26 -> 40      50 vs 200  dE 13 -> 40
+       and none of the four is within dE 30 of gain, loss or the amber pivot.
+
+     Cross-width pairs deliberately gave up some separation to buy that, since
+     weight already tells those apart. Green, red and amber stay out of it:
+     they mean gain, loss and pivot everywhere else on the site. */
+  --chart-ma-9:       #22D3EE;  /* cyan   */
+  --chart-ma-21:      #C084FC;  /* purple */
+  --chart-ma-50:      #60A5FA;  /* blue   */
+  --chart-ma-200:     #F472B6;  /* pink   */
   --chart-vol-up:     rgba(22,163,74,0.55);
   --chart-vol-down:   rgba(220,38,38,0.45);
   --chart-grid:       #1E202A;
@@ -144,10 +153,13 @@
   --chart-base-line:  #B8791A;
   --chart-prior-base: #B0B2B8;
   --chart-grid:       #E8E6E0;
-  --chart-ma-9:       #0D9488;
-  --chart-ma-21:      #0284C7;
-  --chart-ma-50:      #4F46E5;
-  --chart-ma-200:     #9333EA;
+  /* The same four, darkened for a light card. Held to the same measured
+     separation: 9 vs 21 dE 34, 50 vs 200 dE 36, and the cyan moved off teal so
+     the 9-day is not mistakable for gain green on a light background. */
+  --chart-ma-9:       #0891B2;  /* cyan   */
+  --chart-ma-21:      #9333EA;  /* purple */
+  --chart-ma-50:      #2563EB;  /* blue   */
+  --chart-ma-200:     #DB2777;  /* pink   */
 
   --warn:             #A16207;
   --warn-bg:          rgba(161,98,7,0.10);
