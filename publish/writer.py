@@ -55,6 +55,22 @@ def _write(path: pathlib.Path, payload: Any) -> pathlib.Path:
 BAR_FORMAT = ["time", "open", "high", "low", "close", "volume"]
 
 
+def _sma_tail(market: Market, symbol: str, window: int, limit: int) -> list[float | None]:
+    """The last `limit` values of one moving average, aligned to the bars.
+
+    None where the average does not exist yet — the line starts where the
+    history does, rather than being drawn from a number we do not have.
+    """
+    from patterns.indicators import sma
+    if limit <= 0:
+        return []
+    bars = market.series.get(symbol) or []
+    if len(bars) < window:
+        return []
+    line = sma([b.close for b in bars], window)[-limit:]
+    return [round(v, 2) if v is not None else None for v in line]
+
+
 def _bars_for(market: Market, symbol: str, limit: int) -> list[list]:
     if limit <= 0:          # [-0:] is the whole list, not none of it
         return []
@@ -349,6 +365,11 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                                            bundle.change(symbol, "m1"))),
         "bars_format": BAR_FORMAT,
         "bars": _bars_for(market, symbol, bar_limit),
+        # Only the 200. The 9, 21 and 50 need at most fifty prior bars, and the
+        # hundred and eighty we ship contain them, so the browser derives those
+        # three itself. Publishing all four would add about 11MB to every
+        # nightly for three lines that can be worked out from data already here.
+        "sma200": _sma_tail(market, symbol, 200, bar_limit),
         "setups": [s.to_json() for s in setups],
         "primary_setup": primary.to_json() if primary else None,
         "base_history": primary.base_history if primary else [],

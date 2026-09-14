@@ -49,8 +49,13 @@
   --chart-base-fill:  rgba(245,165,36,0.14);
   --chart-base-line:  #F5A524;
   --chart-prior-base: #4A4D59;  /* dashed, prior contractions */
-  --chart-ma-50:      #38BDF8;
-  --chart-ma-200:     #A78BFA;
+  /* Fast to slow, spread across the hue wheel rather than four blues — and
+     drawn at increasing width, so the lines stay separable without relying on
+     colour, the same reason gain and loss carry glyphs. */
+  --chart-ma-9:       #2DD4BF;
+  --chart-ma-21:      #38BDF8;
+  --chart-ma-50:      #818CF8;
+  --chart-ma-200:     #C084FC;
   --chart-vol-up:     rgba(22,163,74,0.55);
   --chart-vol-down:   rgba(220,38,38,0.45);
   --chart-grid:       #1E202A;
@@ -139,8 +144,10 @@
   --chart-base-line:  #B8791A;
   --chart-prior-base: #B0B2B8;
   --chart-grid:       #E8E6E0;
-  --chart-ma-50:      #0284C7;
-  --chart-ma-200:     #7C3AED;
+  --chart-ma-9:       #0D9488;
+  --chart-ma-21:      #0284C7;
+  --chart-ma-50:      #4F46E5;
+  --chart-ma-200:     #9333EA;
 
   --warn:             #A16207;
   --warn-bg:          rgba(161,98,7,0.10);

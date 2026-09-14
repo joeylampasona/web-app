@@ -20,6 +20,20 @@ import type { Contraction, Bar } from "@/lib/types";
 
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
 
+/** The same average the pipeline computes, on the bars already on screen.
+ *  Null until there is enough history, so a line begins where its data does. */
+function simpleMovingAverage(values: number[], window: number): (number | null)[] {
+  const out: (number | null)[] = new Array(values.length).fill(null);
+  if (window <= 0 || values.length < window) return out;
+  let running = 0;
+  for (let i = 0; i < values.length; i++) {
+    running += values[i];
+    if (i >= window) running -= values[i - window];
+    if (i >= window - 1) out[i] = running / window;
+  }
+  return out;
+}
+
 // Colours are read from the tokens at paint time, so no component ever writes
 // a colour down. A missing token fails visibly rather than silently picking
 // some other colour.
@@ -31,6 +45,7 @@ function token(name: string, fallback = "transparent"): string {
 
 export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
+  movingAverages,
 }: {
   bars: Bar[];
   /** Null when the stock is not on a screen: there is no pivot to draw. */
@@ -42,6 +57,11 @@ export function SetupChart({
   height?: number;
   /** Hands back a screenshot function so a card can put the chart in an image. */
   onReady?: (screenshot: (() => HTMLCanvasElement | null) | null) => void;
+  /** The published 200-day line. Passing it turns the moving averages on; the
+   *  9, 21 and 50 are derived here from the bars already on screen. Card charts
+   *  leave it out and stay as they were — four extra lines on a chart the size
+   *  of a business card is noise. */
+  movingAverages?: (number | null)[] | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [overlay, setOverlay] = useState<{ boxes: (Box & { x1: number; x2: number; y1: number; y2: number })[]; width: number }>(
@@ -118,6 +138,35 @@ export function SetupChart({
         })) as never,
       );
 
+      // Moving averages, slowest drawn first so a fast line crossing a slow one
+      // is visible rather than hidden underneath it.
+      if (movingAverages && movingAverages.length === bars.length) {
+        const closes = bars.map((b) => b.close);
+        // Slowest first so a fast line crossing a slow one is visible rather
+        // than hidden under it, and heavier as the window lengthens so the four
+        // stay separable without depending on colour alone.
+        const lines: [number, (number | null)[], 1 | 2][] = [
+          [200, movingAverages, 2],
+          [50, simpleMovingAverage(closes, 50), 2],
+          [21, simpleMovingAverage(closes, 21), 1],
+          [9, simpleMovingAverage(closes, 9), 1],
+        ];
+        for (const [window, values, width] of lines) {
+          const points = bars
+            .map((b, i) => ({ time: b.time, value: values[i] }))
+            .filter((p) => p.value !== null && p.value !== undefined);
+          if (points.length < 2) continue;
+          const line = chart.addLineSeries({
+            color: token(`--chart-ma-${window}`),
+            lineWidth: width,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
+          });
+          line.setData(points as never);
+        }
+      }
+
       if (pivot !== null) {
         candles.createPriceLine({
           price: pivot,
@@ -191,7 +240,7 @@ export function SetupChart({
       disposed = true;
       cleanup();
     };
-  }, [bars, pivot, boxes, breakoutDate, flags, height, onReady]);
+  }, [bars, pivot, boxes, breakoutDate, flags, height, onReady, movingAverages]);
 
   return (
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>

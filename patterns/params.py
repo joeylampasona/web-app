@@ -144,6 +144,19 @@ _FRESH = ParamSpec(
          "moves to climbing.")
 
 
+_TREND = ParamSpec(
+    key="min_trend_rungs", label="Moving averages that must be in order",
+    kind="integer", default=0, minimum=0, maximum=3, step=1, unit=" of 3",
+    funnel_title="Its averages agree",
+    funnel_text="At least {value} of the three rungs hold — 9 above 21, 21 above "
+                "50, 50 above 200.",
+    help="The 9, 21, 50 and 200-day averages, fastest to slowest. Three of three "
+         "is a full stack: every timeframe pointing the same way. Zero turns this "
+         "off, which is where it starts, so no screen changes until you move it. "
+         "A stock with under 200 sessions of history has no 200-day average and "
+         "is not judged on this at all.")
+
+
 _SWING = ParamSpec(
     key="swing_threshold_pct", label="Smallest swing that counts as a contraction",
     kind="percent", default=3.0, minimum=1.0, maximum=12.0, step=0.5, unit="%",
@@ -205,7 +218,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       help="Shares traded in the back half of the base against the "
                            "front half. The card shows the reciprocal, so a bigger "
                            "number there means quieter."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("Prior uptrend", "The stock was already going up before the pause "
@@ -252,7 +265,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       help="We compare the pivot against every session we hold for this "
                            "stock. Our history goes back as far as our data does, which "
                            "is not necessarily the whole life of the company."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("Blue sky", "There is no price history above the pivot.", "opensky"),
@@ -306,7 +319,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       funnel_text="From the lid, it never fell more than {value}%.",
                       help="A long base is allowed to be deep. Past a point it is a "
                            "different company than the one that set the high."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("The long wait", "The same price has capped the stock for a year "
@@ -349,7 +362,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       help="The average closing price of the last 50 sessions. For a "
                            "young listing this is the only trend line with enough "
                            "history to mean anything."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("Recently listed", "The company has been public for under a year. "
@@ -416,7 +429,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       funnel_text="Within {value}% of its highest price in a year.",
                       help="A flat base far below the highs is a stock that has "
                            "stopped falling, which is a different thing."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("A shelf", "Weeks of going sideways in a narrow band instead of "
@@ -501,7 +514,7 @@ SCREENS: dict[str, ScreenSpec] = {
                       funnel_title="Above its 50-day line",
                       funnel_text="Price is above the average of the last 50 days.",
                       help="The average closing price of the last 50 sessions."),
-            _NEAR_PIVOT, _SWING, _FRESH,
+            _NEAR_PIVOT, _SWING, _FRESH, _TREND,
         ],
         concepts=[
             Concept("The cup", "A fall and a gradual curve back up over several "
@@ -540,6 +553,10 @@ def funnel_steps(screen: str, overrides: dict[str, Any] | None = None) -> list[d
             continue
         value = params.get(p.key)
         if p.kind == "boolean" and not value:
+            continue
+        # A numeric gate at zero admits everything. Printing it as a step would
+        # describe a filter that is not filtering.
+        if p.kind in ("integer", "percent") and not value and p.minimum == 0:
             continue
         steps.append({
             "title": p.funnel_title,

@@ -54,12 +54,18 @@ class _Panel:
         self.hi252: dict[str, list] = {}
         self.lo252: dict[str, list] = {}
         self.hi50: dict[str, list] = {}
+        # The short end of the stack. The 50 and 200 are already here; these are
+        # the two that measure a timeframe nothing else on this site covers.
+        self.sma9: dict[str, list] = {}
+        self.sma21: dict[str, list] = {}
         for sym in market.universe:
             bars = market.series.get(sym) or []
             if not bars:
                 continue
             cl = [b.close for b in bars]
             self.idx[sym] = {b.date: i for i, b in enumerate(bars)}
+            self.sma9[sym] = indicators.sma(cl, 9)
+            self.sma21[sym] = indicators.sma(cl, 21)
             self.sma50[sym] = indicators.sma(cl, 50)
             self.sma200[sym] = indicators.sma(cl, 200)
             self.hi252[sym] = indicators.rolling_max([b.high for b in bars], YEAR)
@@ -73,7 +79,8 @@ def _snapshot(panel: _Panel, day: dt.date) -> dict[str, float]:
     near_low = float(cfg.get("near_low_pct", 5.0)) / 100.0
     m = panel.market
     counts = dict(universe=0, near_high=0, near_low=0, uptrend=0, up=0, down=0,
-                  above_50=0, above_200=0, breakout=0, failed_poke=0)
+                  above_50=0, above_200=0, breakout=0, failed_poke=0,
+                  stacked=0, stack_known=0)
     for sym, index in panel.idx.items():
         i = index.get(day)
         if i is None or i < 1:
@@ -102,6 +109,17 @@ def _snapshot(panel: _Panel, day: dt.date) -> dict[str, float]:
             counts["above_200"] += 1
         if s50 and s200 and bar.close > s50 and bar.close > s200 and s50 > s200:
             counts["uptrend"] += 1
+
+        # A full stack: 9 above 21 above 50 above 200. Counted against the names
+        # that have enough history to have all four, not against the universe —
+        # a young listing has no 200-day average, and folding it in as "not
+        # stacked" would quietly understate the reading.
+        s9 = panel.sma9[sym][i]
+        s21 = panel.sma21[sym][i]
+        if None not in (s9, s21, s50, s200):
+            counts["stack_known"] += 1
+            if s9 > s21 > s50 > s200:
+                counts["stacked"] += 1
 
         if i >= BREAKOUT_LOOKBACK:
             lid = panel.hi50[sym][i - 1]
@@ -172,6 +190,10 @@ def compute(market: Market) -> dict:
              {"count": s["above_50"], "universe": universe_size}),
         make("above_200ma", "Above the 200-day line", "above_200", "percent",
              {"count": s["above_200"], "universe": universe_size}),
+        make("full_stack", "Averages fully stacked", "stacked", "percent",
+             {"count": s["stacked"], "universe": s["stack_known"] or universe_size},
+             "The 9, 21, 50 and 200-day averages in order, fastest above slowest. "
+             "Measured against the names with enough history to have all four."),
         make("breakouts", "Broke out today", "breakout", "count",
              {"today": s["breakout"],
               "yesterday": snaps[prior]["breakout"] if prior else 0,

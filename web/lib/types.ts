@@ -31,6 +31,7 @@ export interface Setup {
   base_weeks: number | null;
   base_depth_pct: number | null;
   flags: string[];
+  trend?: TrendAlignment | null;
   quadrant: string | null;
   breakout_date: string | null;
   sessions_since_breakout: number | null;
@@ -97,6 +98,9 @@ export interface StockFile {
   insiders: InsiderSummary | null;
   news: Headline[];
   desk_signals: DeskSignal[];
+  /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are
+   *  derived in the browser from those same bars. */
+  sma200: (number | null)[];
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
@@ -235,4 +239,15 @@ export interface DeskRun {
   /** Per scanner: "ok" | "failed" | "missing". An empty signal set means
    *  nothing at all if the scanner that produces it did not run. */
   stage_status: Record<string, string>;
+}
+
+export interface TrendAlignment {
+  sma: Record<string, number | null>;
+  /** How many of 9>21, 21>50, 50>200 hold. Three is a full stack. */
+  rungs: number;
+  stacked: boolean;
+  price_above_all: boolean;
+  /** Sessions the stack has held, or null when it is not stacked. */
+  stacked_sessions: number | null;
+  cooling: boolean;
 }

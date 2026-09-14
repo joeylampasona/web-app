@@ -5,6 +5,7 @@ import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { InsiderPanel } from "./InsiderPanel";
+import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
 import { SetupChart } from "./SetupChart";
 import { StockCard } from "./StockCard";
@@ -61,7 +62,28 @@ export function StockDetail({ stock, run }: {
       </div>
 
       {setup ? (
-        <StockCard setup={setup} bars={stock.bars.slice(-140)} />
+        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <StockCard setup={setup} bars={stock.bars.slice(-140)} />
+          {/* Drawn only here, never on a card in a list: four lines on a chart
+              the size of a business card is noise, and this is the page someone
+              reached by looking one company up. */}
+          {stock.bars.length > 0 && (
+            <div className="card stack" style={{ padding: "var(--pad-md)",
+                                                 gap: "var(--gap-sm)" }}>
+              <div className="eyebrow">Moving averages</div>
+              <SetupChart
+                bars={stock.bars.slice(-140)}
+                pivot={null}
+                contractions={[]}
+                breakoutDate={null}
+                flags={[]}
+                symbol={`${stock.symbol}-ma`}
+                movingAverages={stock.sma200?.slice(-140)}
+              />
+              <MovingAverageKey stacked={setup.trend?.stacked} />
+            </div>
+          )}
+        </div>
       ) : (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
           <div className="card muted footnote">
@@ -69,7 +91,8 @@ export function StockDetail({ stock, run }: {
             and volume are below.
           </div>
           {stock.bars.length > 0 && (
-            <div className="card" style={{ padding: "var(--pad-md)" }}>
+            <div className="card stack" style={{ padding: "var(--pad-md)",
+                                                 gap: "var(--gap-sm)" }}>
               <SetupChart
                 bars={stock.bars.slice(-140)}
                 pivot={null}
@@ -77,7 +100,9 @@ export function StockDetail({ stock, run }: {
                 breakoutDate={null}
                 flags={[]}
                 symbol={stock.symbol}
+                movingAverages={stock.sma200?.slice(-140)}
               />
+              <MovingAverageKey stacked={stock.primary_setup?.trend?.stacked} />
             </div>
           )}
         </div>

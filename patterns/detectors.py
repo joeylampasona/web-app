@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from data.types import Bar
-from patterns import bases, flags, stages
+from patterns import bases, flags, stages, trend
 from patterns.indicators import atr_pct, mean, sma
 from patterns.params import Params
 
@@ -53,6 +53,9 @@ class Setup:
     industry: str = ""
     volume: float | None = None
     ohlc: dict = field(default_factory=dict)
+    #: Where the stock sits against its 9/21/50/200-day averages. None when it
+    #: has under 200 sessions of history — an absence, not a failing grade.
+    trend: dict | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -155,6 +158,7 @@ def _build(series: Series, params: Params, structure: bases.Structure,
     bars = series.bars
     closes = [b.close for b in bars]
     ma50 = sma(closes, 50)
+    alignment = trend.alignment(closes)
     last = bars[-1]
     pivot = structure.pivot
     tight, dry = _half_ratios(bars, structure.start_idx, structure.end_idx)
@@ -183,7 +187,7 @@ def _build(series: Series, params: Params, structure: bases.Structure,
         price_vs_50ma_pct=round(100.0 * (last.close / ma50[-1] - 1.0), 2) if ma50[-1] else None,
         base_weeks=round(structure.weeks, 1),
         base_depth_pct=round(structure.depth_pct, 2),
-        flags=flags.detect(bars, pivot),
+        flags=flags.detect(bars, pivot) + _cooling_flag(alignment, stage.stage),
         breakout_date=stage.breakout_date.isoformat() if stage.breakout_date else None,
         sessions_since_breakout=stage.sessions_since,
         base_history=[s.to_json(bars) for s in structures],
@@ -195,9 +199,24 @@ def _build(series: Series, params: Params, structure: bases.Structure,
               "change_pct": round(100.0 * (last.close / bars[-2].close - 1.0), 2)
               if len(bars) > 1 and bars[-2].close else None},
     )
+    setup.trend = alignment.to_json() if alignment else None
     if structure.breakout_idx is not None:
         setup.breakout_metrics = _breakout_metrics(bars, structure.breakout_idx, ma50)
     return setup
+
+
+def _cooling_flag(alignment, stage_name: str) -> list[str]:
+    """Cooling only means something once the thing has actually moved.
+
+    On a setup still forming, the short averages crossing is just what a base
+    does while it rests — printing a caution there would need a caveat to
+    explain it away, which is the same as it not being worth printing.
+    """
+    if alignment is None or not alignment.cooling:
+        return []
+    if stage_name not in (stages.FRESH, stages.CLIMBING):
+        return []
+    return ["cooling"]
 
 
 def _gate_rs(series: Series, params: Params) -> bool:
@@ -398,32 +417,50 @@ def _cup_and_handle(series: Series, params: Params,
 
 def detect_flat_base(series: Series, params: Params) -> Setup | None:
     return _detect(series, params,
-                   extra_now=[_above_ma(50), _near_52w_high],
+                   extra_now=[_trend_rungs, _above_ma(50), _near_52w_high],
                    extra_always=[_flat])
 
 
 def detect_cup_and_handle(series: Series, params: Params) -> Setup | None:
     return _detect(series, params,
-                   extra_now=[_above_ma(50)],
+                   extra_now=[_trend_rungs, _above_ma(50)],
                    extra_always=[_cup_and_handle])
+
+
+def _trend_rungs(series: Series, params: Params,
+                 structure: bases.Structure) -> bool:
+    """The moving-average dial. Zero admits everything, which is the default.
+
+    A stock without 200 sessions has no 200-day average, so there is no answer
+    to give. It passes rather than failing, because the dial asks whether the
+    averages disagree — not whether we have enough history to ask.
+    """
+    wanted = int(params.get("min_trend_rungs", 0) or 0)
+    if wanted <= 0:
+        return True
+    alignment = trend.alignment([b.close for b in series.bars])
+    if alignment is None:
+        return True
+    return alignment.rungs >= wanted
 
 
 def detect_vcp(series: Series, params: Params) -> Setup | None:
     return _detect(series, params,
-                   extra_now=[_above_ma(50), _above_ma(200), _near_52w_high],
+                   extra_now=[_trend_rungs, _above_ma(50), _above_ma(200), _near_52w_high],
                    extra_always=[_tightening])
 
 
 def detect_blue_sky(series: Series, params: Params) -> Setup | None:
-    return _detect(series, params, extra_always=[_all_time_high_pivot])
+    return _detect(series, params,
+                   extra_now=[_trend_rungs], extra_always=[_all_time_high_pivot])
 
 
 def detect_multi_year(series: Series, params: Params) -> Setup | None:
-    return _detect(series, params, extra_now=[_above_ma(200)])
+    return _detect(series, params, extra_now=[_trend_rungs, _above_ma(200)])
 
 
 def detect_ipo(series: Series, params: Params) -> Setup | None:
-    return _detect(series, params, extra_now=[_above_ma(50)],
+    return _detect(series, params, extra_now=[_trend_rungs, _above_ma(50)],
                    extra_always=[_recently_listed])
 
 

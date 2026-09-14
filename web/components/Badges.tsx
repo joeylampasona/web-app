@@ -5,9 +5,16 @@ import { Tooltip } from "./Tooltip";
  * Cautions use --warn, never --brand. A caution is not chrome, and amber is
  * already spent on the pivot.
  */
+const FLAGS: Record<string, { glyph: string; label: string }> = {
+  squat: { glyph: "⚑", label: "squat" },
+  failed_poke: { glyph: "×", label: "failed poke" },
+  // Its own glyph, not just its own colour — gain and loss are never colour
+  // alone here and neither is a caution.
+  cooling: { glyph: "↘", label: "cooling" },
+};
+
 export function FlagBadge({ flag }: { flag: string }) {
-  const glyph = flag === "squat" ? "⚑" : "×";
-  const label = flag === "squat" ? "squat" : "failed poke";
+  const { glyph, label } = FLAGS[flag] ?? { glyph: "·", label: flag.replace(/_/g, " ") };
   return (
     <span className="badge badge--warn">
       <span aria-hidden>{glyph}</span>

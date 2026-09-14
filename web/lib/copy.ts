@@ -55,6 +55,10 @@ const COPY = {
   "flag.failed_poke":
     "Price pushed above the pivot during a session in the last two weeks and closed " +
     "back underneath it.",
+  "flag.cooling":
+    "The 9-day average crossed below the 21-day within the last two weeks, so " +
+    "short-term momentum has eased. That is often a pause inside a move rather " +
+    "than the end of one, which is why it is a marker here and not a stage.",
 
   "stage.forming": "The base is there and price is still under the pivot.",
   "stage.fresh_breakout": "It closed above the pivot within the last 5 sessions.",
