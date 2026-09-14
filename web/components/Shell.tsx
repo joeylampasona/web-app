@@ -182,25 +182,37 @@ export function Shell({ children }: { children: React.ReactNode }) {
         >
           <Drawer.Portal>
             <Drawer.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)" }} />
+            {/* Same shape as the stock sheet: a handle that stays put and one
+                scrolling pane, so dragging dismisses and scrolling scrolls.
+                This list was short enough to get away with it; it is eight
+                destinations now and a small phone would have hit the same
+                wall. */}
             <Drawer.Content
               style={{
                 position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 60,
                 background: "var(--surface-2)",
                 borderTop: "0.5px solid var(--border-strong)",
                 borderRadius: "var(--radius-card) var(--radius-card) 0 0",
-                padding: "var(--pad-lg) var(--pad-lg) var(--pad-xl)",
-                maxHeight: "80vh", overflowY: "auto",
+                maxHeight: "80vh", overflow: "hidden",
+                display: "flex", flexDirection: "column",
               }}
             >
-              <div
-                aria-hidden
-                style={{
-                  width: 36, height: 4, borderRadius: "var(--radius-pill)",
-                  background: "var(--border-stronger)", margin: "0 auto var(--pad-lg)",
-                }}
-              />
-              <Drawer.Title className="eyebrow">{tab.label}</Drawer.Title>
-              <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+              <div style={{ flexShrink: 0, padding: "var(--pad-lg) var(--pad-lg) 0" }}>
+                <div
+                  aria-hidden
+                  style={{
+                    width: 36, height: 4, borderRadius: "var(--radius-pill)",
+                    background: "var(--border-stronger)", margin: "0 auto var(--pad-lg)",
+                  }}
+                />
+                <Drawer.Title className="eyebrow">{tab.label}</Drawer.Title>
+              </div>
+              <div className="stack" style={{
+                gap: "var(--gap-sm)", flex: 1, minHeight: 0, overflowY: "auto",
+                overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
+                padding: "var(--gap-sm) var(--pad-lg)",
+                paddingBottom: "calc(var(--pad-xl) + env(safe-area-inset-bottom))",
+              }}>
                 {tab.destinations!.map((destination) => (
                   <Link
                     key={destination.href}

@@ -16,7 +16,7 @@ export default function BreakoutsPage() {
       <div className="eyebrow">Market · the lay of the land</div>
       <h1>All breakouts today</h1>
       <p className="muted footnote">
-        Every name on one of the four screens that closed above its pivot on the session
+        Every name on one of the screens that closed above its pivot on the session
         you pick. The metric rows swap to the breakout set here.
       </p>
       {latest ? (

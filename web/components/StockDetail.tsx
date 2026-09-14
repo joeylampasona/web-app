@@ -18,7 +18,7 @@ function plainRead(stock: StockFile): string {
   const setup = stock.primary_setup;
   const rank = rsText(stock.rs_rating);
   if (!setup) {
-    return `${stock.name} is not on any of the four screens right now. Its relative ` +
+    return `${stock.name} is not on any of the screens right now. Its relative ` +
       `strength rating is ${rank}, and it sits in ${stock.industry}.`;
   }
   const weeks = setup.base_weeks?.toFixed(1) ?? "—";
