@@ -1,11 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ProvisionalBadge } from "./Badges";
 import { PriceChange } from "./PriceChange";
 import { TickerLink } from "./StockDrawer";
 import { rsText } from "@/lib/format";
-import type { FollowThroughFile, FollowThroughScreen } from "@/lib/types";
+import type { BreakoutOutcome, FollowThroughFile, FollowThroughScreen } from "@/lib/types";
+
+/** The same control the screens use, over the columns this page actually has.
+ *  Default is worst-first: the list exists to be checked, and a page that opens
+ *  on its best result is doing the opposite of what it claims to. */
+type SortKey = "now_pct" | "peak_pct" | "worst_pct" | "breakout_date"
+  | "sessions_since" | "symbol";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "now_pct", label: "Return since" },
+  { key: "peak_pct", label: "Best point" },
+  // The drawdown is published and was not shown anywhere. On a page whose whole
+  // job is to say whether it worked, the worst point is the more useful half.
+  { key: "worst_pct", label: "Worst point" },
+  { key: "breakout_date", label: "Breakout date" },
+  { key: "sessions_since", label: "Sessions since" },
+  { key: "symbol", label: "Ticker" },
+];
 
 /**
  * The screens say what is setting up. This says whether it worked.
@@ -18,7 +35,27 @@ import type { FollowThroughFile, FollowThroughScreen } from "@/lib/types";
 export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
   const screens = Object.values(file.screens);
   const [active, setActive] = useState(screens[0]?.screen ?? "vcp");
+  const [sort, setSort] = useState<SortKey>("now_pct");
+  const [descending, setDescending] = useState(false);
   const shown = file.screens[active] ?? screens[0];
+
+  const ordered = useMemo(() => {
+    const rows: BreakoutOutcome[] = shown?.breakouts ?? [];
+    const value = (b: BreakoutOutcome): number | string => {
+      if (sort === "symbol") return b.symbol;
+      if (sort === "breakout_date") return b.breakout_date;
+      return (b[sort] as number | null) ?? -Infinity;
+    };
+    return [...rows].sort((a, b) => {
+      const left = value(a);
+      const right = value(b);
+      const cmp = typeof left === "string"
+        ? String(left).localeCompare(String(right))
+        : Number(left) - Number(right);
+      return descending ? -cmp : cmp;
+    });
+  }, [descending, shown, sort]);
+
   if (!shown) return null;
 
   return (
@@ -56,13 +93,38 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
       <Summary row={shown} />
 
       <section className="stack" style={{ gap: "var(--gap-sm)" }}>
-        <div className="eyebrow">Every one of them</div>
-        {shown.breakouts.length === 0 && (
+        <div className="between wrap" style={{ gap: "var(--gap-sm)" }}>
+          <div className="eyebrow">Every one of them</div>
+          <div className="row" style={{ gap: "var(--gap-sm)" }}>
+            <label className="row footnote dim" style={{ gap: "var(--gap-xs)" }}>
+              <span className="visually-hidden">Sort by</span>
+              <select
+                className="control"
+                value={sort}
+                onChange={(event) => setSort(event.target.value as SortKey)}
+                style={{ background: "var(--surface-2)", minHeight: "var(--h-control)" }}
+              >
+                {SORTS.map((option) => (
+                  <option key={option.key} value={option.key}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="control"
+              onClick={() => setDescending((v) => !v)}
+              aria-label={descending ? "Sort ascending" : "Sort descending"}
+            >
+              {descending ? "↓" : "↑"}
+            </button>
+          </div>
+        </div>
+        {ordered.length === 0 && (
           <p className="muted footnote">
             No breakouts on this screen in the window. That is a reading, not a fault.
           </p>
         )}
-        {shown.breakouts.map((b) => (
+        {ordered.map((b) => (
           <TickerLink
             key={`${b.symbol}-${b.breakout_date}`}
             symbol={b.symbol}
@@ -80,6 +142,7 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
               <span>broke out {b.breakout_date}</span>
               <span>· {b.sessions_since} sessions</span>
               <span>· peak <span className="num">{b.peak_pct > 0 ? "+" : ""}{b.peak_pct}%</span></span>
+              <span>· worst <span className="num">{b.worst_pct > 0 ? "+" : ""}{b.worst_pct}%</span></span>
               <span>· RS then {rsText(b.rs_at_breakout ?? "not ranked yet")}</span>
               {b.failed_fast && <span className="badge">closed back under the pivot</span>}
               {b.now_below_pivot && <span className="badge">below the pivot now</span>}
