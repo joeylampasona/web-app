@@ -5,6 +5,7 @@ import datetime as dt
 import logging
 import sqlite3
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
 
 from data import classify, settings, store
 from data.adapters import DataAdapter, get_adapter
@@ -20,6 +21,30 @@ log = logging.getLogger(__name__)
 CURSOR_PREFIX = "backfill_cursor"
 BARS_PROVIDER_KEY = "bars_provider"
 HORIZON_PREFIX = "history_horizon"
+
+EASTERN = ZoneInfo("America/New_York")
+# A session that comes back empty within this many days of now has probably not
+# been published yet. Older than this and an empty day is a market holiday, which
+# will never have bars and must not hold the cursor up for ever.
+SETTLES_WITHIN_DAYS = 4
+
+
+def last_settled_session(now: dt.datetime | None = None) -> dt.date:
+    """The most recent weekday whose New York close has been and gone.
+
+    `dt.date.today()` is UTC on a CI runner, and UTC rolls over at 8pm Eastern.
+    Asking Polygon for "today" at 9pm Eastern therefore asked for tomorrow — a
+    day that had not traded — which returned empty and, before this, advanced the
+    cursor straight past a session that had not happened yet.
+    """
+    now = now or dt.datetime.now(EASTERN)
+    day = now.date()
+    # The close is 4pm; give the provider until 6pm to publish it.
+    if now.hour < 18:
+        day -= dt.timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= dt.timedelta(days=1)
+    return day
 
 
 def horizon_key(provider: str) -> str:
@@ -187,11 +212,23 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
         store.set_kv(conn, BARS_PROVIDER_KEY, adapter.name)
         return written
 
-    today = dt.date.today()
+    today = last_settled_session()
     start = today - dt.timedelta(days=int(days * 1.45))   # weekends and holidays
     cursor = store.get_kv(conn, key)
     if resume and cursor:
-        start = max(start, dt.date.fromisoformat(cursor) + dt.timedelta(days=1))
+        mark = dt.date.fromisoformat(cursor)
+        # A cursor ahead of the newest bar we actually hold is a cursor that was
+        # advanced past a session it never fetched. Pull it back to the last day
+        # with data so those sessions are asked for again; never push it forward,
+        # which would skip the very gap this is here to close.
+        newest = store.last_session(conn)
+        if newest is not None and mark > newest:
+            if notice:
+                notice(f"The backfill cursor says {mark} but the newest bar on "
+                       f"disk is {newest}. Rewinding to {newest} — the sessions "
+                       f"in between were skipped, not fetched.")
+            mark = newest
+        start = max(start, mark + dt.timedelta(days=1))
 
     # Respect the plan's history window rather than throwing 403s at it.
     known = store.get_kv(conn, horizon_key(adapter.name))
@@ -209,6 +246,11 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
 
     written = 0
     day = start
+    # The first session that came back empty and is too recent to be a holiday.
+    # The cursor stops short of it so tomorrow's run asks for it again; later
+    # days are still fetched and stored, because upserts are idempotent and a
+    # holiday must not block every session behind it.
+    pending: dt.date | None = None
     while day <= today:
         if day.weekday() < 5:
             try:
@@ -224,7 +266,16 @@ def backfill(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
                 raise
             if bars:
                 written += store.upsert_bars(conn, bars)
-            store.set_kv(conn, key, day.isoformat())
+            elif pending is None and (today - day).days <= SETTLES_WITHIN_DAYS:
+                # Empty and recent. A holiday and an unpublished session look
+                # identical here, so this resolves the ambiguity the safe way:
+                # assume it is coming, and do not let the cursor step over it.
+                pending = day
+                if notice:
+                    notice(f"{day} came back empty. Too recent to be a holiday, so "
+                           f"the cursor stops before it and tomorrow asks again.")
+            if pending is None:
+                store.set_kv(conn, key, day.isoformat())
             if progress:
                 progress(day, len(bars))
         day += dt.timedelta(days=1)
