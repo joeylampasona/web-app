@@ -176,7 +176,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: |
           python - <<'PY'
-          import json, pathlib, sys
+          import json, os, pathlib, sys
 
           # The guard above checks intent, before any work. This checks the
           # artefact. The very first nightly run passed its settings check and
@@ -206,6 +206,43 @@ jobs:
                        "dropped almost everything. Refusing to publish it.")
           if not any(s.get("total") for s in meta.get("screens", [])):
               sys.exit("Every screen is empty. Refusing to publish it.")
+          # Provenance, schema and substance all passed on a tree whose as_of had
+          # not moved for three sessions — the backfill had marked sessions
+          # fetched that it never asked for, so the run rebuilt Friday's data
+          # perfectly every night. Nothing compared what was built against what
+          # should have been built, so nothing noticed.
+          import datetime as dt
+          from zoneinfo import ZoneInfo
+
+          eastern = dt.datetime.now(ZoneInfo("America/New_York"))
+          expected = eastern.date()
+          if eastern.hour < 18:
+              expected -= dt.timedelta(days=1)
+          while expected.weekday() >= 5:
+              expected -= dt.timedelta(days=1)
+
+          as_of = dt.date.fromisoformat(meta["as_of"])
+          behind = (expected - as_of).days
+          print(f"last completed New York session: {expected}  published: {as_of}  "
+                f"({behind} days behind)")
+          if behind > 3:
+              # Three is the longest the US market ever closes: a Monday holiday
+              # leaves Friday as the last session. Four cannot be a closed
+              # market, so it is a scan rebuilding old data.
+              sys.exit(f"out/ holds the {as_of} session but the last completed "
+                       f"session was {expected}. The scan rebuilt old data. "
+                       "Refusing to publish it as though it were tonight's.")
+          if behind > 0:
+              # A Monday holiday also lands here, so this cannot be a failure —
+              # but it is never silent, because three nights of this in a row is
+              # exactly what went unnoticed before.
+              print(f"::warning::Published session is {as_of}, {behind} day(s) "
+                    f"behind {expected}. A market holiday looks like this; so "
+                    f"does a scan that is not advancing.")
+          with open(os.environ["GITHUB_ENV"], "a") as fh:
+              fh.write(f"PUBLISHED_SESSION={as_of}\n")
+              fh.write(f"SESSIONS_BEHIND={behind}\n")
+
           PY
 
       - name: Publish the data branch
@@ -270,7 +307,13 @@ jobs:
           if path.exists():
               diff = json.loads(path.read_text())
           fresh = sum(s["stages"].get("fresh_breakout", 0) for s in meta["screens"])
-          lines = [f"**{meta['as_of']}** — {meta['universe_count']:,} names scanned."]
+          behind = int(os.environ.get("SESSIONS_BEHIND") or 0)
+          # The session date was always in this message, but as a date you had to
+          # remember last night's to interpret. Now it says so itself.
+          stale = (f"  ⚠️ {behind} day(s) behind the last completed session — "
+                   f"a market holiday looks like this, so does a stuck scan."
+                   if behind else "")
+          lines = [f"**{meta['as_of']}** — {meta['universe_count']:,} names scanned.{stale}"]
           for screen in meta["screens"]:
               stages = screen["stages"]
               lines.append(

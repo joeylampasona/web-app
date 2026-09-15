@@ -34,9 +34,11 @@ export function client(): SupabaseClient | null {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        // The magic link lands back on /auth/callback carrying its code in the
-        // URL; this is what trades it for a session.
-        detectSessionInUrl: true,
+        // Off deliberately. The automatic exchange swallows its own failure:
+        // when it does not work, nothing throws and nothing fires, and the only
+        // symptom is a page that waits and then gives up guessing. /auth/callback
+        // does the exchange itself so the real reason can be shown.
+        detectSessionInUrl: false,
         flowType: "pkce",
       },
     });
