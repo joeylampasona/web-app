@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { client, configured, projectUrl } from "@/lib/supabase";
+import { client, configured, projectUrl, projectUrlProblem } from "@/lib/supabase";
 
 /**
  * Why sign-up is not working, on the deploy you are standing on.
@@ -28,15 +28,17 @@ export default function AuthCheck() {
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    const supabase = client();
-    if (!supabase || !projectUrl) {
+    if (!client() || !projectUrl) {
       setReach({ kind: "skipped" });
       return;
     }
     let live = true;
-    // Asks the project whether it is awake. No account is touched and no
-    // address is sent anywhere.
-    supabase.auth.getSession()
+
+    // This used to call getSession(), which reads the browser's own storage and
+    // succeeds without touching the network. It therefore reported "the project
+    // answers: yes" for an address that answered nothing at all — a check that
+    // could only pass. This asks the address itself.
+    fetch(`${new URL(projectUrl).origin}/auth/v1/health`, { method: "GET" })
       .then(() => { if (live) setReach({ kind: "ok" }); })
       .catch((error: unknown) => {
         if (live) {
@@ -50,6 +52,7 @@ export default function AuthCheck() {
   }, []);
 
   const callback = origin ? `${origin}/auth/callback` : "…";
+  const problem = projectUrlProblem(projectUrl);
 
   return (
     <div className="page stack" style={{ gap: "var(--pad-xl)" }}>
@@ -83,10 +86,16 @@ export default function AuthCheck() {
 
       {configured && (
         <Row
+          ok={problem === null}
           label="Accounts project"
           value={projectUrl ?? "—"}
-          note="Public by design. The key is not shown here and is not needed to
-                diagnose this."
+          note={problem
+            ? `${problem} In Vercel, edit NEXT_PUBLIC_SUPABASE_URL, tick every `
+              + "environment, and redeploy — this is read when the site is built, "
+              + "so the running deployment keeps the old value until you do."
+            : "Public by design, and the right shape: the project address with "
+              + "nothing after it. The key is not shown here and is not needed "
+              + "to diagnose this."}
         />
       )}
 
@@ -102,8 +111,10 @@ export default function AuthCheck() {
           }
           note={reach.kind === "failed"
             ? `The address above did not respond: ${reach.detail}. A paused `
-              + "project or a mistyped address both look like this."
-            : "The address above responded, so the project exists and is awake."}
+              + "project, a mistyped address and a blocked request all look "
+              + "like this from inside a browser."
+            : "The address above answered a real request over the network, so "
+              + "the project exists and is awake."}
         />
       )}
 

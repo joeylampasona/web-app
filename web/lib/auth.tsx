@@ -180,6 +180,11 @@ function explain(message: string, callback: string): string {
     return "New accounts are switched off on the accounts project. Turn them on "
       + "under Authentication → Sign In / Providers in Supabase.";
   }
+  if (text.includes("invalid path")) {
+    return "The accounts project address has a path on the end of it. It must be "
+      + "just the project address and nothing after it — no /rest/v1/. Fix "
+      + "NEXT_PUBLIC_SUPABASE_URL and redeploy.";
+  }
   if (text.includes("invalid") && text.includes("email")) {
     return "That address was refused as invalid. Check it for a typo.";
   }
