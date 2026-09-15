@@ -36,15 +36,59 @@ jobs:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
-      - name: Is it 6pm in New York?
+      - name: Has tonight's session been scanned yet?
         id: gate
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          hour=$(TZ=America/New_York date +%H)
-          if [ "${{ inputs.force }}" = "true" ] || [ "$hour" = "18" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
+          # This used to insist the Eastern hour be exactly 18, which assumed a
+          # scheduled run starts when it is scheduled. GitHub makes no such
+          # promise: on 2026-09-14 both slots arrived over two hours late, the
+          # hour was 20 and then 21, every step was skipped, and the run
+          # reported success. A whole session went unscanned and looked green.
+          #
+          # So the question is no longer "is it exactly 6pm" but "has tonight's
+          # session been published yet" — which is true whenever it is true,
+          # however late the runner turns up, and is answered by the data branch
+          # rather than by the clock. Both cron slots may now do the work; the
+          # second finds the first has already done it and stands down. If the
+          # first failed, the second is a retry rather than a no-op.
+          session=$(TZ=America/New_York date +%F)
+          hour=$(TZ=America/New_York date +%-H)
+          weekday=$(TZ=America/New_York date +%u)
+          echo "session=$session" >> "$GITHUB_OUTPUT"
+          echo "New York: $session, hour $hour, weekday $weekday"
+
+          decide() {  # run, skip-kind, reason
+            echo "run=$1"    >> "$GITHUB_OUTPUT"
+            echo "skip=$2"   >> "$GITHUB_OUTPUT"
+            echo "reason=$3" >> "$GITHUB_OUTPUT"
+            echo "$3" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          if [ "${{ inputs.force }}" = "true" ]; then
+            decide true none "Running because it was asked for by hand."
+          elif [ "$weekday" -gt 5 ]; then
+            decide false expected "Skipped: $session is the weekend in New York."
+          elif [ "$hour" -lt 18 ]; then
+            decide false expected \
+              "Skipped: it is $hour:00 in New York, before the close. This is the other cron slot."
+          elif [ "$hour" -lt 6 ]; then
+            # Unreachable by the test above; kept for the reader's benefit.
+            decide false unexpected "Skipped: delayed past midnight."
           else
-            echo "Eastern hour is $hour — this is the other cron slot. Skipping."
-            echo "run=false" >> "$GITHUB_OUTPUT"
+            published=$(curl -sf \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/data" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["message"].splitlines()[0])' \
+              2>/dev/null || echo "")
+            echo "Data branch currently says: ${published:-<nothing>}"
+            if [ "$published" = "Data for $session" ]; then
+              decide false expected "Skipped: the $session session is already published."
+            else
+              decide true none "Running: it is $hour:00 in New York on $session and that session is not published yet."
+            fi
           fi
 
       - uses: actions/checkout@v4
@@ -179,7 +223,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "Data for $(date -u +%F)"
+          # Load-bearing: the gate reads this line to decide whether tonight's
+          # session has already been scanned. It names the Eastern session, not
+          # the UTC date — UTC rolls over at 8pm Eastern, so a run that starts
+          # after that would stamp tomorrow's date on tonight's data.
+          git commit -q -m "Data for ${{ steps.gate.outputs.session }}"
           git push -q --force \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
             HEAD:refs/heads/data
@@ -237,6 +285,25 @@ jobs:
               data=json.dumps({"content": "\n".join(lines)[:1900]}).encode(),
               # Discord's edge rejects the default Python-urllib agent with a
               # 403. Naming ourselves is what it wants.
+              headers={"Content-Type": "application/json",
+                       "User-Agent": "base-and-breakout-nightly/1.0"})
+          urllib.request.urlopen(request, timeout=20)
+          PY
+
+      - name: Tell Discord the session was missed
+        continue-on-error: true
+        if: steps.gate.outputs.skip == 'unexpected' && env.DISCORD_WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          REASON="${{ steps.gate.outputs.reason }}" RUN_URL="$run_url" python - <<'PY'
+          import json, os, urllib.request
+          body = {"content": f"Nightly scan did not run. {os.environ['REASON']}\n"
+                             f"The site is still serving the previous session's data.\n"
+                             f"{os.environ['RUN_URL']}"}
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps(body).encode(),
               headers={"Content-Type": "application/json",
                        "User-Agent": "base-and-breakout-nightly/1.0"})
           urllib.request.urlopen(request, timeout=20)
