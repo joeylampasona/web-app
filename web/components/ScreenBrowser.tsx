@@ -56,7 +56,7 @@ export function ScreenBrowser({
 
   return (
     <>
-      <div className="stack" style={{ gap: "var(--gap-sm)", marginBottom: "var(--gap-lg)" }}>
+      <div className="stage-picker" style={{ marginBottom: "var(--gap-lg)" }}>
         {STAGE_ORDER.map((key) => {
           const count = file.stage_counts[key] ?? 0;
           const selected = stage === key;
@@ -67,8 +67,9 @@ export function ScreenBrowser({
               aria-pressed={selected}
               onClick={() => setStage(selected ? null : key)}
               className="card"
+              // Layout lives in .stage-picker: an inline alignItems here beat the
+              // stylesheet, so the four-across variant kept centring its number.
               style={{
-                display: "flex", alignItems: "center", gap: "var(--gap-md)",
                 minHeight: "var(--h-control)", padding: "var(--pad-md) var(--pad-lg)",
                 textAlign: "left", cursor: "pointer",
                 borderColor: selected ? "var(--brand)" : "var(--border)",

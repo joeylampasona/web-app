@@ -135,11 +135,27 @@ button { font: inherit; color: inherit; }
   color: var(--text-primary);
 }
 
+/* One column on a phone, and wider as the screen allows. The site is designed
+   mobile-first and stays that way — this widens the same layout rather than
+   introducing a second one, so there is one set of components to maintain and
+   the phone experience cannot drift.
+
+   The cap matters: full-bleed on a 27" display makes prose unreadable and
+   leaves the eye no anchor. 1280 is wide enough for three columns of cards. */
 .page {
-  max-width: 780px;
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: var(--pad-lg) var(--pad-lg) 132px;
+  padding: var(--pad-lg) var(--pad-lg) var(--page-bottom);
 }
+
+/* Prose does not get wider just because the page did. Cards and tables may run
+   the full width; sentences may not. Scoped to paragraphs the page or a section
+   owns directly, so text inside a card is left alone. */
+.page > p,
+.page > section > p,
+.page > div > p.muted { max-width: 70ch; }
+
+.shell-width { max-width: var(--page-max); margin: 0 auto; }
 
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-md); }
 .grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap-md); }
@@ -168,3 +184,118 @@ table.data td {
 }
 table.data td.text { font-family: var(--font-sans); text-align: left; }
 .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+
+/* ---------------------------------------------------------------- desktop
+
+   Everything above is the phone layout. These three breakpoints let it breathe
+   on a larger screen: the page widens, the card grids fill the extra columns on
+   their own (grid-auto was always auto-fill), and the thumb-reach tab bar is
+   replaced by a sidebar, because a row of tap targets along the bottom edge of
+   a monitor is the one part of a phone layout that does not translate. */
+
+:root {
+  --page-max: 780px;
+  --sidenav-w: 0px;
+  --page-bottom: 132px;   /* clears the fixed tab bar */
+}
+
+.shell { display: block; }
+.sidenav { display: none; }
+
+/* Defined before the breakpoints: an equally specific rule later in the file
+   would win over the media query regardless of the query matching, which is
+   exactly what happened the first time — the stock page stayed one column on a
+   1440px screen and the media query looked correct in isolation. */
+.detail-sections {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--pad-xl);
+  align-items: start;
+}
+
+/* Same reasoning, same ordering rule. */
+.stage-picker {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gap-sm);
+}
+.stage-picker button {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-md);
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --page-max: 1040px;
+    --sidenav-w: 236px;
+    --page-bottom: var(--pad-xl);
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: var(--sidenav-w) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .sidenav {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-right: 0.5px solid var(--border);
+    background: var(--surface-1);
+    padding: var(--pad-lg) var(--pad-md);
+    gap: var(--gap-xs);
+  }
+
+  /* The bottom bar and the sheets it opens are phone furniture. */
+  .tabbar { display: none !important; }
+
+  /* Two columns for everything below the chart on a stock page. */
+  .detail-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Four stages, four columns: as full-width rows each was a single number
+     stretched across the page, which reads as sparse rather than spacious. */
+  .stage-picker { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .stage-picker button {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--gap-xs);
+  }
+}
+
+@media (min-width: 1440px) {
+  :root { --page-max: 1280px; }
+}
+
+.sidenav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+  padding: var(--gap-sm) var(--gap-md);
+  color: var(--text-secondary);
+  font-size: var(--size-footnote);
+  min-height: 34px;
+}
+.sidenav-item:hover { background: var(--surface-2); color: var(--text-primary); }
+.sidenav-item[aria-current="page"],
+.sidenav-item[data-active="true"] { color: var(--brand); }
+
+.sidenav-link {
+  display: block;
+  padding: 5px var(--gap-md) 5px calc(var(--gap-md) + 18px);
+  border-radius: var(--radius-control);
+  color: var(--text-muted);
+  font-size: var(--size-caption);
+}
+.sidenav-link:hover { background: var(--surface-2); color: var(--text-primary); }
+.sidenav-link[aria-current="page"] { color: var(--brand); }

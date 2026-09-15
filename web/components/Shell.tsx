@@ -70,7 +70,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const active = TABS.find((t) => pathname.startsWith(t.match))?.key ?? "screens";
 
   return (
-    <>
+    <div className="shell">
+      <SideNav tabs={TABS} pathname={pathname} active={active} />
+
+      <div style={{ minWidth: 0 }}>
       <header
         style={{
           position: "sticky", top: 0, zIndex: 30,
@@ -86,7 +89,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           paddingRight: "calc(var(--pad-lg) + env(safe-area-inset-right))",
         }}
       >
-        <div className="between" style={{ maxWidth: 780, margin: "0 auto" }}>
+        <div className="between shell-width">
           <Link href="/screens" className="grow">
             <div className="row" style={{ gap: "var(--gap-sm)" }}>
               <span
@@ -113,11 +116,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         style={{
           borderTop: "0.5px solid var(--border)",
           padding: "var(--pad-lg)",
-          paddingBottom: 120,
+          paddingBottom: "var(--page-bottom)",
         }}
       >
-        <div className="stack" style={{ maxWidth: 780, margin: "0 auto",
-                                        gap: "var(--gap-xs)" }}>
+        <div className="stack shell-width" style={{ gap: "var(--gap-xs)" }}>
           <p className="caption dim" style={{ margin: 0 }}>{LEGAL}</p>
           <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
             What that means, in full
@@ -127,6 +129,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <nav
         aria-label="Primary"
+        className="tabbar"
         style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40,
           background: "var(--surface-1)",
@@ -230,6 +233,70 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Drawer.Portal>
         </Drawer.Root>
       ))}
-    </>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The same destinations as the tab bar, as a column.
+ *
+ * A row of thumb-reach tap targets along the bottom edge is the one part of a
+ * phone layout that does not translate to a monitor — it is the furthest point
+ * from where the eye and the pointer already are. So on a wide screen the tabs
+ * become a sidebar and the sheets are not needed at all: there is room to show
+ * a section's destinations in place, which is one fewer tap and one fewer thing
+ * covering the page.
+ *
+ * Rendered always and hidden by CSS below 1024px, so there is no width probe in
+ * JavaScript and nothing to flash or mismatch on hydration.
+ */
+function SideNav({ tabs, pathname, active }: {
+  tabs: typeof TABS; pathname: string; active: string;
+}) {
+  // The section you are in is open; opening another closes it.
+  const [open, setOpen] = useState<string | null>(null);
+  const expanded = open ?? active;
+
+  return (
+    <aside className="sidenav" aria-label="Primary">
+      {tabs.map((tab) => {
+        const isActive = active === tab.key;
+        const isOpen = expanded === tab.key && Boolean(tab.destinations);
+        const row = (
+          <span className="row" style={{ gap: "var(--gap-sm)" }}>
+            <span aria-hidden style={{ width: 16, display: "inline-block" }}>{tab.glyph}</span>
+            <span>{tab.label}</span>
+          </span>
+        );
+        return (
+          <div key={tab.key}>
+            {tab.href ? (
+              <Link href={tab.href} className="sidenav-item"
+                    aria-current={isActive ? "page" : undefined}>
+                {row}
+              </Link>
+            ) : (
+              <button type="button" className="sidenav-item" data-active={isActive}
+                      aria-expanded={isOpen}
+                      onClick={() => setOpen(isOpen ? "" : tab.key)}>
+                {row}
+              </button>
+            )}
+            {isOpen && tab.destinations!.map((destination) => (
+              <Link
+                key={destination.href}
+                href={destination.href}
+                className="sidenav-link"
+                aria-current={pathname === destination.href ? "page" : undefined}
+                title={destination.blurb}
+              >
+                {destination.title}
+              </Link>
+            ))}
+          </div>
+        );
+      })}
+    </aside>
   );
 }

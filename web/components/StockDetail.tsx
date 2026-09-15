@@ -128,6 +128,11 @@ export function StockDetail({ stock, run }: {
         </div>
       )}
 
+      {/* Below the chart the page stops being one column on a wide screen.
+          These sections are independent readings of the same stock, so they sit
+          side by side rather than making the reader scroll past six of them to
+          reach the seventh. One column on a phone, unchanged. */}
+      <div className="detail-sections">
       <section>
         <div className="eyebrow">The read</div>
         <p className="muted footnote">{plainRead(stock)}</p>
@@ -193,7 +198,10 @@ export function StockDetail({ stock, run }: {
         <div className="eyebrow">Insiders</div>
         <InsiderPanel insiders={stock.insiders} />
       </section>
+      </div>
 
+      {/* Full width: it is a chart of every base this stock has built, and
+          halving it would defeat the point of showing them together. */}
       <section>
         <div className="eyebrow">X-ray</div>
         <AuthGate
