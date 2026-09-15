@@ -77,14 +77,23 @@ jobs:
             # Unreachable by the test above; kept for the reader's benefit.
             decide false unexpected "Skipped: delayed past midnight."
           else
+            # Read the session out of the published data, not out of the commit
+            # message describing it. The message was written by a previous run's
+            # clock and can disagree with the tree it sits on — one already does:
+            # a manual run at 1:30am Eastern labelled a tree "Data for
+            # 2026-09-15" whose as_of was 2026-09-14, and this gate would have
+            # read that label and skipped Tuesday on the strength of it.
+            #
+            # meta.json cannot disagree with itself. A label is a claim about
+            # the work; as_of is the work.
             published=$(curl -sf \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/commits/data" \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["message"].splitlines()[0])' \
+              -H "Accept: application/vnd.github.raw" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/contents/meta.json?ref=data" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("as_of",""))' \
               2>/dev/null || echo "")
-            echo "Data branch currently says: ${published:-<nothing>}"
-            if [ "$published" = "Data for $session" ]; then
+            echo "The data branch holds the ${published:-<unknown>} session."
+            if [ "$published" = "$session" ]; then
               decide false expected "Skipped: the $session session is already published."
             else
               decide true none "Running: it is $hour:00 in New York on $session and that session is not published yet."
@@ -261,10 +270,21 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           # Load-bearing: the gate reads this line to decide whether tonight's
-          # session has already been scanned. It names the Eastern session, not
-          # the UTC date — UTC rolls over at 8pm Eastern, so a run that starts
-          # after that would stamp tomorrow's date on tonight's data.
-          git commit -q -m "Data for ${{ steps.gate.outputs.session }}"
+          # session has already been scanned, so it has to name the session this
+          # tree HOLDS, which is meta.json's as_of. It named the wall-clock
+          # session instead, and the two are not the same thing: a run started by
+          # hand at 1:30am Eastern stamped "Data for 2026-09-15" on a tree whose
+          # as_of was 2026-09-14, because Tuesday had not traded yet. The next
+          # scheduled run would have read that label, believed Tuesday was
+          # already scanned, and stood down — skipping a session on the strength
+          # of a label for work that was never done.
+          #
+          # Which is the fault this gate exists to prevent, reintroduced by the
+          # gate. The clock does not decide which session the data is; the data
+          # does.
+          session=$(python3 -c "import json; print(json.load(open('meta.json'))['as_of'])")
+          echo "Publishing the $session session."
+          git commit -q -m "Data for $session"
           git push -q --force \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
             HEAD:refs/heads/data
