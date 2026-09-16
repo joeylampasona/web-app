@@ -1,8 +1,5 @@
 name: Nightly scan
 
-# 6:30pm ET on weekdays. GitHub cron is UTC only and does not follow US daylight
-# saving, so both candidate hours are scheduled and the job checks the real
-# Eastern hour before doing any work.
 # When the data exists, not when the market shuts.
 #
 # The schedule used to be 6:30pm Eastern, half an hour after the close, which
@@ -58,6 +55,9 @@ jobs:
       # Read-only, scoped to the Market Desk repository. Absent, the desk is
       # skipped and the site runs on its own data exactly as before.
       MARKET_DESK_TOKEN: ${{ secrets.MARKET_DESK_TOKEN }}
+      # Scheduled economic data releases. Absent, the calendar carries company
+      # events only and says so on the page.
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
@@ -66,18 +66,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This used to insist the Eastern hour be exactly 18, which assumed a
-          # scheduled run starts when it is scheduled. GitHub makes no such
-          # promise: on 2026-09-14 both slots arrived over two hours late, the
-          # hour was 20 and then 21, every step was skipped, and the run
-          # reported success. A whole session went unscanned and looked green.
+          # The question is "has the last completed session been published yet",
+          # not "is it the right time". It used to insist the Eastern hour be
+          # exactly 18, which assumed a scheduled run starts when it is
+          # scheduled; on 2026-09-14 both slots arrived over two hours late, the
+          # hour was 20 and then 21, every step was skipped, and the run reported
+          # success with a whole session unscanned.
           #
-          # So the question is no longer "is it exactly 6pm" but "has tonight's
-          # session been published yet" — which is true whenever it is true,
-          # however late the runner turns up, and is answered by the data branch
-          # rather than by the clock. Both cron slots may now do the work; the
-          # second finds the first has already done it and stands down. If the
-          # first failed, the second is a retry rather than a no-op.
           # The session we ought to be holding: the most recent weekday whose
           # New York close has been and gone. Asking "is it today?" broke as
           # soon as a slot landed after midnight Eastern — the date rolled over,
@@ -176,6 +171,7 @@ jobs:
           # fault on the page.
           on_off() { [ -n "$1" ] && echo "on" || echo "off — that section will be empty"; }
           echo "Market Desk signals: $(on_off "$MARKET_DESK_TOKEN")"
+          echo "Data releases (FRED): $(on_off "$FRED_API_KEY")"
           echo "Discord report:      $(on_off "$DISCORD_WEBHOOK_URL")"
           echo "Vercel refresh:      $(on_off "$VERCEL_DEPLOY_HOOK")"
 

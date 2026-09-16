@@ -17,6 +17,13 @@ export interface CatalystEvent {
   readthrough: { from: string; tag: string; theme: string } | null;
 }
 
+/** A scheduled economic data release. Not ticker-scoped and not a forecast —
+ *  the date a number comes out, nothing about what it will say. */
+export interface DataRelease {
+  date: string; release_id: number; name: string;
+  notable: boolean; days_until: number; link: string | null;
+}
+
 export interface Setup {
   symbol: string; name: string; screen: string; stage: string;
   pivot: number; close: number;

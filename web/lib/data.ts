@@ -126,6 +126,13 @@ export function getUpcoming() {
   }>("catalysts/upcoming.json");
 }
 
+export function getReleases() {
+  return read<{
+    as_of: string; configured: boolean; count: number; source: string;
+    releases: import("./types").DataRelease[];
+  }>("catalysts/releases.json");
+}
+
 export function getHighIV() {
   return read<{
     as_of: string;

@@ -86,6 +86,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             news: dict[str, list[dict]] | None = None,
             desk: dict[str, list[dict]] | None = None,
             desk_run: dict | None = None,
+            releases: list | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -204,6 +205,18 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "readthrough": sum(1 for e in upcoming if e.readthrough),
         "events": [e.to_json(as_of) for e in upcoming],
         "type_labels": ev.TYPE_LABELS,
+    }))
+    # Handed in from the cache the catalysts stage fills, like news and insiders:
+    # publish never reaches the network. The file is written either way, so the
+    # page can tell "not switched on" from "nothing scheduled".
+    from catalysts import releases as rel
+    release_rows = releases or []
+    written.append(_write(out / "catalysts" / "releases.json", {
+        "as_of": as_of.isoformat(),
+        "configured": rel.configured(),
+        "count": len(release_rows),
+        "source": "Federal Reserve Bank of St. Louis (FRED)",
+        "releases": [r.to_json(as_of) for r in release_rows],
     }))
     written.append(_write(out / "catalysts" / "high_iv.json", {
         "as_of": as_of.isoformat(),

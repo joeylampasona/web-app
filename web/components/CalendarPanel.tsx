@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TickerLink } from "./StockDrawer";
-import type { CatalystEvent } from "@/lib/types";
+import type { CatalystEvent, DataRelease } from "@/lib/types";
 
 /**
  * Every dated event the scan knows about, a week at a time.
@@ -47,12 +47,20 @@ function prettyDate(iso: string): string {
   });
 }
 
-export function CalendarPanel({ file }: {
+/** The releases filter is its own chip rather than a type inside `events`,
+ *  because a data release has no ticker and everything in `events` does. */
+const RELEASES = "data_releases";
+
+export function CalendarPanel({ file, releases }: {
   file: {
     as_of: string; count: number;
     events: CatalystEvent[];
     type_labels: Record<string, string>;
   };
+  releases?: {
+    as_of: string; configured: boolean; count: number; source: string;
+    releases: DataRelease[];
+  } | null;
 }) {
   const [monday, setMonday] = useState(() => weekStart(file.as_of));
   const [kind, setKind] = useState<string | null>(null);
@@ -63,8 +71,20 @@ export function CalendarPanel({ file }: {
     for (const event of file.events) {
       seen.set(event.type, (seen.get(event.type) ?? 0) + 1);
     }
-    return [...seen.entries()].sort((a, b) => b[1] - a[1]);
-  }, [file.events]);
+    const rows = [...seen.entries()].sort((a, b) => b[1] - a[1]);
+    if (releases?.releases.length) rows.push([RELEASES, releases.releases.length]);
+    return rows;
+  }, [file.events, releases]);
+
+  const releasesByDay = useMemo(() => {
+    const grouped = new Map<string, DataRelease[]>();
+    if (kind && kind !== RELEASES) return grouped;
+    for (const row of releases?.releases ?? []) {
+      if (!grouped.has(row.date)) grouped.set(row.date, []);
+      grouped.get(row.date)!.push(row);
+    }
+    return grouped;
+  }, [kind, releases]);
 
   const days = useMemo(() => {
     const window = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
@@ -72,7 +92,7 @@ export function CalendarPanel({ file }: {
     const grouped = new Map<string, CatalystEvent[]>(window.map((d) => [d, []]));
     for (const event of file.events) {
       if (!within.has(event.date)) continue;
-      if (kind && event.type !== kind) continue;
+      if (kind && event.type !== kind) continue;   // RELEASES excludes them all
       grouped.get(event.date)!.push(event);
     }
     for (const rows of grouped.values()) {
@@ -81,7 +101,9 @@ export function CalendarPanel({ file }: {
     return window.map((date) => ({ date, events: grouped.get(date)! }));
   }, [file.events, kind, monday]);
 
-  const shown = days.reduce((n, d) => n + d.events.length, 0);
+  const releasesShown = days.reduce(
+    (n, d) => n + (releasesByDay.get(d.date)?.length ?? 0), 0);
+  const shown = days.reduce((n, d) => n + d.events.length, 0) + releasesShown;
   const estimates = days.reduce(
     (n, d) => n + d.events.filter((e) => e.confirmed !== "confirmed").length, 0);
   // Events are only ever written forward from the scan, so a week before it is
@@ -127,7 +149,8 @@ export function CalendarPanel({ file }: {
             aria-pressed={kind === type}
             onClick={() => setKind(kind === type ? null : type)}
           >
-            {file.type_labels[type] ?? type} <span className="num dim">{total}</span>
+            {type === RELEASES ? "Data releases" : file.type_labels[type] ?? type}{" "}
+            <span className="num dim">{total}</span>
           </button>
         ))}
       </div>
@@ -144,8 +167,9 @@ export function CalendarPanel({ file }: {
       </div>
 
       {days.map(({ date, events }) => {
+        const dayReleases = releasesByDay.get(date) ?? [];
         const weekend = [5, 6].includes((new Date(`${date}T12:00:00`).getDay() + 6) % 7);
-        if (weekend && events.length === 0) return null;   // no market, no row
+        if (weekend && events.length === 0 && dayReleases.length === 0) return null;
         return (
           <section key={date} className="stack" style={{ gap: "var(--gap-xs)" }}>
             <div className="between">
@@ -154,13 +178,35 @@ export function CalendarPanel({ file }: {
                 {" · "}{prettyDate(date)}
               </div>
               <span className="caption dim">
-                <span className="num">{events.length}</span>
+                <span className="num">{events.length + dayReleases.length}</span>
                 {events.length > 0
                   && events.every((e) => e.confirmed !== "confirmed")
                   && " · all estimated"}
               </span>
             </div>
-            {events.length === 0 ? (
+            {dayReleases.length > 0 && (
+              <div className="grid-auto" style={{ gap: "var(--gap-xs)" }}>
+                {dayReleases.map((row) => (
+                  // Borderless to match the ticker rows beside it: TickerLink
+                  // sets border and background to none inline, so a bordered
+                  // card here made a data release look heavier than an earnings
+                  // date sitting on the same day. They rank the same.
+                  <div key={`${row.date}-${row.release_id}-${row.name}`}
+                       style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
+                    <div className="footnote">{row.name}</div>
+                    <div className="row wrap caption dim" style={{ gap: "var(--gap-xs)" }}>
+                      <span>data release</span>
+                      {row.notable && <span>· widely watched</span>}
+                      {row.link && (
+                        <a href={row.link} target="_blank" rel="noopener noreferrer"
+                           style={{ textDecoration: "underline" }}>FRED</a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {events.length === 0 && dayReleases.length === 0 ? (
               <p className="caption dim" style={{ margin: 0 }}>Nothing dated.</p>
             ) : (
               // A busy day is three hundred rows. One column of them wastes a
@@ -206,6 +252,13 @@ export function CalendarPanel({ file }: {
           </section>
         );
       })}
+
+      {releases && !releases.configured && (
+        <p className="caption dim" style={{ margin: 0 }}>
+          Economic data releases are not switched on for this build, so only
+          company events are shown.
+        </p>
+      )}
 
       {shown === 0 && (
         <div className="card muted footnote">

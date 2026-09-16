@@ -238,6 +238,19 @@ def cmd_catalysts(args) -> int:
         # section. Neither is worth failing a nightly run over.
         print(f"  → Insider filings skipped: {exc}", flush=True)
 
+    # When the data comes out, not when the Fed meets — see catalysts/releases.
+    # One call, and the whole thing is optional: no key, no tab, no failure.
+    from catalysts import releases as rel
+    try:
+        found = rel.fetch(market.as_of, notice=lambda m: print(f"  → {m}", flush=True))
+        if found:
+            rel.store(conn, found)
+            gone = rel.prune(conn, market.as_of)
+            if gone:
+                print(f"  → {gone:,} past release dates dropped.", flush=True)
+    except Exception as exc:                      # noqa: BLE001
+        print(f"  → Data releases skipped: {exc}", flush=True)
+
     # Headlines, market-wide. Fetched once for everyone rather than per ticker:
     # five calls a minute would be three hours one name at a time.
     from catalysts import news as newsmod
@@ -441,9 +454,13 @@ def cmd_publish(args) -> int:
     run = store.start_run(conn, "publish")
     (market, bundle, result, changes, calendar, iv_rows, backtests,
      follow, insider_rows, news_rows, desk_rows, desk_run) = _pipeline(conn)
+    from catalysts import releases as rel
+    release_rows = rel.load(conn, market.as_of)
+
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
-                             news=news_rows, desk=desk_rows, desk_run=desk_run)
+                             news=news_rows, desk=desk_rows, desk_run=desk_run,
+                             releases=release_rows)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")
