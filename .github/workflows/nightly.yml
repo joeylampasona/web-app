@@ -3,10 +3,26 @@ name: Nightly scan
 # 6:30pm ET on weekdays. GitHub cron is UTC only and does not follow US daylight
 # saving, so both candidate hours are scheduled and the job checks the real
 # Eastern hour before doing any work.
+# GitHub does not promise to run a scheduled workflow. On 2026-09-14 it
+# delivered both slots over two hours late; on 2026-09-15 it delivered neither,
+# with the workflow active and the crons correct. Two slots meant two chances.
+#
+# So there are now seven, hourly across the Eastern evening and into the small
+# hours, covering both halves of the year (the first two land at 18:30 and 19:30
+# in summer, 17:30 and 18:30 in winter). Whichever fires first does the work;
+# the rest read the data branch, see the session already published and stand
+# down in about five seconds. Redundancy is cheap when the gate is idempotent.
 on:
   schedule:
     - cron: "30 22 * * 1-5"
     - cron: "30 23 * * 1-5"
+    # Past midnight UTC the Eastern weekday is the day before, so these run
+    # Tuesday-to-Saturday UTC to cover Monday-to-Friday evenings in New York.
+    - cron: "30 0 * * 2-6"
+    - cron: "30 1 * * 2-6"
+    - cron: "30 2 * * 2-6"
+    - cron: "30 3 * * 2-6"
+    - cron: "30 4 * * 2-6"
   workflow_dispatch:
     inputs:
       force:
@@ -53,11 +69,19 @@ jobs:
           # rather than by the clock. Both cron slots may now do the work; the
           # second finds the first has already done it and stands down. If the
           # first failed, the second is a retry rather than a no-op.
+          # The session we ought to be holding: the most recent weekday whose
+          # New York close has been and gone. Asking "is it today?" broke as
+          # soon as a slot landed after midnight Eastern — the date rolled over,
+          # the hour was 1, and the gate refused to catch up on a session that
+          # was hours settled. This is the same question the backfill asks.
           session=$(TZ=America/New_York date +%F)
           hour=$(TZ=America/New_York date +%-H)
-          weekday=$(TZ=America/New_York date +%u)
+          [ "$hour" -lt 18 ] && session=$(date -d "$session -1 day" +%F)
+          while [ "$(date -d "$session" +%u)" -gt 5 ]; do
+            session=$(date -d "$session -1 day" +%F)
+          done
           echo "session=$session" >> "$GITHUB_OUTPUT"
-          echo "New York: $session, hour $hour, weekday $weekday"
+          echo "New York time $hour:00; the last completed session is $session."
 
           decide() {  # run, skip-kind, reason
             echo "run=$1"    >> "$GITHUB_OUTPUT"
@@ -68,14 +92,6 @@ jobs:
 
           if [ "${{ inputs.force }}" = "true" ]; then
             decide true none "Running because it was asked for by hand."
-          elif [ "$weekday" -gt 5 ]; then
-            decide false expected "Skipped: $session is the weekend in New York."
-          elif [ "$hour" -lt 18 ]; then
-            decide false expected \
-              "Skipped: it is $hour:00 in New York, before the close. This is the other cron slot."
-          elif [ "$hour" -lt 6 ]; then
-            # Unreachable by the test above; kept for the reader's benefit.
-            decide false unexpected "Skipped: delayed past midnight."
           else
             # Read the session out of the published data, not out of the commit
             # message describing it. The message was written by a previous run's
@@ -86,15 +102,26 @@ jobs:
             #
             # meta.json cannot disagree with itself. A label is a claim about
             # the work; as_of is the work.
-            published=$(curl -sf \
+            meta=$(curl -sf \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github.raw" \
               "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/contents/meta.json?ref=data" \
+              || echo "")
+            published=$(printf '%s' "$meta" \
               | python3 -c 'import json,sys; print(json.load(sys.stdin).get("as_of",""))' \
               2>/dev/null || echo "")
-            echo "The data branch holds the ${published:-<unknown>} session."
+            # How long ago the branch was last written. A market holiday has no
+            # new session to publish, so as_of can never catch up to it and every
+            # slot would run a full hour to rebuild the same tree. If the branch
+            # was written in the last few hours, the work has been attempted and
+            # there is nothing another attempt can add.
+            age=$(printf '%s' "$meta" | python3 -c 'import datetime as d,json,sys;w=d.datetime.fromisoformat(json.load(sys.stdin)["generated_at"]);w=w if w.tzinfo else w.replace(tzinfo=d.timezone.utc);print(int((d.datetime.now(d.timezone.utc)-w).total_seconds()//3600))' 2>/dev/null || echo 99999)
+            echo "The data branch holds the ${published:-<unknown>} session, written ${age}h ago."
             if [ "$published" = "$session" ]; then
               decide false expected "Skipped: the $session session is already published."
+            elif [ "$age" -lt 4 ]; then
+              decide false expected \
+                "Skipped: the data branch was rebuilt ${age}h ago and is still on $published. A market holiday looks like this."
             else
               decide true none "Running: it is $hour:00 in New York on $session and that session is not published yet."
             fi
