@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { TickerLink } from "./StockDrawer";
-import type { CatalystEvent, DataRelease } from "@/lib/types";
+import type { CatalystEvent, DataRelease, FomcMeeting, FomcStatus } from "@/lib/types";
 
 /**
  * Every dated event the scan knows about, a week at a time.
@@ -60,6 +60,7 @@ export function CalendarPanel({ file, releases }: {
   releases?: {
     as_of: string; configured: boolean; count: number; source: string;
     releases: DataRelease[];
+    fomc?: FomcStatus;
   } | null;
 }) {
   const [monday, setMonday] = useState(() => weekStart(file.as_of));
@@ -86,6 +87,17 @@ export function CalendarPanel({ file, releases }: {
     return grouped;
   }, [kind, releases]);
 
+  // FOMC sits with the releases: both are market-wide and neither has a ticker.
+  const fomcByDay = useMemo(() => {
+    const grouped = new Map<string, FomcMeeting[]>();
+    if (kind && kind !== RELEASES) return grouped;
+    for (const row of releases?.fomc?.meetings ?? []) {
+      if (!grouped.has(row.date)) grouped.set(row.date, []);
+      grouped.get(row.date)!.push(row);
+    }
+    return grouped;
+  }, [kind, releases]);
+
   const days = useMemo(() => {
     const window = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
     const within = new Set(window);
@@ -102,7 +114,8 @@ export function CalendarPanel({ file, releases }: {
   }, [file.events, kind, monday]);
 
   const releasesShown = days.reduce(
-    (n, d) => n + (releasesByDay.get(d.date)?.length ?? 0), 0);
+    (n, d) => n + (releasesByDay.get(d.date)?.length ?? 0)
+      + (fomcByDay.get(d.date)?.length ?? 0), 0);
   const shown = days.reduce((n, d) => n + d.events.length, 0) + releasesShown;
   const estimates = days.reduce(
     (n, d) => n + d.events.filter((e) => e.confirmed !== "confirmed").length, 0);
@@ -166,10 +179,30 @@ export function CalendarPanel({ file, releases }: {
         .
       </div>
 
+      {releases?.fomc?.stale && (
+        <p className="caption" style={{ margin: 0, color: "var(--warn)" }}>
+          {releases.fomc.message}
+        </p>
+      )}
+      {releases?.fomc && !releases.fomc.stale && releases.fomc.checked_on && (
+        <p className="caption dim" style={{ margin: 0 }}>
+          FOMC dates are kept by hand from the Federal Reserve&rsquo;s published
+          schedule, last checked {releases.fomc.checked_on}.
+        </p>
+      )}
+      {releases && !releases.configured && (
+        <p className="caption dim" style={{ margin: 0 }}>
+          Economic data releases are not switched on for this build, so only
+          company events are shown.
+        </p>
+      )}
+
       {days.map(({ date, events }) => {
         const dayReleases = releasesByDay.get(date) ?? [];
+        const dayFomc = fomcByDay.get(date) ?? [];
         const weekend = [5, 6].includes((new Date(`${date}T12:00:00`).getDay() + 6) % 7);
-        if (weekend && events.length === 0 && dayReleases.length === 0) return null;
+        if (weekend && events.length === 0 && dayReleases.length === 0
+            && dayFomc.length === 0) return null;
         return (
           <section key={date} className="stack" style={{ gap: "var(--gap-xs)" }}>
             <div className="between">
@@ -178,12 +211,23 @@ export function CalendarPanel({ file, releases }: {
                 {" · "}{prettyDate(date)}
               </div>
               <span className="caption dim">
-                <span className="num">{events.length + dayReleases.length}</span>
+                <span className="num">
+                  {events.length + dayReleases.length + dayFomc.length}
+                </span>
                 {events.length > 0
                   && events.every((e) => e.confirmed !== "confirmed")
                   && " · all estimated"}
               </span>
             </div>
+            {dayFomc.map((meeting) => (
+              <div key={`fomc-${meeting.date}-${meeting.label}`}
+                   style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
+                <div className="footnote">{meeting.label}</div>
+                <div className="caption dim">
+                  Federal Reserve · the decision lands at the end of this day
+                </div>
+              </div>
+            ))}
             {dayReleases.length > 0 && (
               <div className="grid-auto" style={{ gap: "var(--gap-xs)" }}>
                 {dayReleases.map((row) => (
@@ -206,7 +250,8 @@ export function CalendarPanel({ file, releases }: {
                 ))}
               </div>
             )}
-            {events.length === 0 && dayReleases.length === 0 ? (
+            {events.length === 0 && dayReleases.length === 0
+              && dayFomc.length === 0 ? (
               <p className="caption dim" style={{ margin: 0 }}>Nothing dated.</p>
             ) : (
               // A busy day is three hundred rows. One column of them wastes a
@@ -252,13 +297,6 @@ export function CalendarPanel({ file, releases }: {
           </section>
         );
       })}
-
-      {releases && !releases.configured && (
-        <p className="caption dim" style={{ margin: 0 }}>
-          Economic data releases are not switched on for this build, so only
-          company events are shown.
-        </p>
-      )}
 
       {shown === 0 && (
         <div className="card muted footnote">

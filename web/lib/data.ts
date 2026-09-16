@@ -130,6 +130,7 @@ export function getReleases() {
   return read<{
     as_of: string; configured: boolean; count: number; source: string;
     releases: import("./types").DataRelease[];
+    fomc?: import("./types").FomcStatus;
   }>("catalysts/releases.json");
 }
 

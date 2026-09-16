@@ -24,6 +24,16 @@ export interface DataRelease {
   notable: boolean; days_until: number; link: string | null;
 }
 
+/** A hand-kept FOMC date, and how much runway the list it came from has left.
+ *  `stale` is the alarm: the list cannot run out without saying so. */
+export interface FomcMeeting { date: string; label: string; days_until: number }
+
+export interface FomcStatus {
+  stale: boolean; runway_days: number | null; checked_on: string;
+  source: string; listed: number; message: string;
+  meetings: FomcMeeting[];
+}
+
 export interface Setup {
   symbol: string; name: string; screen: string; stage: string;
   pivot: number; close: number;

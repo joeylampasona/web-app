@@ -374,6 +374,11 @@ jobs:
                   f"{stages.get('forming', 0)} forming)")
           if fresh == 0:
               lines.append("_Nothing broke out today. That is a reading, not a fault._")
+          # The hand-kept FOMC list, if it is running out. This is the message
+          # somebody actually reads every day, so it is where the alarm belongs.
+          fomc = meta.get("fomc") or {}
+          if fomc.get("stale"):
+              lines.append(f"\n⚠️ {fomc.get('message', 'The FOMC list needs attention.')}")
 
           request = urllib.request.Request(
               os.environ["DISCORD_WEBHOOK_URL"],

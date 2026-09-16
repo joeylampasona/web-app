@@ -209,14 +209,20 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # Handed in from the cache the catalysts stage fills, like news and insiders:
     # publish never reaches the network. The file is written either way, so the
     # page can tell "not switched on" from "nothing scheduled".
-    from catalysts import releases as rel
+    from catalysts import fomc as fomcmod, releases as rel
     release_rows = releases or []
+    fomc_status = fomcmod.status(as_of)
     written.append(_write(out / "catalysts" / "releases.json", {
         "as_of": as_of.isoformat(),
         "configured": rel.configured(),
         "count": len(release_rows),
         "source": "Federal Reserve Bank of St. Louis (FRED)",
         "releases": [r.to_json(as_of) for r in release_rows],
+        # Hand-kept, so it carries its own expiry — see catalysts/fomc.
+        "fomc": {
+            **fomc_status,
+            "meetings": [m.to_json(as_of) for m in fomcmod.meetings(as_of)],
+        },
     }))
     written.append(_write(out / "catalysts" / "high_iv.json", {
         "as_of": as_of.isoformat(),
@@ -287,6 +293,13 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # Which of the desk's scanners worked. An empty signal set means
         # nothing at all if the scanner that produces it failed.
         "desk_run": desk_run,
+        # The one hand-kept list on the site, and how much runway it has left.
+        # Carried in meta so the nightly's own summary can shout about it: a
+        # list that runs out quietly is indistinguishable from a quiet calendar.
+        "fomc": {"stale": fomc_status["stale"],
+                 "runway_days": fomc_status["runway_days"],
+                 "listed": fomc_status["listed"],
+                 "message": fomc_status["message"]},
         "benchmark": market.benchmark,
         "market_wide_breakouts": int(next(
             (c["value"] for c in breadth_payload.get("cards", [])

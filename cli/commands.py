@@ -238,6 +238,13 @@ def cmd_catalysts(args) -> int:
         # section. Neither is worth failing a nightly run over.
         print(f"  → Insider filings skipped: {exc}", flush=True)
 
+    # The one hand-kept list here. Said out loud every run, because the whole
+    # case for keeping it by hand is that running out cannot happen silently.
+    from catalysts import fomc as fomcmod
+    fomc_state = fomcmod.status(market.as_of)
+    print(f"  → {'FOMC LIST NEEDS ATTENTION: ' if fomc_state['stale'] else ''}"
+          f"{fomc_state['message']}", flush=True)
+
     # When the data comes out, not when the Fed meets — see catalysts/releases.
     # One call, and the whole thing is optional: no key, no tab, no failure.
     from catalysts import releases as rel
