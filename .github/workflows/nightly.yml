@@ -3,30 +3,39 @@ name: Nightly scan
 # 6:30pm ET on weekdays. GitHub cron is UTC only and does not follow US daylight
 # saving, so both candidate hours are scheduled and the job checks the real
 # Eastern hour before doing any work.
-# GitHub does not promise to run a scheduled workflow. On 2026-09-14 it
-# delivered both slots over two hours late; on 2026-09-15 it delivered neither,
-# with the workflow active and the crons correct. Two slots meant two chances.
+# When the data exists, not when the market shuts.
 #
-# So there are now seven, hourly across the Eastern evening and into the small
-# hours, covering both halves of the year (the first two land at 18:30 and 19:30
-# in summer, 17:30 and 18:30 in winter). Whichever fires first does the work;
-# the rest read the data branch, see the session already published and stand
-# down in about five seconds. Redundancy is cheap when the gate is idempotent.
+# The schedule used to be 6:30pm Eastern, half an hour after the close, which
+# reads like the obvious time and cannot work. Our provider does not publish a
+# session's grouped aggregates that evening:
+#
+#   run #13  Tue 00:34 ET  ->  published Mon 14th   Monday's close was there
+#   run #14  Tue 20:04 ET  ->  published Mon 14th   Tuesday's close was not
+#
+# A run at half past six would therefore never carry that day's close, and the
+# site would sit a session behind for ever without anything being broken. The
+# window is now the small hours, by which time the previous session has landed —
+# the gate targets the last completed session, so a run at 1:30am Wednesday is
+# asking for Tuesday, which is what we want.
+#
+# Four slots rather than one because GitHub does not promise to run any of them:
+# on 2026-09-14 it delivered both of the old slots over two hours late, and on
+# 2026-09-15 it delivered neither, with the workflow active and the crons
+# correct. Whichever fires first does the work; the rest read the data branch,
+# see the session already published, and stand down in about five seconds.
+# Redundancy is cheap once the gate is idempotent, and it is.
 on:
   schedule:
-    - cron: "30 22 * * 1-5"
-    - cron: "30 23 * * 1-5"
-    # Past midnight UTC the Eastern weekday is the day before, so these run
-    # Tuesday-to-Saturday UTC to cover Monday-to-Friday evenings in New York.
-    - cron: "30 0 * * 2-6"
-    - cron: "30 1 * * 2-6"
-    - cron: "30 2 * * 2-6"
-    - cron: "30 3 * * 2-6"
-    - cron: "30 4 * * 2-6"
+    # 01:30 to 04:30 in New York. These are Tuesday-to-Saturday in UTC because
+    # the Eastern day is the one before — Saturday UTC covers Friday's session.
+    - cron: "30 5 * * 2-6"
+    - cron: "30 6 * * 2-6"
+    - cron: "30 7 * * 2-6"
+    - cron: "30 8 * * 2-6"
   workflow_dispatch:
     inputs:
       force:
-        description: "Run even if it is not 6pm in New York"
+        description: "Run even if the last completed session is already published"
         type: boolean
         default: true
 
