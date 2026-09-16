@@ -49,13 +49,36 @@ SOURCE = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 
 # The day somebody last copied the list from that page. Not a guess: set it when
 # you edit MEETINGS and leave it alone otherwise.
-CHECKED_ON = ""
+CHECKED_ON = "2026-09-16"
 
 # Decision days, oldest first. See FILLING IT IN above.
-# Deliberately empty: dates nobody has verified are worse than no dates, and an
-# empty list announces itself on the first run rather than being discovered by a
-# reader who planned around a meeting that was not happening.
-MEETINGS: list[tuple[str, str]] = []
+#
+# Transcribed from the Fed's published schedule on the date in CHECKED_ON. Each
+# entry is the SECOND day of a two-day meeting, which is when the decision lands.
+# Every one falls on a Wednesday after a Tuesday, which is the FOMC's pattern and
+# was checked rather than assumed.
+#
+# The 2027 meetings carry the Fed's asterisk for a Summary of Economic
+# Projections — March, June, September, December, the usual four. The 2026 rows
+# are not marked because the schedule they were copied from did not mark them.
+MEETINGS: list[tuple[str, str]] = [
+    ("2026-01-28", "FOMC decision"),
+    ("2026-03-18", "FOMC decision"),
+    ("2026-04-29", "FOMC decision"),
+    ("2026-06-17", "FOMC decision"),
+    ("2026-07-29", "FOMC decision"),
+    ("2026-09-16", "FOMC decision"),
+    ("2026-10-28", "FOMC decision"),
+    ("2026-12-09", "FOMC decision"),
+    ("2027-01-27", "FOMC decision"),
+    ("2027-03-17", "FOMC decision, projections"),
+    ("2027-04-28", "FOMC decision"),
+    ("2027-06-09", "FOMC decision, projections"),
+    ("2027-07-28", "FOMC decision"),
+    ("2027-09-15", "FOMC decision, projections"),
+    ("2027-10-27", "FOMC decision"),
+    ("2027-12-08", "FOMC decision, projections"),
+]
 
 # Below this much runway the list needs topping up. A quarter is enough notice:
 # the Fed publishes two years ahead, so this should never actually fire unless
