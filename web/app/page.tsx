@@ -119,6 +119,8 @@ export default function Home() {
     stage: stages.get(row.symbol)?.stage ?? null,
     earnings_within_7d: (stages.get(row.symbol)?.days ?? 99) <= 7,
     days_until_earnings: stages.get(row.symbol)?.days ?? null,
+    spark: row.spark ?? null,
+    spark_change_pct: row.spark_change_pct ?? null,
   }));
 
   const strongestStock: StrongestStock | null = best

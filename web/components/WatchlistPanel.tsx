@@ -2,14 +2,20 @@
 
 import { AuthGate } from "./AuthGate";
 import { StageBadge } from "./Badges";
+import { Sparkline } from "./Sparkline";
 import { TickerLink } from "./StockDrawer";
 import { useWatchlist, MAX_TICKERS } from "@/lib/useWatchlist";
 import { rsText } from "@/lib/format";
+import { PriceChange } from "./PriceChange";
 
 export interface WatchRow {
   symbol: string; name: string; rs_rating: number | string;
   stage: string | null; earnings_within_7d: boolean;
   days_until_earnings: number | null;
+  /** Normalised price shape for the row's sparkline. Null when the published
+   *  window was too short or dead flat. */
+  spark?: number[] | null;
+  spark_change_pct?: number | null;
 }
 
 export function WatchlistPanel({ rows }: { rows: WatchRow[] }) {
@@ -82,11 +88,14 @@ function Row({ row }: { row: WatchRow }) {
   return (
     <TickerLink symbol={row.symbol} className="card between"
                 style={{ padding: "var(--pad-md) var(--pad-lg)", width: "100%",
-                         marginBottom: "var(--gap-sm)" }}>
-      <span className="grow">
-        <span className="mono">{row.symbol}</span> <span>{row.name}</span>
+                         marginBottom: "var(--gap-sm)", gap: "var(--gap-sm)" }}>
+      <span className="grow" style={{ minWidth: 0 }}>
+        <span className="mono">{row.symbol}</span>{" "}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</span>
       </span>
-      <span className="row" style={{ gap: "var(--gap-sm)" }}>
+      <span className="row" style={{ gap: "var(--gap-sm)", flexShrink: 0 }}>
+        <Sparkline points={row.spark} changePct={row.spark_change_pct} />
+        <PriceChange value={row.spark_change_pct} className="footnote" />
         {row.stage && <StageBadge stage={row.stage} />}
         <span className="num dim">{rsText(row.rs_rating)}</span>
       </span>

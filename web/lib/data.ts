@@ -241,6 +241,11 @@ export function getDefaultBacktest(screen: string): BacktestSummary | null {
 export interface SearchRow {
   symbol: string; name: string; industry: string; rs_rating: number | string;
   themes: string[];
+  /** Normalised 0-100 price shape for rows that have no room for a chart.
+   *  Null when the window was too short or dead flat -- a flat line and a
+   *  missing one look the same to a reader and only one is true. */
+  spark?: number[] | null;
+  spark_change_pct?: number | null;
 }
 
 export function getSearchIndex(): SearchRow[] {

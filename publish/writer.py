@@ -17,6 +17,7 @@ from patterns import params as param_module
 from patterns import scan, stages
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
+from rankings import spark
 from rankings import rotation, rs, treemap
 
 VERSION = 1
@@ -202,6 +203,11 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "rs_rating": bundle.now.get(symbol),
             "themes": market.themes.get(symbol, []),
             "on_screen": sorted({s.screen for s in setups_by_symbol.get(symbol, [])}),
+            # A normalised price shape for list rows that have no room for a
+            # chart -- the watchlist and search results. Null when the window
+            # is too short or dead flat, so the row can say which.
+            "spark": spark.shape(market.closes(symbol)),
+            "spark_change_pct": spark.change_pct(market.closes(symbol)),
         } for symbol in market.universe],
     }))
 

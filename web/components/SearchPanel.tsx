@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { rsText } from "@/lib/format";
 import type { SearchRow } from "@/lib/data";
+import { PriceChange } from "./PriceChange";
+import { Sparkline } from "./Sparkline";
 import { TickerLink } from "./StockDrawer";
 
 export function SearchPanel({
@@ -92,13 +94,18 @@ export function SearchPanel({
       <div className="stack" style={{ gap: "var(--gap-sm)" }}>
         {results.map((row) => (
           <TickerLink key={row.symbol} symbol={row.symbol} className="card between"
-                      style={{ padding: "var(--pad-md) var(--pad-lg)", width: "100%" }}>
-            <span className="grow">
+                      style={{ padding: "var(--pad-md) var(--pad-lg)", width: "100%",
+                               gap: "var(--gap-sm)" }}>
+            <span className="grow" style={{ minWidth: 0 }}>
               <span className="mono">{row.symbol}</span>{" "}
               <span>{row.name}</span>
               <span className="caption dim"> · {row.industry}</span>
             </span>
-            <span className="num dim">{rsText(row.rs_rating)}</span>
+            <span className="row" style={{ gap: "var(--gap-sm)", flexShrink: 0 }}>
+              <Sparkline points={row.spark} changePct={row.spark_change_pct} />
+              <PriceChange value={row.spark_change_pct} className="footnote" />
+              <span className="num dim">{rsText(row.rs_rating)}</span>
+            </span>
           </TickerLink>
         ))}
       </div>
