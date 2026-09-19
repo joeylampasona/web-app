@@ -20,19 +20,22 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_NAME,
   description: TAGLINE,
-  // A pasted link used to render as a grey rectangle with a domain in it.
+  // A pasted link used to render as a grey rectangle with a domain in it. The
+  // banner is a supplied image rather than a generated one, so it is named here
+  // instead of by app/opengraph-image.
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
     title: SITE_NAME,
     description: TAGLINE,
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: SITE_NAME }],
   },
   twitter: { card: "summary_large_image", title: SITE_NAME,
-             description: TAGLINE },
+             description: TAGLINE, images: ["/og.jpg"] },
   manifest: "/manifest.webmanifest",
   // Without this the browser guesses at /favicon.ico, which does not exist,
   // and every page load carries a 404 that hides real ones in the console.
-  icons: { icon: "/icon.svg", apple: "/icon-maskable.svg" },
+  icons: { icon: "/icon.png", apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: SITE_NAME },
   other: { "apple-mobile-web-app-capable": "yes" },
 };
