@@ -1,0 +1,91 @@
+name: Weekly digest
+
+# Sunday, on the data the nightly already published.
+#
+# The nightly runs Tuesday to Saturday, so nothing is competing for Sunday and
+# the latest published session is Friday's close — which is the right input for
+# a letter about the week ahead. Nothing here recomputes anything; it reads the
+# same out/ tree the site serves.
+#
+# Sending is OFF unless it is asked for. The scheduled run composes every
+# letter and uploads them as an artifact, and a human reads them. Turning the
+# schedule into a real send is one line — `send: true` below — and it should
+# not be flipped before the legal question about emailing a weekly watchlist
+# has an answer.
+on:
+  schedule:
+    # 13:00 UTC Sunday — mid-morning in the US, early afternoon in Europe.
+    - cron: "0 13 * * 0"
+  workflow_dispatch:
+    inputs:
+      send:
+        description: "Actually send. Off means compose and upload for review."
+        type: boolean
+        default: false
+      only:
+        description: "One address, for a test send to yourself"
+        type: string
+        default: ""
+
+concurrency:
+  group: weekly-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      SITE_URL: https://thetape.cc
+      DIGEST_FROM: "The Tape <noreply@thetape.cc>"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The published tree, exactly as the site serves it. The digest never
+      # recomputes: if the letter and the site disagree, the letter is wrong.
+      - name: Fetch the published data
+        run: |
+          git fetch origin data --depth=1
+          git worktree add /tmp/published origin/data
+          ls /tmp/published/meta.json
+
+      - name: Refuse to run on stale data
+        run: |
+          as_of=$(python3 -c "import json;print(json.load(open('/tmp/published/meta.json'))['as_of'])")
+          age=$(( ($(date -u +%s) - $(date -u -d "$as_of" +%s)) / 86400 ))
+          echo "published session $as_of, $age day(s) old"
+          # Friday's close read on Sunday is two days old. Four is the most it
+          # can be without the nightly having failed, and a letter about "the
+          # week ahead" built on last week's numbers is worse than no letter.
+          if [ "$age" -gt 4 ]; then
+            echo "::error::published data is $age days old — the nightly has not run. Not sending."
+            exit 1
+          fi
+
+      - name: Compose (and send, if asked)
+        run: |
+          ARGS="--out /tmp/published"
+          if [ "${{ inputs.send }}" = "true" ]; then ARGS="$ARGS --send"; fi
+          if [ -n "${{ inputs.only }}" ]; then ARGS="$ARGS --only ${{ inputs.only }}"; fi
+          echo "python -m digest.send $ARGS"
+          python -m digest.send $ARGS
+
+      # Only a dry run produces these. A real send writes nothing to disk.
+      - name: Upload the letters for review
+        if: ${{ inputs.send != true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-preview
+          path: var/digest-preview/
+          if-no-files-found: ignore
+          retention-days: 14

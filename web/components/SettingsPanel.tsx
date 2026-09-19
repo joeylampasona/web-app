@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWatchlist } from "@/lib/useWatchlist";
+import { useEmailPrefs } from "@/lib/useEmailPrefs";
 import {
   readChoice, resolve, setChoice, subscribe, systemTheme, type ThemeChoice,
 } from "@/lib/theme";
@@ -140,6 +141,66 @@ function Account() {
   );
 }
 
+function Digest() {
+  const { configured, ready: authReady, signedIn } = useAuth();
+  const { ready, weeklyDigest, saving, error, configured: table, setWeeklyDigest } =
+    useEmailPrefs();
+
+  if (!authReady || !ready) return null;
+
+  if (!configured || !signedIn) {
+    return (
+      <p className="muted footnote" style={{ margin: 0 }}>
+        The weekly email needs an account, so there is somewhere to send it and
+        somewhere to record that you asked for it.
+      </p>
+    );
+  }
+
+  if (!table) {
+    return (
+      <p className="footnote" style={{ margin: 0, color: "var(--warn)" }}>
+        Email preferences are not set up on this project yet — the schema file
+        has not been run since the table was added.
+      </p>
+    );
+  }
+
+  return (
+    <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+      <div className="row" style={{ gap: "var(--gap-sm)" }}>
+        <button
+          type="button"
+          className={weeklyDigest ? "control primary" : "control"}
+          aria-pressed={weeklyDigest}
+          disabled={saving}
+          onClick={() => setWeeklyDigest(!weeklyDigest)}
+        >
+          {saving ? "Saving…" : weeklyDigest ? "Subscribed" : "Send me the Sunday email"}
+        </button>
+        {weeklyDigest && !saving && (
+          <button type="button" className="control"
+                  onClick={() => setWeeklyDigest(false)}>
+            Stop
+          </button>
+        )}
+      </div>
+      <p className="caption dim" style={{ margin: 0 }}>
+        {weeklyDigest
+          ? "The market's condition, what is set up, anything on your watchlist "
+            + "dated that week, and the week's events. Every one carries a link "
+            + "that stops them without signing in."
+          : "Nothing is sent unless you ask. We never pass your address on."}
+      </p>
+      {error && (
+        <p className="footnote" style={{ margin: 0, color: "var(--warn)" }}>
+          That did not save: {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsPanel({
   asOf, provider, universeCount, benchmark, live,
 }: {
@@ -163,6 +224,13 @@ export function SettingsPanel({
       </Section>
 
       <Section
+        title="Email"
+        blurb="One letter on Sundays, about the week ahead. Off unless you turn it on."
+      >
+        <Digest />
+      </Section>
+
+      <Section
         title="What this site keeps"
         blurb="All of it, in four lines."
       >
@@ -175,8 +243,12 @@ export function SettingsPanel({
         </ul>
         <p className="caption dim" style={{ margin: 0 }}>
           No prices you looked at, no pages you visited, nothing sold to anybody.
-          To have the account and everything on it deleted, email the address in
-          the <Link href="/legal" style={{ textDecoration: "underline" }}>disclaimer</Link>.
+          Switching the Sunday email off stops all mail except the sign-in codes,
+          which are how you get in rather than something we send you.
+          {/* This said "email the address in the disclaimer" and there is no
+              address on the disclaimer, or anywhere else on the site — an
+              instruction pointing at nothing. It goes back when a contact
+              address exists and has been tested. */}
         </p>
       </Section>
 
