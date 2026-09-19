@@ -10,6 +10,13 @@ what is set up, then what is dated. A quiet week says it is quiet rather than
 padding itself out, for the same reason the site does: a week when nothing is
 set up is a fact about the market, and dressing it up would make the letter
 worth less every time it arrived.
+
+The same letter goes to everyone. Nothing in it is personal -- no watchlist, no
+holdings, nothing drawn from an account -- which means the preview one person
+reads is exactly what every subscriber receives, and the worst a bug can do is
+send the wrong market summary rather than the wrong person's data. Personalised
+sections are a later decision with a heavier safety bill; this one is a
+newsletter.
 """
 from __future__ import annotations
 
@@ -22,7 +29,6 @@ from typing import Any
 # How many names to list per section. A letter nobody finishes is a letter
 # nobody reads, and the site is one tap away for the rest.
 MAX_PER_SCREEN = 6
-MAX_WATCHLIST = 12
 MAX_EVENTS = 8
 
 
@@ -35,8 +41,6 @@ class Digest:
     checks: list[str] = field(default_factory=list)
     indexes: list[dict] = field(default_factory=list)
     setups: list[dict] = field(default_factory=list)
-    watchlist_events: list[dict] = field(default_factory=list)
-    watchlist_breakouts: list[dict] = field(default_factory=list)
     week_events: list[dict] = field(default_factory=list)
     quiet: bool = False
 
@@ -116,15 +120,12 @@ def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str]]:
             checks)
 
 
-def build(out: pathlib.Path, watchlist: list[str] | None = None) -> Digest:
-    """Compose one digest. `watchlist` is this person's tickers, upper-case."""
-    held = {s.upper() for s in (watchlist or [])}
+def build(out: pathlib.Path) -> Digest:
+    """Compose the week's letter. One letter, the same for every subscriber."""
     meta = _read(out, "meta.json") or {}
     breadth = _read(out, "breadth.json")
     indexes = _read(out, "indexes.json")
-    upcoming = _read(out, "catalysts/upcoming.json") or {}
     releases = _read(out, "catalysts/releases.json") or {}
-    diff = _read(out, "screens/diff.json") or {}
 
     verdict, blurb, checks = _verdict(breadth, indexes)
 
@@ -144,16 +145,6 @@ def build(out: pathlib.Path, watchlist: list[str] | None = None) -> Digest:
             setups.append({"screen": screen["name"], "key": key, "rows": rows,
                            "total": screen.get("total", 0)})
 
-    # Only the reader's own names, and only what is dated inside the week.
-    watchlist_events = [
-        e for e in upcoming.get("events", [])
-        if e.get("ticker", "").upper() in held and 0 <= e.get("days_until", 99) <= 9
-    ][:MAX_WATCHLIST]
-
-    broke = {s for rows in diff.get("screens", {}).values()
-             for s in rows.get("broke_out_today", [])}
-    watchlist_breakouts = [{"symbol": s} for s in sorted(broke & held)]
-
     week_events = [
         r for r in (releases.get("releases") or [])
         if r.get("notable") and 0 <= r.get("days_until", 99) <= 9
@@ -164,7 +155,7 @@ def build(out: pathlib.Path, watchlist: list[str] | None = None) -> Digest:
                                    "name": meeting.get("label", "FOMC decision"),
                                    "notable": True})
 
-    quiet = not setups and not watchlist_events and not week_events
+    quiet = not setups and not week_events
 
     return Digest(
         as_of=meta.get("as_of", ""),
@@ -173,8 +164,6 @@ def build(out: pathlib.Path, watchlist: list[str] | None = None) -> Digest:
         checks=[c for c in checks if c],
         indexes=(indexes or {}).get("rows", []),
         setups=setups,
-        watchlist_events=watchlist_events,
-        watchlist_breakouts=watchlist_breakouts,
         week_events=week_events,
         quiet=quiet,
     )

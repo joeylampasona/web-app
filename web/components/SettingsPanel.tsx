@@ -187,9 +187,10 @@ function Digest() {
       </div>
       <p className="caption dim" style={{ margin: 0 }}>
         {weeklyDigest
-          ? "The market's condition, what is set up, anything on your watchlist "
-            + "dated that week, and the week's events. Every one carries a link "
-            + "that stops them without signing in."
+          ? "The market's condition, what is set up across the screens, and the "
+            + "week's dated events. The same letter goes to everyone — nothing "
+            + "in it comes from your account. Every one carries a link that "
+            + "stops them without signing in."
           : "Nothing is sent unless you ask. We never pass your address on."}
       </p>
       {error && (

@@ -1,22 +1,24 @@
 """Compose and send the weekly digest.
 
 Sending is off unless it is asked for. Every run is a dry run by default,
-writing what it would have sent to a directory you can read. The switch to
-actually send is an argument, not a default, because the failure that matters
-here is not a broken layout: it is one person receiving another person's
-watchlist, and that cannot be taken back.
+writing what it would have sent to a directory you can read.
 
-Three things guard against it:
+The letter is composed ONCE and is the same for everyone. Nothing in it comes
+from an account -- no watchlist, no holdings -- so the preview a person reads is
+exactly what every subscriber receives, and the worst a bug here can do is send
+the wrong market summary rather than the wrong person's data. That is the main
+reason this job is as short as it is.
 
-  * Rows are fetched per user and every row is checked to carry the user_id it
-    was fetched for. A mismatch aborts the whole run rather than skipping the
-    row, because a mismatch means the query is wrong and every other row is
-    suspect too.
+What remains worth guarding:
+
   * last_sent_at makes a re-run idempotent. A job that half-finished can be run
     again without reaching anyone twice.
+  * A non-200 from Supabase raises. An error that came back as an empty
+    subscriber list would report "0 sent" and look like a quiet week.
   * The service-role key is read from the environment and never logged. It
     bypasses row-level security by design, which is why it lives in CI secrets
-    and nowhere else.
+    and nowhere else. It is used for exactly one thing: reading the addresses
+    of people who asked for this.
 """
 from __future__ import annotations
 
@@ -75,32 +77,6 @@ def fetch_subscribers(url: str, service_key: str) -> list[dict[str, Any]]:
     if resp.status_code != 200:
         raise DigestError(f"reading subscribers failed: {resp.status_code} {resp.text[:200]}")
     return resp.json()
-
-
-def fetch_watchlist(url: str, service_key: str, user_id: str) -> list[str]:
-    """One person's tickers, checked to actually be theirs.
-
-    The check is not paranoia about the database. It is about the query: a
-    filter that silently stopped applying would return everyone's rows, and
-    the only visible symptom would be strangers' tickers in somebody's email.
-    """
-    resp = requests.get(
-        f"{url}/rest/v1/watchlist",
-        headers=_supabase_headers(service_key),
-        params={"select": "symbol,user_id", "user_id": f"eq.{user_id}"},
-        timeout=30,
-    )
-    if resp.status_code != 200:
-        raise DigestError(f"reading a watchlist failed: {resp.status_code} {resp.text[:200]}")
-    rows = resp.json()
-    for row in rows:
-        if row.get("user_id") != user_id:
-            raise DigestError(
-                "a watchlist row came back for a different account than it was "
-                "requested for. Refusing to send anything: if this filter is "
-                "wrong, every other row in this run is suspect too."
-            )
-    return [r["symbol"] for r in rows]
 
 
 def mark_sent(url: str, service_key: str, user_id: str) -> None:
@@ -176,6 +152,13 @@ def run(argv: list[str] | None = None) -> int:
     sender = os.environ.get("DIGEST_FROM", "The Tape <noreply@thetape.cc>")
     api_key = _env("RESEND_API_KEY", required=args.send)
 
+    # One letter, composed before the loop, because every subscriber gets the
+    # same one. Composing per person would invite the bug where they stop
+    # being the same.
+    digest = compose.build(out)
+    subject = compose.subject(digest)
+    print(f"this week's letter: {subject!r}", flush=True)
+
     subscribers = fetch_subscribers(url, service_key)
     if args.only:
         subscribers = [s for s in subscribers if s.get("email") == args.only]
@@ -192,12 +175,10 @@ def run(argv: list[str] | None = None) -> int:
             skipped += 1
             continue
 
-        watchlist = fetch_watchlist(url, service_key, user_id)
-        digest = compose.build(out, watchlist)
+        # The only thing that differs per recipient is their own stop link.
         unsubscribe = f"{site}/unsubscribe?t={row['unsubscribe_token']}"
         html = render.html(digest, site, unsubscribe)
         text = render.text(digest, site, unsubscribe)
-        subject = compose.subject(digest)
 
         if not args.send:
             # The address goes in the file name so a preview can be checked
@@ -206,8 +187,7 @@ def run(argv: list[str] | None = None) -> int:
             (preview / f"{stem}.html").write_text(html)
             (preview / f"{stem}.txt").write_text(
                 f"To: {email}\nSubject: {subject}\n\n{text}")
-            print(f"  would send to {email}: {subject} "
-                  f"({len(watchlist)} on their watchlist)", flush=True)
+            print(f"  would send to {email}", flush=True)
             sent += 1
             continue
 

@@ -7,6 +7,10 @@ name: Weekly digest
 # a letter about the week ahead. Nothing here recomputes anything; it reads the
 # same out/ tree the site serves.
 #
+# The letter is the same for every subscriber and contains nothing from anyone's
+# account. That is why this job is short: there is no per-person data to get
+# wrong, so the preview below is literally what everyone receives.
+#
 # Sending is OFF unless it is asked for. The scheduled run composes every
 # letter and uploads them as an artifact, and a human reads them. Turning the
 # schedule into a real send is one line — `send: true` below — and it should

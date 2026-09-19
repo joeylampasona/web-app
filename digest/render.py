@@ -47,24 +47,17 @@ def _day(iso: str) -> str:
 
 def text(d: Digest, site: str, unsubscribe_url: str) -> str:
     """The plain-text part. Written to be read, not as a fallback nobody sees."""
-    lines = [f"THE TAPE — the week ahead", f"Measured at the {d.as_of} close.", ""]
+    lines = ["THE TAPE — the week ahead", f"Measured at the {d.as_of} close.", ""]
     lines += [d.verdict.upper(), d.verdict_blurb, ""]
     for c in d.checks:
         lines.append(f"  - {c}")
+
     if d.indexes:
         lines.append("")
         for row in d.indexes:
             side = ("above" if row.get("above_200") else "below") \
                 if row.get("above_200") is not None else "—"
             lines.append(f"  {row['symbol']}  {row['close']}  ({side} its 200-day)")
-
-    if d.watchlist_breakouts:
-        lines += ["", "ON YOUR WATCHLIST — broke out",
-                  "  " + ", ".join(r["symbol"] for r in d.watchlist_breakouts)]
-    if d.watchlist_events:
-        lines += ["", "ON YOUR WATCHLIST — dated this week"]
-        for e in d.watchlist_events:
-            lines.append(f"  {_day(e['date'])}  {e['ticker']}  {e.get('type_label', e.get('type',''))}")
 
     if d.setups:
         lines += ["", "SET UP"]
@@ -141,23 +134,9 @@ def html(d: Digest, site: str, unsubscribe_url: str) -> str:
             f'border="0" style="background-color:{RAISED};border-radius:10px;">'
             f'<tr>{cells}</tr></table></td></tr>')
 
-    if d.watchlist_breakouts:
-        body = _row(", ".join(
-            f'<span style="font-family:{MONO};">{esc(r["symbol"])}</span>'
-            for r in d.watchlist_breakouts))
-        parts.append(_section("On your watchlist — broke out", body))
-
-    if d.watchlist_events:
-        body = "".join(
-            _row(f'<span style="color:{WARN};">{esc(_day(e["date"]))}</span> '
-                 f'<span style="font-family:{MONO};">{esc(e["ticker"])}</span>',
-                 esc(e.get("type_label") or e.get("type", "")))
-            for e in d.watchlist_events)
-        parts.append(_section("On your watchlist — dated this week", body))
-
     if d.setups:
         body = "".join(
-            _row(f'{esc(s["screen"])}',
+            _row(esc(s["screen"]),
                  esc(", ".join(r["symbol"] for r in s["rows"])))
             for s in d.setups)
         parts.append(_section("Set up", body))
