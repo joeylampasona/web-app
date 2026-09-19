@@ -115,6 +115,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="row" style={{ gap: "var(--gap-sm)" }}>
             <ThemeToggle />
+            {/* Hidden on desktop, where the sidebar footer carries it. */}
+            <Link
+              href="/settings"
+              className="control footnote settings-gear"
+              aria-label="Settings"
+              title="Settings"
+              style={{ minHeight: 36 }}
+            >
+              <span aria-hidden>⚙</span>
+            </Link>
             <AccountButton />
           </div>
         </div>
@@ -313,6 +323,19 @@ function SideNav({ tabs, pathname, active }: {
           </div>
         );
       })}
+
+      {/* Settings sits at the foot of the sidebar rather than in the tab bar.
+          The bar is at six and 53px per cell at 320px; a seventh would cost
+          the labels. This is something people open twice a year. */}
+      <div style={{ marginTop: "auto", paddingTop: "var(--gap-lg)" }}>
+        <Link href="/settings" className="sidenav-item"
+              aria-current={pathname === "/settings" ? "page" : undefined}>
+          <span className="row" style={{ gap: "var(--gap-sm)" }}>
+            <span aria-hidden style={{ width: 16, display: "inline-block" }}>⚙</span>
+            <span>Settings</span>
+          </span>
+        </Link>
+      </div>
     </aside>
   );
 }

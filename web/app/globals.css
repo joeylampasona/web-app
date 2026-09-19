@@ -256,7 +256,14 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
   gap: var(--gap-md);
 }
 
+/* The header gear is the phone's way into settings, since the tab bar is
+   full. On desktop the sidebar footer carries it and two entry points in one
+   viewport is one too many. */
+.settings-gear { display: inline-flex; align-items: center; justify-content: center; }
+
 @media (min-width: 1024px) {
+  .settings-gear { display: none; }
+
   :root {
     --page-max: 1040px;
     --sidenav-w: 236px;

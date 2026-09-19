@@ -1,38 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apply, readChoice, resolve, setChoice, subscribe, type Theme } from "@/lib/theme";
 
 /**
- * Dark is the default. prefers-color-scheme is respected on first load only —
- * after that the reader's choice wins. A light-first financial site is a tell
- * that nobody who trades built it.
+ * The header's one-tap switch. The stored choice, the resolution of "system"
+ * and the persistence all live in lib/theme, so this button and the settings
+ * page cannot drift apart: both subscribe, and a change in either reaches the
+ * other immediately rather than at the next page load.
  */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("theme");
-    if (stored === "light" || stored === "dark") {
-      setTheme(stored);
-      document.documentElement.dataset.theme = stored;
-      return;
-    }
-    const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-    const initial = prefersLight ? "light" : "dark";
-    setTheme(initial);
-    document.documentElement.dataset.theme = initial;
+    const sync = () => {
+      const next = resolve(readChoice());
+      setTheme(next);
+      apply(next);
+    };
+    sync();
+    return subscribe(sync);
   }, []);
 
-  const toggle = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.dataset.theme = next;
-    try {
-      window.localStorage.setItem("theme", next);
-    } catch {
-      /* storage unavailable */
-    }
-  };
+  // Toggling always picks a side. Someone reaching for this button wants the
+  // other one now, not "follow the device and see what happens"; the settings
+  // page is where "system" lives.
+  const toggle = () => setChoice(theme === "dark" ? "light" : "dark");
 
   return (
     <button
