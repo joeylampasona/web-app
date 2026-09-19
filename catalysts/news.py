@@ -134,3 +134,36 @@ def by_symbol(conn: sqlite3.Connection, symbols: Iterable[str],
             "url": row["url"],
         })
     return out
+
+
+def market_wide(by_symbol_rows: dict[str, list[dict]],
+                limit: int = 12) -> list[dict]:
+    """One recent-headlines list for the whole site, from the per-symbol map.
+
+    An article usually carries several tickers, so the same headline appears
+    under each of them. Deduplicating by URL and collecting the tickers back
+    onto the article turns "six headlines each for nine hundred names" into a
+    reading list, and keeps the same story from filling the page.
+
+    No ranking or scoring of our own goes on top. The order is the order they
+    were published, newest first, which is the only ordering that is a fact
+    rather than an opinion.
+    """
+    articles: dict[str, dict] = {}
+    for symbol, rows in by_symbol_rows.items():
+        for row in rows:
+            url = row.get("url")
+            if not url:
+                continue
+            held = articles.get(url)
+            if held is None:
+                held = {**row, "tickers": []}
+                articles[url] = held
+            if symbol not in held["tickers"]:
+                held["tickers"].append(symbol)
+
+    out = sorted(articles.values(),
+                 key=lambda a: a.get("published_at") or "", reverse=True)
+    for article in out:
+        article["tickers"] = sorted(article["tickers"])
+    return out[:limit]

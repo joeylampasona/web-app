@@ -103,9 +103,12 @@ export function TickerLink({
   return (
     <button
       type="button"
-      className={className}
-      style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
-               textAlign: "left", ...style }}
+      className={className ? `ticker-link ${className}` : "ticker-link"}
+      // cursor and text-align do not conflict with anything a caller passes,
+      // so they stay inline. background, border and padding moved to the
+      // zero-specificity .ticker-link rule -- inline they silently overrode
+      // every className a caller gave this button.
+      style={{ cursor: "pointer", textAlign: "left", ...style }}
       onClick={() => drawer?.open(symbol)}
     >
       {children}

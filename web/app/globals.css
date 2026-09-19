@@ -95,6 +95,21 @@ button { font: inherit; color: inherit; }
 }
 .primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
 
+/* The reset a TickerLink needs so it does not look like a native button.
+ *
+ * It lives in :where(), which has zero specificity, so ANY class the caller
+ * passes wins over it without depending on where it sits in this file. It
+ * used to be three inline properties on the button, and inline styles beat
+ * classes: every <TickerLink className="badge"> on the site rendered as loose
+ * text with no pill, because background, border and padding were being reset
+ * out from under the badge rule. Source order would have fixed it too, and
+ * would have broken again the next time someone moved a block. */
+:where(.ticker-link) {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -105,6 +120,12 @@ button { font: inherit; color: inherit; }
   background: var(--surface-2);
   color: var(--text-secondary);
   white-space: nowrap;
+  /* The fill alone does not make a pill. On a card it is surface-2 against
+     surface-1, which measures 1.05:1 in light and 1.09:1 in dark -- a shape
+     needs roughly 3:1 to read as a shape, so an unmodified badge was showing
+     up as loose text. The tinted variants below override the fill and keep
+     this edge, which does them no harm. */
+  border: 0.5px solid var(--border-strong);
 }
 .badge--warn { background: var(--warn-bg); color: var(--warn); }
 .badge--gain { background: var(--gain-muted); color: var(--gain); }

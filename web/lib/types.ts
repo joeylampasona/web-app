@@ -275,6 +275,17 @@ export interface Headline {
   published_at: string; title: string; publisher: string; url: string;
 }
 
+/** A headline on the market-wide list, which also carries the names the
+ *  article was filed against. One story usually names several. */
+export interface MarketHeadline extends Headline {
+  tickers: string[];
+}
+
+export interface NewsFile {
+  as_of: string;
+  articles: MarketHeadline[];
+}
+
 export interface DeskSignal {
   as_of: string; source: string; reason: string; detail: string;
   magnitude: number | null; url: string;

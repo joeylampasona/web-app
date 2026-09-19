@@ -11,6 +11,7 @@ from backtest import engine, metrics
 from backtest.settings import OPTIONS, BacktestSettings
 from catalysts import events as ev
 from catalysts import iv as ivmod
+from catalysts import news as newsmod
 from data import classify, settings
 from data.market import Market
 from patterns import params as param_module
@@ -157,6 +158,14 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "heating_cooling": rotation.heating_cooling(industries),
         "themes_heating_cooling": rotation.heating_cooling(themes),
         "sector_etfs": rs.etf_ratings(market),
+    }))
+
+    # Recent headlines across every name the site follows, deduplicated from
+    # the per-symbol map the catalysts stage already filled. No extra fetch:
+    # the news endpoint is queried market-wide once a night regardless.
+    written.append(_write(out / "news.json", {
+        "as_of": as_of.isoformat(),
+        "articles": newsmod.market_wide(news or {}),
     }))
 
     # Broad-market indexes and the regime check, for the home page. Both are

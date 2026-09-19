@@ -79,6 +79,10 @@ export function getBreadth() {
   return read<{ as_of: string; universe_size: number; cards: BreadthCard[] }>("breadth.json");
 }
 
+export function getNews() {
+  return read<import("./types").NewsFile>("news.json");
+}
+
 export function getIndexes() {
   return read<import("./types").IndexesFile>("indexes.json");
 }

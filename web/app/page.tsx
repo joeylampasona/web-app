@@ -2,13 +2,14 @@ import Link from "next/link";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { HomeCalendar } from "@/components/HomeCalendar";
 import { HomeIndexes } from "@/components/HomeIndexes";
+import { HomeNews } from "@/components/HomeNews";
 import { HomeRead } from "@/components/HomeRead";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
-  getAllScreens, getBreadth, getDiff, getIndexes, getMeta, getReleases,
+  getAllScreens, getBreadth, getDiff, getIndexes, getMeta, getNews, getReleases,
   getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
 import { longDate } from "@/lib/format";
@@ -64,6 +65,7 @@ export default function Home() {
   const diff = getDiff();
   const upcoming = getUpcoming();
   const releases = getReleases();
+  const news = getNews();
 
   const cards = breadth?.cards ?? [];
   const value = (key: string) => cards.find((c) => c.key === key)?.value ?? null;
@@ -197,6 +199,8 @@ export default function Home() {
       </section>
 
       <HomeWatchlist rows={watchRows} />
+
+      <HomeNews articles={news?.articles ?? []} />
 
       {upcoming && (
         <HomeCalendar
