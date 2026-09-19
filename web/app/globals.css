@@ -214,6 +214,15 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
   align-items: start;
 }
 
+/* Same rule, same reason as above: defined before the breakpoints so the media
+   query can win. */
+.quadrant-lists {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--pad-lg);
+  align-items: start;
+}
+
 /* Same reasoning, same ordering rule. */
 .stage-picker {
   display: grid;
@@ -258,6 +267,11 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
 
   /* Two columns for everything below the chart on a stock page. */
   .detail-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Two quadrants across. A three-column table stretched to 1170px is mostly
+     whitespace, and putting powering up beside turning up is the comparison a
+     rotation page exists to make. */
+  .quadrant-lists { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   /* Four stages, four columns: as full-width rows each was a single number
      stretched across the page, which reads as sparse rather than spacious. */

@@ -14,6 +14,14 @@ const QUADRANT_COLOUR: Record<string, string> = {
   falling_back: "var(--q-falling)",
 };
 
+/** The four quadrants in one order, read by the legend and the list alike so
+ *  they cannot drift apart. */
+const QUADRANTS = ["powering_up", "turning_up", "cooling_off", "falling_back"] as const;
+
+/** How many names a quadrant shows before asking. Powering up alone held 679;
+ *  sectioning the list was pointless if each section stayed a wall. */
+const PREVIEW_ROWS = 25;
+
 /**
  * The viewBox is measured rather than fixed.
  *
@@ -51,6 +59,7 @@ export function Scatter({
   // a phone this was several hundred coloured dots and no way to ask which.
   const [hovered, setHovered] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const group = groups.find((g) => g.key === tab) ?? groups[0];
 
   const frame = useRef<HTMLDivElement>(null);
@@ -126,7 +135,7 @@ export function Scatter({
       />
 
       <div className="grid-2" style={{ gap: "var(--gap-sm)" }}>
-        {(["powering_up", "turning_up", "cooling_off", "falling_back"] as const).map((q) => (
+        {QUADRANTS.map((q) => (
           <div key={q} className="row footnote" style={{ gap: "var(--gap-sm)" }}>
             <span aria-hidden style={{
               width: 8, height: 8, borderRadius: 2, background: QUADRANT_COLOUR[q],
@@ -250,33 +259,93 @@ export function Scatter({
           </div>
         </div>
       ) : (
-        <div className="scroll-x card" style={{ padding: 0 }}>
-          <table className="data">
-            <thead>
-              <tr><th>Name</th><th>RS</th><th>Δ 1m</th><th>Quadrant</th></tr>
-            </thead>
-            <tbody>
-              {[...points]
-                .sort((a, b) => (b.x ?? 0) - (a.x ?? 0))
-                .filter((p) => highlighted.size === 0 || highlighted.has(p.id))
-                .map((point) => (
-                  <tr key={point.id}>
-                    <td className="text">
-                      {group.hrefPrefix ? (
-                        <Link href={`${group.hrefPrefix}${point.id}`}>{point.label}</Link>
-                      ) : (
-                        point.label
-                      )}
-                    </td>
-                    <td>{point.x}</td>
-                    <td style={{ color: QUADRANT_COLOUR[point.quadrant ?? ""] }}>
-                      {signed(point.y, 0, "")}
-                    </td>
-                    <td className="text caption">{labels[point.quadrant ?? ""] ?? "—"}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+        // One flat list of two thousand rows, every one of them repeating its own
+        // quadrant in the last column, is not a list anyone can read. The four
+        // quadrants are the thing the page is about, so they are the structure:
+        // a section each, in the legend's order, and the column that said the
+        // same word two thousand times is gone.
+        <div className="quadrant-lists">
+          {QUADRANTS.map((quadrant) => {
+            const rows = [...points]
+              .filter((p) => (p.quadrant ?? "") === quadrant)
+              .filter((p) => highlighted.size === 0 || highlighted.has(p.id))
+              .sort((a, b) => (b.x ?? 0) - (a.x ?? 0));
+            // A search is already a narrow answer; capping it would hide the
+            // very rows somebody went looking for.
+            const searching = highlighted.size > 0;
+            const open = searching || expanded.has(quadrant);
+            const shown = open ? rows : rows.slice(0, PREVIEW_ROWS);
+            // A search that matched one name should not answer with three
+            // headings saying it did not match. Empty quadrants still show when
+            // nobody is searching, because "nothing is powering up" is itself a
+            // reading of the market.
+            if (searching && rows.length === 0) return null;
+            return (
+              <section key={quadrant} className="stack" style={{ gap: "var(--gap-xs)" }}>
+                <div className="between">
+                  <div className="row" style={{ gap: "var(--gap-sm)" }}>
+                    <span aria-hidden style={{
+                      width: 8, height: 8, borderRadius: 2,
+                      background: QUADRANT_COLOUR[quadrant], flexShrink: 0,
+                    }} />
+                    <span className="eyebrow" style={{ color: QUADRANT_COLOUR[quadrant] }}>
+                      {labels[quadrant]}
+                    </span>
+                  </div>
+                  <span className="caption dim num">{rows.length}</span>
+                </div>
+
+                {rows.length === 0 ? (
+                  <p className="caption dim" style={{ margin: 0 }}>
+                    {searching ? "No match here." : "Nothing in this quadrant."}
+                  </p>
+                ) : (
+                  <>
+                    <div className="scroll-x card" style={{ padding: 0 }}>
+                      <table className="data">
+                        <thead>
+                          <tr><th>Name</th><th>RS</th><th>Δ 1m</th></tr>
+                        </thead>
+                        <tbody>
+                          {shown.map((point) => (
+                            <tr key={point.id}>
+                              <td className="text">
+                                {group.hrefPrefix ? (
+                                  <Link href={`${group.hrefPrefix}${point.id}`}>{point.label}</Link>
+                                ) : (
+                                  point.label
+                                )}
+                              </td>
+                              <td>{point.x}</td>
+                              <td style={{ color: QUADRANT_COLOUR[quadrant] }}>
+                                {signed(point.y, 0, "")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {rows.length > PREVIEW_ROWS && !searching && (
+                      <button
+                        type="button"
+                        className="control footnote"
+                        onClick={() => setExpanded((was) => {
+                          const next = new Set(was);
+                          if (next.has(quadrant)) next.delete(quadrant);
+                          else next.add(quadrant);
+                          return next;
+                        })}
+                      >
+                        {open
+                          ? `Show the strongest ${PREVIEW_ROWS}`
+                          : `Show all ${rows.length}`}
+                      </button>
+                    )}
+                  </>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
