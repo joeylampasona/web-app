@@ -216,7 +216,8 @@ def cmd_catalysts(args) -> int:
     else:
         print("  → Market Desk not configured; skipping.", flush=True)
 
-    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates)
+    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates,
+                        conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
     ev.attach(calendar, result.all_setups())
 
     # Form 4s for the names on a screen. Filings never change once filed, so
@@ -225,14 +226,23 @@ def cmd_catalysts(args) -> int:
     from data import insiders
     from data.edgar import EdgarUnavailable
     try:
-        def insider_progress(done: int, total: int, added: int) -> None:
-            print(f"  → insider filings {done:,}/{total:,} — {added:,} new", flush=True)
+        def insider_progress(done: int, total: int, added: int,
+                             parsed: int) -> None:
+            print(f"  → insider filings {done:,}/{total:,} — "
+                  f"{added:,} read, {parsed:,} transactions", flush=True)
 
         print(f"  → Reading insider filings for {len(population):,} names. "
               f"The first run takes a while; later ones read only what is new.",
               flush=True)
-        added = insiders.fetch(conn, population, progress=insider_progress)
-        print(f"  → {added:,} new Form 4 filings read.", flush=True)
+        added, parsed = insiders.fetch(conn, population, progress=insider_progress)
+        print(f"  → {added:,} new Form 4 filings read, "
+              f"{parsed:,} transactions parsed.", flush=True)
+        if added and not parsed:
+            # The shape of the bug that hid for weeks: filings fetched fine and
+            # every one of them yielded nothing. Reading a document SEC serves
+            # as HTML does exactly this, and "filings read" alone looks healthy.
+            print("  → WARNING: every filing parsed to zero transactions. "
+                  "That is a parsing or URL fault, not a quiet week.", flush=True)
     except EdgarUnavailable as exc:
         # A missing industry is a worse page; missing insider data is a missing
         # section. Neither is worth failing a nightly run over.
@@ -412,7 +422,8 @@ def _pipeline(conn, with_backtests: bool = True):
     else:
         print("  → Market Desk not configured; skipping.", flush=True)
 
-    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates)
+    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates,
+                        conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
     ev.attach(calendar, result.all_setups())
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
     iv_rows = ivmod.compute(calendar, population, names, adapter)

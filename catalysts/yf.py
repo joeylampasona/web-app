@@ -79,3 +79,65 @@ def option_chain(symbol: str) -> OptionChain | None:
     except Exception as exc:                      # noqa: BLE001
         log.debug("option chain failed for %s: %s", symbol, exc)
         return None
+
+
+# ---------------------------------------------------------------- cache
+#
+# Yahoo rate-limits a per-ticker scrape long before two thousand names are
+# through it, and the failures are individually harmless and collectively
+# fatal: the roadmap simply empties. Storing what arrives means a throttled
+# night costs the names it missed rather than all of them.
+
+# How long a stored date is trusted before it is looked up again. Companies
+# announce a quarter ahead and rarely move it, so a week is generous and keeps
+# the nightly request count low enough that Yahoo mostly answers.
+FRESH_DAYS = 7
+
+
+def store_dates(conn, by_symbol: dict[str, list]) -> int:
+    """Keep what was fetched. Returns rows written."""
+    now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    written = 0
+    for symbol, events in by_symbol.items():
+        for event in events:
+            conn.execute(
+                "INSERT OR REPLACE INTO earnings_dates"
+                "(symbol, date, confirmed, fetched_at) VALUES (?,?,?,?)",
+                (symbol.upper(), event.date.isoformat(), event.confirmed, now))
+            written += 1
+    conn.commit()
+    return written
+
+
+def stale_symbols(conn, symbols, fresh_days: int = FRESH_DAYS) -> list[str]:
+    """The names worth asking about tonight.
+
+    A symbol with a stored date fetched inside the window is skipped, which is
+    what keeps the request count under Yahoo's patience. Everything else — never
+    fetched, or fetched long enough ago that the date may have moved — is asked
+    for.
+    """
+    cutoff = (dt.datetime.now(dt.timezone.utc)
+              - dt.timedelta(days=fresh_days)).isoformat(timespec="seconds")
+    fresh = {r[0] for r in conn.execute(
+        "SELECT DISTINCT symbol FROM earnings_dates WHERE fetched_at >= ?",
+        (cutoff,))}
+    return [s for s in symbols if s.upper() not in fresh]
+
+
+def load_dates(conn, symbols, as_of: dt.date) -> dict[str, list[EarningsEvent]]:
+    """Everything stored for these names that has not already happened."""
+    wanted = {s.upper() for s in symbols}
+    out: dict[str, list[EarningsEvent]] = {}
+    for row in conn.execute(
+            "SELECT symbol, date, confirmed FROM earnings_dates"
+            " WHERE date >= ? ORDER BY date", (as_of.isoformat(),)):
+        symbol = row[0]
+        if symbol not in wanted:
+            continue
+        try:
+            day = dt.date.fromisoformat(row[1])
+        except (TypeError, ValueError):
+            continue
+        out.setdefault(symbol, []).append(EarningsEvent(symbol, day, row[2]))
+    return out

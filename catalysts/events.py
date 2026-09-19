@@ -154,20 +154,52 @@ _HOUR_NOTE = {
 
 def build(market: Market, symbols: Sequence[str],
           adapter: DataAdapter | None = None,
-          desk_earnings: dict[str, tuple[dt.date, str]] | None = None) -> Calendar:
+          desk_earnings: dict[str, tuple[dt.date, str]] | None = None,
+          conn=None, notice=None) -> Calendar:
     adapter = adapter or get_adapter()
     as_of = market.as_of
     calendar = Calendar(as_of=as_of)
     horizon = as_of + dt.timedelta(days=int(settings.get("catalysts.lookahead_days", 90)))
     symbols = sorted(set(symbols))
 
+    # Earnings dates come from a per-ticker scrape that Yahoo rate-limits well
+    # before two thousand names are through it. With a connection they are
+    # cached: only the names without a recent date are asked for, and whatever
+    # arrives is kept. A throttled night then costs the names it missed rather
+    # than every name, which is what used to happen — 62% of pages published an
+    # empty roadmap for companies that certainly report inside the window.
+    from catalysts import yf as yfmod
+    ask_for = list(symbols)
+    if conn is not None:
+        try:
+            ask_for = yfmod.stale_symbols(conn, symbols)
+            if notice:
+                notice(f"earnings: {len(symbols) - len(ask_for):,} names already "
+                       f"have a recent date, asking about {len(ask_for):,}.")
+        except Exception as exc:                  # noqa: BLE001
+            log.warning("earnings cache unreadable, asking about everything: %s", exc)
+
     try:
-        earnings = adapter.get_earnings_dates(symbols)
+        fetched = adapter.get_earnings_dates(ask_for) if ask_for else {}
     except NotImplementedError:
-        earnings = {}
+        fetched = {}
     except Exception as exc:                      # noqa: BLE001
         log.warning("earnings ingestion failed: %s", exc)
-        earnings = {}
+        fetched = {}
+
+    earnings = dict(fetched)
+    if conn is not None:
+        try:
+            yfmod.store_dates(conn, fetched)
+            # Everything known, not just tonight's haul.
+            for symbol, events in yfmod.load_dates(conn, symbols, as_of).items():
+                earnings.setdefault(symbol, events)
+            if notice:
+                got = sum(1 for v in earnings.values() if v)
+                notice(f"earnings: {len(fetched):,} names fetched tonight, "
+                       f"{got:,} of {len(symbols):,} have a date in total.")
+        except Exception as exc:                  # noqa: BLE001
+            log.warning("earnings cache unusable: %s", exc)
 
     # The Market Desk is authoritative where it has a date: it reads them from a
     # dedicated source and carries the session half, where our own fallback is

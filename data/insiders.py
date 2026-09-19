@@ -116,11 +116,14 @@ def parse_form4(xml: str, symbol: str, accession: str) -> list[dict]:
 
 
 def fetch(conn: sqlite3.Connection, symbols: Iterable[str], since_days: int = 180,
-          max_per_symbol: int = 12, progress=None) -> int:
+          max_per_symbol: int = 12, progress=None) -> tuple[int, int]:
     """Read Form 4s filed since `since_days` that we have not read before.
 
-    Returns the number of new filings read. A filing already in the cache is
-    never fetched again — they do not change once filed.
+    Returns (filings read, transactions parsed). Both, because it used to
+    return only the first: a run that fetched hundreds of filings and parsed
+    nothing out of any of them printed a healthy number and published a site
+    with no insider data anywhere. A filing already in the cache is never
+    fetched again — they do not change once filed.
     """
     symbols = [s.upper() for s in symbols]
     if settings.get("data.provider") == "synthetic":
@@ -134,11 +137,12 @@ def fetch(conn: sqlite3.Connection, symbols: Iterable[str], since_days: int = 18
     seen = {r["accession"] for r in
             conn.execute("SELECT accession FROM insider_filings")}
     added = 0
+    parsed = 0
     total = len(symbols)
 
     for index, symbol in enumerate(symbols, 1):
         if progress and (index % 50 == 0 or index == total):
-            progress(index, total, added)
+            progress(index, total, added, parsed)
         cik = cik_map.get(symbol)
         if not cik:
             continue
@@ -170,8 +174,24 @@ def fetch(conn: sqlite3.Connection, symbols: Iterable[str], since_days: int = 18
             _store(conn, accession, symbol, filed, rows)
             seen.add(accession)
             added += 1
+            parsed += len(rows)
     conn.commit()
-    return added
+    return added, parsed
+
+
+def raw_document(primary: str) -> str:
+    """The machine-readable Form 4, not the page SEC renders for humans.
+
+    `primaryDocument` in the submissions feed usually points at an XSL
+    rendering — `xslF345X03/doc4.xml` — which despite the .xml suffix serves
+    HTML. Fetching that returned 200, the XML parser rejected it, the filing
+    was recorded as read, and the transaction table stayed empty. Every stock
+    page on the site showed no insider activity while the nightly reported
+    filings read.
+
+    The raw document is the same name one directory up.
+    """
+    return primary.split("/")[-1] if "/" in primary else primary
 
 
 def _read_filing(session, cik: str, accession: str, primary: str,
@@ -179,7 +199,7 @@ def _read_filing(session, cik: str, accession: str, primary: str,
     stripped = accession.replace("-", "")
     number = cik[3:].lstrip("0") if cik.startswith("CIK") else cik.lstrip("0")
     url = (f"https://www.sec.gov/Archives/edgar/data/{number}/"
-           f"{stripped}/{primary}")
+           f"{stripped}/{raw_document(primary)}")
     try:
         resp = session.get(url, headers={"User-Agent": _user_agent()}, timeout=30)
         time.sleep(0.11)

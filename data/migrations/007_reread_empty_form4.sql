@@ -1,0 +1,21 @@
+-- Re-read the Form 4 filings that produced nothing.
+--
+-- insider_filings is a permanent cache: a filing recorded as read is never
+-- fetched again, because filings do not change once filed. That is correct,
+-- and it is also what sealed in a bug.
+--
+-- The fetcher was asking SEC for `primaryDocument`, which for a Form 4 points
+-- at an XSL rendering — xslF345X03/doc4.xml — that serves HTML despite the
+-- .xml suffix. It answered 200, the XML parser rejected it, the filing was
+-- recorded as read, and no transaction rows were written. Every stock page on
+-- the site showed no insider activity while the nightly reported filings read,
+-- and no amount of re-running would have fixed it, because the filings were
+-- already in the cache.
+--
+-- This drops exactly the filings that yielded no transactions, so the next run
+-- fetches them again against the corrected URL. Filings that genuinely contain
+-- nothing reportable are dropped too and re-read once, which is cheap and
+-- happens a single time: migrations are recorded in schema_migrations and this
+-- one will not run again.
+DELETE FROM insider_filings
+ WHERE accession NOT IN (SELECT accession FROM insider_transactions);
