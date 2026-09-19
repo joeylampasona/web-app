@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { HomeCalendar } from "@/components/HomeCalendar";
-import { HomeIndexes } from "@/components/HomeIndexes";
 import { HomeNews } from "@/components/HomeNews";
 import { HomeRead } from "@/components/HomeRead";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
@@ -12,7 +11,7 @@ import {
   getAllScreens, getBreadth, getDiff, getIndexes, getMeta, getNews, getReleases,
   getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
-import { longDate } from "@/lib/format";
+import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
 import { SITE_NAME } from "@/lib/copy";
 
@@ -135,7 +134,9 @@ export default function Home() {
       <DataBanner meta={meta} />
 
       <div>
-        <div className="eyebrow">{longDate(meta?.as_of)} close</div>
+        {/* The session used to be an eyebrow here. The hero chip carries it
+            now, and printing the same date twice, eight pixels apart, reads
+            as a mistake rather than as emphasis. */}
         <h1 style={{ marginBottom: "var(--gap-xs)" }}>Today</h1>
         <p className="muted footnote" style={{ margin: 0, maxWidth: "62ch" }}>
           Everything below is measured at the last settled session, across{" "}
@@ -143,9 +144,8 @@ export default function Home() {
         </p>
       </div>
 
-      <HomeRead read={read} />
-
-      <HomeIndexes rows={indexes?.rows ?? []} />
+      <HomeRead read={read} indexes={indexes?.rows ?? []}
+                session={`${shortDate(meta?.as_of)} close`} />
 
       <HomeStrongest
         industry={sectors?.strongest?.[0] ?? null}

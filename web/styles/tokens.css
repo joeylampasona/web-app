@@ -37,6 +37,31 @@
   --brand-border:     #4A3410;
   --on-brand:         #2B1A02;  /* text on a solid amber fill */
 
+  /* The hero slab: near-black in BOTH themes.
+     The reference designs put a dark card at the top of a pale page, and that
+     contrast is most of what makes them read as designed. Inverting it on a
+     light page would throw the effect away, so these are declared here and
+     deliberately NOT overridden in the light block below.
+
+     Anything that sits on the slab needs the dark-mode value of its colour,
+     not the theme's. Light-mode loss (#B91C1C) measures 2.91:1 against the
+     slab, under the 3:1 a shape needs to read at all, so a PriceChange inside
+     the hero on a light page would have been a red nobody could see. The
+     .hero class in globals.css maps the theme variables onto these, which
+     means existing components work inside it untouched. */
+  --on-dark-bg:       #101119;
+  --on-dark-raised:   #1B1D27;
+  --on-dark-ink:      #FAF9F6;
+  --on-dark-muted:    #A8AAB8;
+  --on-dark-dim:      #74778A;
+  --on-dark-border:   #272A36;
+  --on-dark-brand:    #F5A524;
+  --on-dark-brand-muted: rgba(245,165,36,0.16);
+  --on-dark-gain:     #16A34A;
+  --on-dark-loss:     #DC2626;
+  --on-dark-warn:     #EAB308;
+  --radius-hero:      16px;
+
   /* Price semantics — DATA ONLY */
   --gain:             #16A34A;
   --gain-muted:       rgba(22,163,74,0.12);

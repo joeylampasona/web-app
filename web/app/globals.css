@@ -95,6 +95,62 @@ button { font: inherit; color: inherit; }
 }
 .primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
 
+/* The hero slab.
+ *
+ * It re-declares the theme variables to their on-dark values rather than
+ * carrying a parallel set of hero-specific class names. Everything already
+ * built -- PriceChange, .badge, .card, .muted, .dim -- then renders correctly
+ * inside it with no change, because each of them reads the same variables it
+ * always did and simply finds different values in scope.
+ */
+.hero {
+  background: var(--on-dark-bg);
+  border: 0.5px solid var(--on-dark-border);
+  border-radius: var(--radius-hero);
+  padding: var(--pad-xl);
+  color: var(--on-dark-ink);
+
+  --surface-1: var(--on-dark-bg);
+  --surface-2: var(--on-dark-raised);
+  --surface-3: var(--on-dark-raised);
+  --text-primary: var(--on-dark-ink);
+  --text-secondary: var(--on-dark-muted);
+  --text-muted: var(--on-dark-dim);
+  --border: var(--on-dark-border);
+  --border-strong: var(--on-dark-border);
+  --brand: var(--on-dark-brand);
+  --brand-muted: var(--on-dark-brand-muted);
+  --gain: var(--on-dark-gain);
+  --loss: var(--on-dark-loss);
+  --warn: var(--on-dark-warn);
+}
+
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs);
+  padding: 4px var(--pad-md);
+  border-radius: var(--radius-pill);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: var(--size-caption);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The compact row of indexes that sits on the slab, below the verdict --
+   the place the reference designs put their action buttons. */
+.hero-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--gap-sm);
+  background: var(--on-dark-raised);
+  border-radius: var(--radius);
+  padding: var(--pad-md);
+}
+
 /* The reset a TickerLink needs so it does not look like a native button.
  *
  * It lives in :where(), which has zero specificity, so ANY class the caller
