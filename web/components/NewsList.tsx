@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MarketHeadline } from "@/lib/types";
 import { TickerLink } from "./StockDrawer";
 
@@ -15,7 +15,14 @@ import { TickerLink } from "./StockDrawer";
  * Grouped by day, because a reader scanning a week wants to know whether five
  * stories landed on one afternoon or were spread across it. That difference is
  * the whole signal in a headline list.
+ *
+ * Twenty at a time. All hundred at once is fifteen thousand pixels, about
+ * seventeen phone screens, and a page that long reads as a wall rather than a
+ * list. The rest are one tap away and the count says how many, so nobody has
+ * to guess whether the scroll is nearly over.
  */
+
+const PAGE = 20;
 
 function dayKey(iso: string): string {
   return (iso || "").slice(0, 10);
@@ -42,16 +49,24 @@ function time(iso: string): string {
 
 export function NewsList({ articles }: { articles: MarketHeadline[] }) {
   const [filter, setFilter] = useState("");
+  const [limit, setLimit] = useState(PAGE);
 
   const now = useMemo(() => Date.now(), []);
   const needle = filter.trim().toUpperCase();
 
-  const shown = useMemo(() => {
+  const matched = useMemo(() => {
     if (!needle) return articles;
     return articles.filter((a) =>
       a.tickers.some((t) => t.includes(needle))
       || a.publisher.toUpperCase().includes(needle));
   }, [articles, needle]);
+
+  // A new filter starts a new list. Carrying the old reveal across would show
+  // sixty of one search and twenty of the next for no reason the reader can see.
+  useEffect(() => { setLimit(PAGE); }, [needle]);
+
+  const shown = matched.slice(0, limit);
+  const remaining = matched.length - shown.length;
 
   const days = useMemo(() => {
     const out = new Map<string, MarketHeadline[]>();
@@ -62,7 +77,8 @@ export function NewsList({ articles }: { articles: MarketHeadline[] }) {
       else out.set(key, [article]);
     }
     return [...out.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [shown]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matched, limit]);
 
   if (articles.length === 0) {
     return (
@@ -132,6 +148,20 @@ export function NewsList({ articles }: { articles: MarketHeadline[] }) {
             ))}
           </section>
         ))
+      )}
+
+      {remaining > 0 && (
+        <button
+          type="button"
+          className="control"
+          onClick={() => setLimit((held) => held + PAGE)}
+          style={{ width: "100%" }}
+        >
+          Show {Math.min(PAGE, remaining)} more
+          <span className="dim">
+            {" "}· {remaining} left
+          </span>
+        </button>
       )}
     </div>
   );
