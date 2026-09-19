@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 
@@ -51,6 +52,13 @@ export function AccountButton() {
           <span className="caption dim" style={{ wordBreak: "break-all" }}>
             {user?.email}
           </span>
+          <Link
+            href="/settings"
+            className="control footnote"
+            onClick={() => setOpen(false)}
+          >
+            Settings
+          </Link>
           <button
             type="button"
             className="control footnote"

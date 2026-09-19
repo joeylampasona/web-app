@@ -43,9 +43,10 @@ export function HomeNews({ articles }: { articles: MarketHeadline[] }) {
     <section className="stack" style={{ gap: "var(--gap-sm)" }}>
       <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
         <div className="eyebrow">In the news</div>
-        <span className="caption dim" style={{ whiteSpace: "nowrap" }}>
-          Links go to the publisher
-        </span>
+        <Link href="/market/news" className="footnote"
+              style={{ textDecoration: "underline", whiteSpace: "nowrap" }}>
+          All headlines
+        </Link>
       </div>
 
       <div className="stack" style={{ gap: "var(--gap-sm)" }}>
@@ -78,8 +79,8 @@ export function HomeNews({ articles }: { articles: MarketHeadline[] }) {
       </div>
 
       <p className="caption dim" style={{ margin: 0 }}>
-        We do not host, summarise or rank these, and a headline appearing here is
-        not a view about the company.{" "}
+        Links go to the publisher. We do not host, summarise or rank these, and a
+        headline appearing here is not a view about the company.{" "}
         <Link href="/legal" style={{ textDecoration: "underline" }}>Disclaimer</Link>.
       </p>
     </section>

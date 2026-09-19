@@ -38,6 +38,7 @@ const TABS: {
     key: "market", label: "Market", glyph: "◳", match: "/market",
     destinations: [
       { href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
+      { href: "/market/news", title: "In the news", blurb: "Headlines for the names this site follows." },
       { href: "/market/calendar", title: "The calendar", blurb: "Earnings, ex-dividends and splits, day by day." },
       { href: "/market/followthrough", title: "Did it work?", blurb: "What happened to the breakouts we showed." },
       { href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
@@ -59,7 +60,6 @@ const TABS: {
     destinations: [
       { href: "/learn", title: "How it works", blurb: "The anatomy of a breakout, screen by screen." },
       { href: "/learn/backtest", title: "Backtest", blurb: "Settings, result and the trades." },
-      { href: "/learn/reading", title: "Reading", blurb: "Guides and case studies." },
       { href: "/legal", title: "Disclaimer", blurb: "What the numbers mean, and what they do not." },
     ],
   },
@@ -115,15 +115,29 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="row" style={{ gap: "var(--gap-sm)" }}>
             <ThemeToggle />
-            {/* Hidden on desktop, where the sidebar footer carries it. */}
+            {/* Hidden on desktop, where the sidebar footer carries it.
+                Drawn rather than typed: U+2699 is emoji-presentation-prone, so
+                iOS is free to render it as a colour emoji, a hairline outline
+                or nothing at all depending on the font it reaches for. Chromium
+                draws it cleanly, which is why testing there did not catch it.
+                A path is the same shape on every device. */}
             <Link
               href="/settings"
               className="control footnote settings-gear"
               aria-label="Settings"
               title="Settings"
-              style={{ minHeight: 36 }}
+              // flexShrink: the header is a flex row and the masthead grows,
+              // so without this the gear was squeezed to 26px — a target too
+              // small to hit reliably, which looks exactly like a button that
+              // is not there.
+              style={{ minHeight: 36, width: 36, padding: 0, flexShrink: 0 }}
             >
-              <span aria-hidden>⚙</span>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
+                   strokeLinejoin="round" aria-hidden focusable="false">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
             </Link>
             <AccountButton />
           </div>
