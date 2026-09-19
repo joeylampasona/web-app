@@ -100,6 +100,19 @@ def _get(path: str, params: dict) -> dict:
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        # FRED answers a rejected request with a body naming the parameter it
+        # disliked. Discarding it left the nightly saying only "HTTP Error 400:
+        # Bad Request" — true, useless, and indistinguishable from FRED being
+        # down. The key is never in the message: it is in the query string, and
+        # the query string is not what gets reported.
+        detail = ""
+        try:
+            body = exc.read().decode()[:400]
+            detail = f" — {body}" if body else ""
+        except Exception:                          # noqa: BLE001
+            pass
+        raise ReleasesUnavailable(f"HTTP {exc.code}{detail}") from exc
     except Exception as exc:                      # noqa: BLE001
         raise ReleasesUnavailable(str(exc)) from exc
 
@@ -114,13 +127,20 @@ def fetch(as_of: dt.date, lookahead_days: int | None = None,
     horizon = as_of + dt.timedelta(
         days=int(lookahead_days or settings.get("catalysts.lookahead_days", 90)))
     try:
+        # The realtime window is about VINTAGES — which edition of the data we
+        # are asking to see — not about which release dates to return. It was
+        # being set to (as_of, as_of + 90 days), which asks for a vintage of
+        # the data as it will exist three months from now. FRED rejects that
+        # with a 400, and the whole calendar has been silently empty since.
+        #
+        # The schedule ahead comes from include_release_dates_with_no_data,
+        # not from the realtime window: future dates have nothing published
+        # against them yet, so without that flag the endpoint answers with
+        # history only. The horizon is applied below, where it belongs.
+        today = min(as_of, dt.date.today())
         payload = _get("/releases/dates", {
-            # Future dates have no data attached to them yet, so without this
-            # the endpoint answers with history only — which is the opposite of
-            # a calendar.
             "include_release_dates_with_no_data": "true",
-            "realtime_start": as_of.isoformat(),
-            "realtime_end": horizon.isoformat(),
+            "realtime_start": today.isoformat(),
             "sort_order": "asc",
             "limit": 1000,
         })
@@ -153,8 +173,19 @@ def fetch(as_of: dt.date, lookahead_days: int | None = None,
     out.sort(key=lambda r: (r.date, not r.notable, r.name))
     if notice:
         flagged = sum(1 for r in out if r.notable)
-        notice(f"{len(out):,} scheduled data releases to {horizon} "
-               f"({flagged:,} of them widely watched).")
+        if not out:
+            # FRED schedules something most weekdays, so an empty answer over a
+            # ninety-day horizon is a fault wearing a quiet calendar's clothes.
+            # The last version of this published `configured: true, count: 0`
+            # without a word, and it stayed that way until somebody happened to
+            # look at the file.
+            notice(f"FRED answered with no scheduled releases at all between "
+                   f"{as_of} and {horizon}. That is not a quiet calendar — it "
+                   f"publishes something most weekdays — so treat this as a "
+                   f"broken request rather than an empty one.")
+        else:
+            notice(f"{len(out):,} scheduled data releases to {horizon} "
+                   f"({flagged:,} of them widely watched).")
     return out
 
 
