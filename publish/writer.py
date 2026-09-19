@@ -16,7 +16,8 @@ from data.market import Market
 from patterns import params as param_module
 from patterns import scan, stages
 from publish import schema
-from rankings import breadth, groups, rotation, rs, treemap
+from rankings import breadth, groups, indexes as index_rows
+from rankings import rotation, rs, treemap
 
 VERSION = 1
 
@@ -155,6 +156,15 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "heating_cooling": rotation.heating_cooling(industries),
         "themes_heating_cooling": rotation.heating_cooling(themes),
         "sector_etfs": rs.etf_ratings(market),
+    }))
+
+    # Broad-market indexes and the regime check, for the home page. Both are
+    # read straight off bars already in the database, so this adds no requests.
+    written.append(_write(out / "indexes.json", {
+        "as_of": as_of.isoformat(),
+        "benchmark": market.benchmark,
+        "regime": index_rows.regime(market),
+        "rows": index_rows.rows(market),
     }))
 
     setups_by_symbol: dict[str, list] = {}

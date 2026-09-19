@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { HomeCalendar } from "@/components/HomeCalendar";
+import { HomeIndexes } from "@/components/HomeIndexes";
 import { HomeRead } from "@/components/HomeRead";
+import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
-  getAllScreens, getBreadth, getDiff, getMeta, getReleases, getSearchIndex,
-  getUpcoming, hasData,
+  getAllScreens, getBreadth, getDiff, getIndexes, getMeta, getReleases,
+  getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
 import { longDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
@@ -57,7 +59,8 @@ export default function Home() {
 
   const meta = getMeta();
   const breadth = getBreadth();
-  const read = readMarket(breadth?.cards);
+  const indexes = getIndexes();
+  const read = readMarket(breadth?.cards, indexes?.regime);
   const diff = getDiff();
   const upcoming = getUpcoming();
   const releases = getReleases();
@@ -96,7 +99,20 @@ export default function Home() {
       }
     }
   }
-  const watchRows: WatchRow[] = getSearchIndex().map((row) => ({
+  // The strongest industry and theme are the head of a list the pipeline has
+  // already ranked; the strongest stock is not published as such, so it is
+  // picked here from the search index and given the stage it holds in the
+  // screens. A rating without a stage beside it reads as a tip.
+  const sectors = getSectors();
+  const searchRows = getSearchIndex();
+  const rankedStocks = searchRows.filter(
+    (row): row is typeof row & { rs_rating: number } => typeof row.rs_rating === "number",
+  );
+  const best = rankedStocks.length
+    ? rankedStocks.reduce((top, row) => (row.rs_rating > top.rs_rating ? row : top))
+    : null;
+
+  const watchRows: WatchRow[] = searchRows.map((row) => ({
     symbol: row.symbol,
     name: row.name,
     rs_rating: row.rs_rating,
@@ -104,6 +120,11 @@ export default function Home() {
     earnings_within_7d: (stages.get(row.symbol)?.days ?? 99) <= 7,
     days_until_earnings: stages.get(row.symbol)?.days ?? null,
   }));
+
+  const strongestStock: StrongestStock | null = best
+    ? { symbol: best.symbol, name: best.name, rs_rating: best.rs_rating,
+        stage: stages.get(best.symbol)?.stage ?? null }
+    : null;
 
   return (
     <div className="page stack" style={{ gap: "var(--gap-xl)" }}>
@@ -119,6 +140,14 @@ export default function Home() {
       </div>
 
       <HomeRead read={read} />
+
+      <HomeIndexes rows={indexes?.rows ?? []} />
+
+      <HomeStrongest
+        industry={sectors?.strongest?.[0] ?? null}
+        theme={sectors?.themes_strongest?.[0] ?? null}
+        stock={strongestStock}
+      />
 
       <section className="stack" style={{ gap: "var(--gap-md)" }}>
         <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>

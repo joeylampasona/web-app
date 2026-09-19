@@ -61,6 +61,16 @@ rankings:
   near_low_pct: 5.0
   rotation_lookback: 21        # one month of sessions for the RS delta
   sector_etfs: [XLK, XLF, XLE, XLV, XLI, XLY, XLP, XLU, XLB, XLRE, XLC]
+  # Broad-market symbols published for the home page's index strip and for the
+  # "benchmark above its 200-day" regime check. They are loaded from bars the
+  # grouped-daily call already stores for the whole market, so adding one here
+  # costs no extra requests and it arrives with its full history.
+  #
+  # Only things that trade as US equities can go in this list. VIX cannot: it
+  # is an index, and the adapter reads the stocks market. VIXY and VXX are
+  # equities but track VIX futures, which is a different number that decays --
+  # do not add one here and label it VIX.
+  indexes: [SPY, QQQ]
 
 patterns:
   # Detector defaults live in patterns/params.py so the Learn funnel and the

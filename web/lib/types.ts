@@ -128,6 +128,32 @@ export interface StockFile {
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
 }
 
+/** A broad-market index row for the home page strip. `above_200` is null when
+ *  the symbol has under 200 sessions -- not enough history to have an answer. */
+export interface IndexRow {
+  symbol: string; name: string; close: number;
+  change_pct: number | null;
+  above_200: boolean | null;
+  vs_200_pct: number | null;
+  sessions: number;
+}
+
+/** Is the benchmark above its 200-day line? `above` is null for "cannot say",
+ *  which is a third state and not the same as false. */
+export interface RegimeStatus {
+  symbol: string;
+  above: boolean | null;
+  vs_200_pct: number | null;
+  sessions: number;
+  note: string;
+}
+
+export interface IndexesFile {
+  as_of: string; benchmark: string;
+  regime: RegimeStatus;
+  rows: IndexRow[];
+}
+
 export interface BreadthCard {
   key: string; label: string; unit: "percent" | "count"; value: number;
   counts: Record<string, number>;

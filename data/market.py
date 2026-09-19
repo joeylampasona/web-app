@@ -57,9 +57,15 @@ def load(conn: sqlite3.Connection | None = None, include_all: bool = False) -> M
 
     benchmark = settings.get("universe.benchmark", "SPY")
     etfs = list(settings.get("rankings.sector_etfs", []))
+    # Broad-market symbols for the home page. Their bars are already in the
+    # database -- the grouped-daily call stores the whole market, unfiltered --
+    # they were simply never loaded, because loading is scoped to the universe
+    # plus the benchmark and the sector ETFs.
+    indexes = list(settings.get("rankings.indexes", []))
     universe = store.universe_symbols(conn)
     wanted = list(dict.fromkeys(
-        (store.all_symbols_with_bars(conn) if include_all else universe) + [benchmark] + etfs))
+        (store.all_symbols_with_bars(conn) if include_all else universe)
+        + [benchmark] + etfs + indexes))
 
     series = store.load_many(conn, wanted)
     refs: dict[str, TickerRef] = {}

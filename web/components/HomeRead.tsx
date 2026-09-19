@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { MarketRead, Verdict } from "@/lib/marketRead";
+import { TOTAL_TESTS, type MarketRead, type Verdict } from "@/lib/marketRead";
 
 /**
  * The market read, with its arithmetic shown.
@@ -82,9 +82,9 @@ export function HomeRead({ read }: { read: MarketRead }) {
       )}
 
       <p className="caption dim" style={{ margin: 0 }}>
-        {read.measured === 3
-          ? "Three checks on the published breadth numbers, nothing else."
-          : `${read.measured} of 3 checks had data in the last run.`}{" "}
+        {read.measured === TOTAL_TESTS
+          ? "Four checks on the published numbers, nothing else."
+          : `${read.measured} of ${TOTAL_TESTS} checks had data in the last run.`}{" "}
         <Link href="/market/breadth" style={{ textDecoration: "underline" }}>
           See the breadth page
         </Link>{" "}

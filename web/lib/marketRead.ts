@@ -1,4 +1,4 @@
-import type { BreadthCard } from "./types";
+import type { BreadthCard, RegimeStatus } from "./types";
 
 /**
  * One sentence on whether the tape is worth trading breakouts into.
@@ -28,6 +28,26 @@ import type { BreadthCard } from "./types";
 
 export type Verdict = "in_gear" | "mixed" | "against" | "unknown";
 
+/** How many tests exist when every input is present: the regime plus the three
+ *  breadth checks. Exported so nothing downstream has to hard-code the count
+ *  and go stale the next time a test is added. */
+export const TOTAL_TESTS = 4;
+
+/**
+ * The bar is deliberately higher for blessing than for warning.
+ *
+ * Getting "in gear" wrong costs money; getting "against" wrong costs a missed
+ * trade. Those are not the same mistake, so they do not get the same threshold.
+ *
+ * The asymmetry also survives a test dropping out. With all four present,
+ * blessing needs a clear majority while two negatives are enough to warn. This
+ * caught a real miscalibration: the bar was 2 when there were three tests, and
+ * adding a fourth left 2 in place -- which had quietly turned a majority into
+ * a coin flip, and read an ordinary mixed day as in gear.
+ */
+const BLESS_AT = 3;
+const WARN_AT = 2;
+
 export interface ReadTest {
   label: string;
   detail: string;
@@ -39,7 +59,7 @@ export interface MarketRead {
   headline: string;
   blurb: string;
   tests: ReadTest[];
-  /** How many of the three tests had the data they needed. */
+  /** How many of the TOTAL_TESTS had the data they needed. */
   measured: number;
 }
 
@@ -51,9 +71,22 @@ function pct(value: number): string {
   return `${value.toFixed(0)}%`;
 }
 
-export function readMarket(cards: BreadthCard[] | null | undefined): MarketRead {
+export function readMarket(
+  cards: BreadthCard[] | null | undefined,
+  regime?: RegimeStatus | null,
+): MarketRead {
   const all = cards ?? [];
   const tests: ReadTest[] = [];
+
+  // `above: null` means the history is too short to know, which is not the
+  // same as false. An unknown regime is skipped, never scored as a negative.
+  if (regime && regime.above !== null) {
+    tests.push({
+      label: `${regime.symbol} against its 200-day line`,
+      detail: regime.note,
+      score: regime.above ? 1 : -1,
+    });
+  }
 
   const breakouts = card(all, "breakouts");
   const failed = card(all, "failed_pokes");
@@ -105,15 +138,16 @@ export function readMarket(cards: BreadthCard[] | null | undefined): MarketRead 
       headline: "Not enough breadth data to call it",
       blurb:
         measured === 0
-          ? "No breadth numbers were published in the last run, so there is nothing to read."
-          : "Only one of the three breadth checks had data, which is not enough to say anything.",
+          ? "No breadth or index numbers were published in the last run, so there is nothing to read."
+          : `Only one of the ${TOTAL_TESTS} checks had data, which is not enough to say anything.`,
       tests,
       measured,
     };
   }
 
   const total = tests.reduce((sum, t) => sum + t.score, 0);
-  if (total >= 2) {
+  const belowTrend = regime?.above === false;
+  if (total >= BLESS_AT && !belowTrend) {
     return {
       verdict: "in_gear",
       headline: "The tape is in gear",
@@ -123,13 +157,25 @@ export function readMarket(cards: BreadthCard[] | null | undefined): MarketRead 
       tests, measured,
     };
   }
-  if (total <= -2) {
+  if (total <= -WARN_AT) {
     return {
       verdict: "against",
       headline: "The tape is against breakouts",
       blurb:
         "More names are failing at their pivots than holding above them, and " +
         "participation is thin. Bases that look clean still tend to fail in this.",
+      tests, measured,
+    };
+  }
+  if (belowTrend && total >= 2) {
+    return {
+      verdict: "mixed",
+      headline: "Mixed, under a falling benchmark",
+      blurb:
+        `Breadth is holding up, but ${regime?.symbol ?? "the benchmark"} is below ` +
+        "its 200-day line. Breadth can look healthy for a week inside a downtrend, " +
+        "and those are the weeks that cost the most, because everything else is " +
+        "telling you to buy.",
       tests, measured,
     };
   }
