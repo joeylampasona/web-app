@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { StockDetail } from "@/components/StockDetail";
 import { getMeta, getStock, hasData } from "@/lib/data";
+import { SITE_NAME } from "@/lib/copy";
 
 export const dynamicParams = true;
 
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: {
 }): Promise<Metadata> {
   const { symbol } = await params;
   const stock = getStock(symbol);
-  if (!stock) return { title: `${symbol.toUpperCase()} — Base & Breakout` };
+  if (!stock) return { title: `${symbol.toUpperCase()} — ${SITE_NAME}` };
 
   const ranked = typeof stock.rs_rating === "number";
   const setup = stock.primary_setup;
@@ -26,7 +27,7 @@ export async function generateMetadata({ params }: {
           : "not on a screen right now",
   ].filter(Boolean).join(" · ");
 
-  const title = `${stock.name} (${stock.symbol}) — Base & Breakout`;
+  const title = `${stock.name} (${stock.symbol}) — ${SITE_NAME}`;
   return {
     title,
     description,

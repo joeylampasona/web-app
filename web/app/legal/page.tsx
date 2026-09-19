@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { getMeta } from "@/lib/data";
+import { SITE_NAME } from "@/lib/copy";
 
 export const metadata: Metadata = {
-  title: "Disclaimer — Base & Breakout",
+  title: `Disclaimer — ${SITE_NAME}`,
   description: "What this site is, what it is not, and what its numbers mean.",
 };
 
@@ -22,7 +23,7 @@ export default function LegalPage() {
 
       <Section title="Not investment advice">
         <p>
-          Base &amp; Breakout is a screening and market-analytics tool. It shows you
+          {SITE_NAME} is a screening and market-analytics tool. It shows you
           where prices have been and flags shapes in them. It does not tell you what
           to buy, what to sell, or when.
         </p>

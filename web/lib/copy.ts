@@ -112,6 +112,17 @@ export const LEGAL =
   "registered investment adviser. Historical figures are backtests and are " +
   "hypothetical.";
 
+/**
+ * The site's name, in one place.
+ *
+ * It was written out in sixteen files — the header, the manifest, two preview
+ * images, the share card, the disclaimer, and every page title — which is
+ * sixteen chances to rename fifteen of them. SITE_NAME is the long form,
+ * SITE_SHORT the one a phone home screen has room for.
+ */
+export const SITE_NAME = "Base & Breakout";
+export const SITE_SHORT = "Breakout";
+
 export const TAGLINE = "Bases, breakouts and relative strength, after every close.";
 
 export const RS_NOTE =

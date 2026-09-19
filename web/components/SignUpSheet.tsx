@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Drawer } from "vaul";
 import { useAuth } from "@/lib/auth";
+import { useKeyboardInset } from "@/lib/useKeyboardInset";
 
 /**
  * One email field and one button. Supabase sends a one-time link; clicking it
@@ -15,6 +16,7 @@ export function SignUpSheet() {
   } = useAuth();
   const [email, setEmail] = useState("");
   const sending = linkState.kind === "sending";
+  const keyboard = useKeyboardInset();
 
   return (
     <Drawer.Root
@@ -30,6 +32,16 @@ export function SignUpSheet() {
             borderTop: "0.5px solid var(--border-strong)",
             borderRadius: "var(--radius-card) var(--radius-card) 0 0",
             padding: "var(--pad-xl)",
+            // Lift clear of the on-screen keyboard. Without this the sheet stays
+            // pinned to the bottom of the layout viewport and the keyboard is
+            // drawn over the top of it, hiding the field being typed into.
+            transform: keyboard ? `translateY(-${keyboard}px)` : undefined,
+            transition: "transform 140ms ease-out",
+            // On a short screen with the keyboard up there may be less room than
+            // the sheet wants; let it scroll rather than push the button off.
+            maxHeight: keyboard
+              ? `calc(100dvh - ${keyboard}px - var(--pad-xl))` : undefined,
+            overflowY: keyboard ? "auto" : undefined,
           }}
         >
           <Drawer.Title style={{ fontSize: "var(--size-h3)", fontWeight: 500 }}>

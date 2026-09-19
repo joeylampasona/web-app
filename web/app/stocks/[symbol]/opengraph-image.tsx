@@ -1,9 +1,10 @@
 import { ImageResponse } from "next/og";
 import { token } from "@/lib/ogTokens";
 import { getStock } from "@/lib/data";
+import { SITE_NAME } from "@/lib/copy";
 
 export const runtime = "nodejs";
-export const alt = "Stock on Base & Breakout";
+export const alt = `Stock on ${SITE_NAME}`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -37,7 +38,7 @@ export default async function Image({ params }: { params: Promise<{ symbol: stri
           <div style={{ width: 22, height: 22, borderRadius: 5,
                         background: token("brand") }} />
           <div style={{ fontSize: 26, color: token("text-muted") }}>
-            Base &amp; Breakout
+            {SITE_NAME}
           </div>
         </div>
 

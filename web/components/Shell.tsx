@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Drawer } from "vaul";
-import { LEGAL, TAGLINE } from "@/lib/copy";
+import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -100,7 +100,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   background: "var(--brand)", display: "inline-block",
                 }}
               />
-              <strong style={{ fontWeight: 500 }}>Base &amp; Breakout</strong>
+              <strong style={{ fontWeight: 500 }}>{SITE_NAME}</strong>
             </div>
             <div className="caption dim">{TAGLINE}</div>
           </Link>

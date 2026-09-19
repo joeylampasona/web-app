@@ -1,9 +1,10 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { FollowThroughPanel } from "@/components/FollowThroughPanel";
 import { getFollowThrough, getMeta, hasData } from "@/lib/data";
+import { SITE_NAME } from "@/lib/copy";
 
 export const metadata = {
-  title: "Did it work? — Base & Breakout",
+  title: `Did it work? — ${SITE_NAME}`,
   description: "What happened to the breakouts each screen showed.",
 };
 

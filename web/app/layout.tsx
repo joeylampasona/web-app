@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { TAGLINE } from "@/lib/copy";
+import { SITE_NAME, TAGLINE } from "@/lib/copy";
 
 /**
  * The address the site is served from, so relative preview-image URLs resolve.
@@ -18,22 +18,22 @@ const SITE_URL =
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Base & Breakout",
+  title: SITE_NAME,
   description: TAGLINE,
   // A pasted link used to render as a grey rectangle with a domain in it.
   openGraph: {
     type: "website",
-    siteName: "Base & Breakout",
-    title: "Base & Breakout",
+    siteName: SITE_NAME,
+    title: SITE_NAME,
     description: TAGLINE,
   },
-  twitter: { card: "summary_large_image", title: "Base & Breakout",
+  twitter: { card: "summary_large_image", title: SITE_NAME,
              description: TAGLINE },
   manifest: "/manifest.webmanifest",
   // Without this the browser guesses at /favicon.ico, which does not exist,
   // and every page load carries a 404 that hides real ones in the console.
   icons: { icon: "/icon.svg", apple: "/icon-maskable.svg" },
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Base & Breakout" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: SITE_NAME },
   other: { "apple-mobile-web-app-capable": "yes" },
 };
 

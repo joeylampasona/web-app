@@ -1,6 +1,7 @@
 "use client";
 
 import { change, price, rsText } from "./format";
+import { SITE_NAME } from "@/lib/copy";
 
 /**
  * Composes a shareable PNG: the chart as it appears on screen, the same metric
@@ -128,7 +129,7 @@ export async function renderShareImage(payload: SharePayload): Promise<Blob | nu
   ctx.textAlign = "left";
   ctx.fillStyle = token("--brand");
   ctx.font = `500 24px ${sans}`;
-  ctx.fillText("Base & Breakout", PAD, y);
+  ctx.fillText(SITE_NAME, PAD, y);
 
   ctx.textAlign = "right";
   ctx.fillStyle = token("--text-muted");

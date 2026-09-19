@@ -1,10 +1,10 @@
 import { ImageResponse } from "next/og";
-import { TAGLINE } from "@/lib/copy";
+import { SITE_NAME, TAGLINE } from "@/lib/copy";
 import { token } from "@/lib/ogTokens";
 import { getMeta } from "@/lib/data";
 
 export const runtime = "nodejs";
-export const alt = "Base & Breakout — bases, breakouts and relative strength";
+export const alt = `${SITE_NAME} — bases, breakouts and relative strength`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -42,7 +42,7 @@ export default async function Image() {
           <div style={{ width: 28, height: 28, borderRadius: 6,
                         background: token("brand") }} />
           <div style={{ fontSize: 34, color: token("text-primary"), fontWeight: 500 }}>
-            Base &amp; Breakout
+            {SITE_NAME}
           </div>
         </div>
 
