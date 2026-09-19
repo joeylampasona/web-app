@@ -216,7 +216,19 @@ def cmd_catalysts(args) -> int:
     else:
         print("  → Market Desk not configured; skipping.", flush=True)
 
-    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates,
+    # Every stock with a page, not just the ones on a screen today. A roadmap
+    # is a fact about the company — when it reports, when it goes ex-dividend —
+    # and it does not stop being true because the stock is not currently in a
+    # base. 1,329 of the 2,145 published pages showed an empty roadmap for that
+    # reason alone, which reads as a fault rather than a boundary.
+    #
+    # It is affordable because the calendar's cost is not per-name. Dividends
+    # and splits come market-wide in one paged call each and are filtered here,
+    # so they widen for free. Earnings are per-ticker, but the seven-day cache
+    # means a steady night asks about a seventh of the universe and keeps what
+    # arrives. Insider filings and implied volatility stay on `population`:
+    # those genuinely cost a request each.
+    calendar = ev.build(market, market.universe, adapter, desk_earnings=desk_dates,
                         conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
     ev.attach(calendar, result.all_setups())
 
@@ -422,7 +434,19 @@ def _pipeline(conn, with_backtests: bool = True):
     else:
         print("  → Market Desk not configured; skipping.", flush=True)
 
-    calendar = ev.build(market, population, adapter, desk_earnings=desk_dates,
+    # Every stock with a page, not just the ones on a screen today. A roadmap
+    # is a fact about the company — when it reports, when it goes ex-dividend —
+    # and it does not stop being true because the stock is not currently in a
+    # base. 1,329 of the 2,145 published pages showed an empty roadmap for that
+    # reason alone, which reads as a fault rather than a boundary.
+    #
+    # It is affordable because the calendar's cost is not per-name. Dividends
+    # and splits come market-wide in one paged call each and are filtered here,
+    # so they widen for free. Earnings are per-ticker, but the seven-day cache
+    # means a steady night asks about a seventh of the universe and keeps what
+    # arrives. Insider filings and implied volatility stay on `population`:
+    # those genuinely cost a request each.
+    calendar = ev.build(market, market.universe, adapter, desk_earnings=desk_dates,
                         conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
     ev.attach(calendar, result.all_setups())
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}

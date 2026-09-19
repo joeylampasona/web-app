@@ -127,7 +127,7 @@ def fetch(conn: sqlite3.Connection, symbols: Iterable[str], since_days: int = 18
     """
     symbols = [s.upper() for s in symbols]
     if settings.get("data.provider") == "synthetic":
-        return 0
+        return 0, 0          # (filings, transactions) — both halves, as above
 
     base = (settings.get("edgar.base_url") or "https://data.sec.gov").rstrip("/")
     session = requests.Session()

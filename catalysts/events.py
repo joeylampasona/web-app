@@ -99,17 +99,42 @@ def _synthetic_extras(adapter, symbols: Sequence[str], as_of: dt.date) -> list[E
     return events
 
 
+# Polygon caps a reference page at 1000 rows and pages the rest behind
+# next_url. One page was enough while the calendar covered only the names on a
+# screen; across the whole universe a quarter's ex-dividend dates run past it,
+# and an unpaged call would drop the tail silently — the rows simply would not
+# be there, with nothing in the log to say so.
+_MAX_PAGES = 12
+
+
+def _paged(adapter: DataAdapter, path: str, params: dict) -> list[dict]:
+    """Every row across pages, oldest call first. Stops at _MAX_PAGES."""
+    rows: list[dict] = []
+    payload = adapter._get(path, params)                                   # noqa: SLF001
+    for _ in range(_MAX_PAGES):
+        rows.extend(payload.get("results") or [])
+        nxt = payload.get("next_url")
+        if not nxt:
+            break
+        payload = adapter._get(nxt)                                        # noqa: SLF001
+    return rows
+
+
 def _polygon_extras(adapter: DataAdapter, symbols: Sequence[str],
                     as_of: dt.date) -> list[Event]:
-    """Dividends and splits in two calls, not two per ticker."""
+    """Dividends and splits market-wide, not two calls per ticker.
+
+    The endpoints are asked for a date range and answer for the whole market,
+    so the symbol set only decides what is kept. Widening it from the names on
+    a screen to the whole universe therefore costs no extra requests.
+    """
     wanted = set(symbols)
     events: list[Event] = []
     horizon = as_of + dt.timedelta(days=int(settings.get("catalysts.lookahead_days", 90)))
     try:
-        payload = adapter._get("/v3/reference/dividends", {                # noqa: SLF001
-            "ex_dividend_date.gte": as_of.isoformat(),
-            "ex_dividend_date.lte": horizon.isoformat(), "limit": 1000})
-        for row in payload.get("results", []):
+        for row in _paged(adapter, "/v3/reference/dividends", {
+                "ex_dividend_date.gte": as_of.isoformat(),
+                "ex_dividend_date.lte": horizon.isoformat(), "limit": 1000}):
             if row.get("ticker") in wanted and row.get("ex_dividend_date"):
                 events.append(Event(row["ticker"], DIVIDEND,
                                     dt.date.fromisoformat(row["ex_dividend_date"]),
@@ -118,10 +143,9 @@ def _polygon_extras(adapter: DataAdapter, symbols: Sequence[str],
     except Exception as exc:                      # noqa: BLE001
         log.warning("dividend ingestion skipped: %s", exc)
     try:
-        payload = adapter._get("/v3/reference/splits", {                   # noqa: SLF001
-            "execution_date.gte": as_of.isoformat(),
-            "execution_date.lte": horizon.isoformat(), "limit": 1000})
-        for row in payload.get("results", []):
+        for row in _paged(adapter, "/v3/reference/splits", {
+                "execution_date.gte": as_of.isoformat(),
+                "execution_date.lte": horizon.isoformat(), "limit": 1000}):
             if row.get("ticker") in wanted and row.get("execution_date"):
                 ratio = f"{row.get('split_from', '')}-for-{row.get('split_to', '')}"
                 events.append(Event(row["ticker"], SPLIT,
