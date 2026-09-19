@@ -53,7 +53,7 @@ export function SearchPanel({
             <div className="eyebrow">Recent breakouts</div>
             <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
               {suggestions.map((row) => (
-                <TickerLink key={row.symbol} symbol={row.symbol} className="badge">
+                <TickerLink key={row.symbol} symbol={row.symbol} className="badge badge--ticker">
                   <span className="mono">{row.symbol}</span>
                 </TickerLink>
               ))}
@@ -103,7 +103,7 @@ export function SearchPanel({
                         gap: "var(--gap-sm)" }}>
             <TickerLink symbol={row.symbol} className="grow"
                         style={{ minWidth: 0, display: "block" }}>
-              <span className="mono">{row.symbol}</span>{" "}
+              <span className="mono" style={{ color: "var(--link)" }}>{row.symbol}</span>{" "}
               <span>{row.name}</span>
               <span className="caption dim"> · {row.industry}</span>
             </TickerLink>

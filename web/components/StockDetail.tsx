@@ -36,6 +36,19 @@ function plainRead(stock: StockFile): string {
     `Its relative strength rating is ${rank}.`;
 }
 
+/** The chip class for a quadrant, or nothing when the group has none.
+ *  These four colours are already computed for every name; they were only ever
+ *  shown on one badge. */
+function quadrantChip(quadrant: string | null): string {
+  switch (quadrant) {
+    case "powering": return "chip--powering";
+    case "turning": return "chip--turning";
+    case "cooling": return "chip--cooling";
+    case "falling": return "chip--falling";
+    default: return "";
+  }
+}
+
 export function StockDetail({ stock, run }: {
   stock: StockFile;
   /** Which of the market sweep's scanners worked — so an empty signal
@@ -80,7 +93,8 @@ export function StockDetail({ stock, run }: {
         {stock.themes.length > 0 && (
           <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
             {stock.themes.map((slug) => (
-              <Link key={slug} href={`/themes/${slug}`} className="badge">{slug}</Link>
+              <Link key={slug} href={`/themes/${slug}`}
+                    className={`badge ${quadrantChip(stock.quadrant)}`}>{slug}</Link>
             ))}
           </div>
         )}

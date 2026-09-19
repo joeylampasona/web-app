@@ -189,6 +189,17 @@ button { font: inherit; color: inherit; }
 .badge--gain { background: var(--gain-muted); color: var(--gain); }
 .badge--loss { background: var(--loss-muted); color: var(--loss); }
 .badge--brand { background: var(--brand-muted); color: var(--brand-ink); }
+/* A ticker chip. Coloured because it is a thing you can tap, not because the
+   colour means anything about the company — which is why it is held clear of
+   gain, loss and the brand, and why no number on this site is ever this
+   colour. */
+.badge--ticker {
+  background: var(--link-muted);
+  color: var(--link);
+  border-color: transparent;
+  font-family: var(--font-mono, monospace);
+}
+.badge--ticker:hover { border-color: var(--link); }
 .badge--provisional {
   background: var(--warn-bg);
   color: var(--provisional);
@@ -399,3 +410,32 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
 }
 .sidenav-link:hover { background: var(--surface-2); color: var(--text-primary); }
 .sidenav-link[aria-current="page"] { color: var(--brand-ink); }
+
+/* Sector and theme chips, tinted by the quadrant the group is in. These four
+   colours are already computed for every industry and theme and were only ever
+   shown on one badge; on the chips they turn a grey list into a readable one
+   without adding a colour to the palette. */
+.chip--powering { color: var(--q-powering); border-color: var(--q-powering); }
+.chip--turning  { color: var(--q-turning);  border-color: var(--q-turning); }
+.chip--cooling  { color: var(--q-cooling);  border-color: var(--q-cooling); }
+.chip--falling  { color: var(--q-falling);  border-color: var(--q-falling); }
+
+/* Screen identity. Four colours across six screens: four is the most that stay
+   mutually separable in what this palette has left, and the two pairs that
+   share are the two that share a shape — VCP and the flat base are both
+   contraction bases, blue sky and the IPO base are both a name at its highs. */
+.screen--vcp,
+.screen--flat_base      { color: var(--screen-contraction); }
+.screen--blue_sky,
+.screen--ipo            { color: var(--screen-highs); }
+.screen--multi_year     { color: var(--screen-comeback); }
+.screen--cup_and_handle { color: var(--screen-classic); }
+
+/* The dot that carries it in a list, where a word would be noise. */
+.screen-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}

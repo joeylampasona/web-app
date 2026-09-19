@@ -90,7 +90,7 @@ function Row({ row }: { row: WatchRow }) {
                 style={{ padding: "var(--pad-md) var(--pad-lg)", width: "100%",
                          marginBottom: "var(--gap-sm)", gap: "var(--gap-sm)" }}>
       <span className="grow" style={{ minWidth: 0 }}>
-        <span className="mono">{row.symbol}</span>{" "}
+        <span className="mono" style={{ color: "var(--link)" }}>{row.symbol}</span>{" "}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{row.name}</span>
       </span>
       <span className="row" style={{ gap: "var(--gap-sm)", flexShrink: 0 }}>

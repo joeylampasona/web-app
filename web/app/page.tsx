@@ -13,6 +13,7 @@ import {
 } from "@/lib/data";
 import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
+import { screenClass } from "@/lib/screenColour";
 import { SITE_NAME } from "@/lib/copy";
 
 /**
@@ -228,7 +229,11 @@ export default function Home() {
               style={{ gap: "var(--gap-xs)", textDecoration: "none" }}
             >
               <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-                <span style={{ fontWeight: 500 }}>{screen.name}</span>
+                <span className="row" style={{ gap: "var(--gap-sm)", alignItems: "center",
+                                               minWidth: 0 }}>
+                  <span className={`screen-dot ${screenClass(screen.key)}`} aria-hidden />
+                  <span style={{ fontWeight: 500 }}>{screen.name}</span>
+                </span>
                 <span className="num footnote">{screen.total}</span>
               </div>
               <div className="caption dim">

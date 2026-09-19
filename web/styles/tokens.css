@@ -79,6 +79,30 @@
   --on-dark-warn:     #EAB308;
   --radius-hero:      16px;
 
+  /* Interactive: a ticker you can tap.
+     Measured, not chosen. Every hue was swept against the nine colours already
+     in use: nothing clears dE 24 from all of them in both themes, because the
+     four chart lines have taken cyan, blue, purple and pink. But those four
+     only mean anything inside a chart, while gain, loss, brand and warn mean
+     the same thing on every surface — so this is held clear of those four and
+     allowed to sit in the blues. Worst separation dE 46 dark, 46 light. */
+  --link:             #1986E6;
+  --link-muted:       rgba(25,134,230,0.16);
+
+  /* Screen identity.
+     Six screens, four colours — because four is the most that are mutually
+     separable in what the palette has left, and six crammed into the surviving
+     blue-to-magenta arc would sit ~18 degrees apart and read as one family:
+     decoration that looks like meaning.
+     So two pairs share, and the pairs are not arbitrary. VCP and the flat base
+     are both contraction bases; blue sky and the IPO base are both a name at
+     its highs with no overhead supply. A reader who notices the repeat learns
+     something true about the shapes. */
+  --screen-contraction: #12C7E2;   /* VCP, flat base */
+  --screen-highs:       #1D7EED;   /* blue sky, IPO base */
+  --screen-comeback:    #AA8EF6;   /* multi-year */
+  --screen-classic:     #E212E2;   /* cup and handle */
+
   /* Price semantics — DATA ONLY */
   /* Gain stays green. Moving it off green to make room for lime was tried and
      is worse: in light mode only eleven colours clear every constraint and all
@@ -198,6 +222,18 @@
   --brand-muted:      rgba(218,252,79,0.42);
   --brand-border:     #B9D94A;
   --on-brand:         #14200A;   /* dark ink on the lime fill */
+
+  --link:             #146BB8;
+  --link-muted:       rgba(20,107,184,0.14);
+
+  /* Darkened for a pale card, then checked against each other rather than
+     chosen by eye — the first attempt measured dE 14.5 apart and would have
+     read as one colour. Held at dE 20 mutually while keeping every one light
+     enough to still look like a colour: a purple at 14:1 is a black. */
+  --screen-contraction: #107993;
+  --screen-highs:       #0654DB;
+  --screen-comeback:    #65119C;
+  --screen-classic:     #D105B2;
 
   --gain:             #15803D;
   --loss:             #B91C1C;

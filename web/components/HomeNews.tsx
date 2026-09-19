@@ -63,7 +63,7 @@ export function HomeNews({ articles }: { articles: MarketHeadline[] }) {
             </a>
             <div className="row wrap" style={{ gap: "var(--gap-xs)", alignItems: "baseline" }}>
               {article.tickers.slice(0, 4).map((ticker) => (
-                <TickerLink key={ticker} symbol={ticker} className="badge">
+                <TickerLink key={ticker} symbol={ticker} className="badge badge--ticker">
                   {ticker}
                 </TickerLink>
               ))}

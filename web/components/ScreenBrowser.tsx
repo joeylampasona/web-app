@@ -181,7 +181,7 @@ export function ScreenBrowser({
                 <tr key={`${setup.screen}-${setup.symbol}`}>
                   <td className="text">
                     <Link href={`/stocks/${setup.symbol}`}>
-                      <span className="mono">{setup.symbol}</span>{" "}
+                      <span className="mono" style={{ color: "var(--link)" }}>{setup.symbol}</span>{" "}
                       <span className="dim caption">{setup.name}</span>
                     </Link>
                   </td>
