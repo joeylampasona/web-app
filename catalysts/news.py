@@ -136,8 +136,16 @@ def by_symbol(conn: sqlite3.Connection, symbols: Iterable[str],
     return out
 
 
+# What the site-wide list carries. Twelve was a home-page number that became
+# the whole news page by accident when that page was built from the same call.
+# The cache holds a couple of thousand articles over a fortnight, so a hundred
+# is roughly the last day and a half — enough for the page to be worth opening
+# and worth filtering, and still a small file.
+MARKET_WIDE_LIMIT = 100
+
+
 def market_wide(by_symbol_rows: dict[str, list[dict]],
-                limit: int = 12) -> list[dict]:
+                limit: int = MARKET_WIDE_LIMIT) -> list[dict]:
     """One recent-headlines list for the whole site, from the per-symbol map.
 
     An article usually carries several tickers, so the same headline appears
