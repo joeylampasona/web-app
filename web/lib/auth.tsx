@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
@@ -41,10 +42,9 @@ export interface AuthState {
   ready: boolean;
   signedIn: boolean;
   user: { id: string; email: string } | null;
-  promptOpen: boolean;
+  /** Why the reader was sent to sign in, shown as the page heading. */
   promptReason: string;
   requireSignUp: (reason: string) => void;
-  closePrompt: () => void;
   linkState: LinkState;
   sendLink: (email: string) => Promise<void>;
   /** Trades a code for a session, in this window. */
@@ -56,7 +56,8 @@ export interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [promptOpen, setPromptOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
   const [promptReason, setPromptReason] = useState("");
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [ready, setReady] = useState(!configured);
@@ -84,7 +85,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(toUser(session?.user));
       setReady(true);
       if (session) {
-        setPromptOpen(false);
         setLinkState({ kind: "idle" });
       }
     });
@@ -95,11 +95,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  /**
+   * Every gate on the site funnels through here, so this is the one place that
+   * decides what signing in looks like. It used to open a bottom sheet; a sheet
+   * is fixed-position, which on iOS is a losing argument with the keyboard. It
+   * is a page now, and the page carries where the reader was so they land back
+   * on it rather than at the top of the site.
+   */
   const requireSignUp = useCallback((reason: string) => {
     setPromptReason(reason);
     setLinkState({ kind: "idle" });
-    setPromptOpen(true);
-  }, []);
+    const next = encodeURIComponent(pathname || "/screens");
+    router.push(`/signin?reason=${encodeURIComponent(reason)}&next=${next}`);
+  }, [pathname, router]);
 
   const sendLink = useCallback(async (email: string) => {
     const supabase = client();
@@ -194,17 +202,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ready,
       signedIn: Boolean(user),
       user,
-      promptOpen,
       promptReason,
       requireSignUp,
-      closePrompt: () => setPromptOpen(false),
       linkState,
       sendLink,
       verifyCode,
       resetLink: () => setLinkState({ kind: "idle" }),
       signOut,
     }),
-    [linkState, promptOpen, promptReason, ready, requireSignUp, sendLink,
+    [linkState, promptReason, ready, requireSignUp, sendLink,
      signOut, user, verifyCode],
   );
 
