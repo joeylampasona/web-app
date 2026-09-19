@@ -108,7 +108,13 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
           setSymbols((held) => held.filter((s) => s !== symbol));
           return;
         }
-        if (symbols.length >= MAX_TICKERS) return;
+        if (symbols.length >= MAX_TICKERS) {
+          // Returning quietly made the star do nothing and say nothing, which
+          // reads as a broken button rather than a full list.
+          setError(`Your watchlist holds the maximum of ${MAX_TICKERS} tickers. `
+                   + "Remove one to add another.");
+          return;
+        }
         const { error: insertError } = await supabase
           .from("watchlist").insert({ user_id: user.id, symbol });
         if (insertError) { setError(insertError.message); return; }

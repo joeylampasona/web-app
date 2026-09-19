@@ -10,6 +10,7 @@ import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
 import { SetupChart } from "./SetupChart";
 import { StockCard } from "./StockCard";
+import { WatchStar } from "./WatchStar";
 import { XRayChart } from "./XRayChart";
 import { QuadrantBadge } from "./Badges";
 import { compactMoney, rsText } from "@/lib/format";
@@ -68,7 +69,13 @@ export function StockDetail({ stock, run }: {
               {stock.symbol} · {stock.industry} · {compactMoney(stock.market_cap)}
             </div>
           </div>
-          <QuadrantBadge quadrant={stock.quadrant} />
+          <div className="row" style={{ gap: "var(--gap-sm)", alignItems: "center" }}>
+            {/* Always here. It used to be drawn only by the StockCard below,
+                which renders only when the name is on a screen — so any stock
+                that was not could not be added to a watchlist from anywhere. */}
+            <WatchStar symbol={stock.symbol} withLabel />
+            <QuadrantBadge quadrant={stock.quadrant} />
+          </div>
         </div>
         {stock.themes.length > 0 && (
           <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
