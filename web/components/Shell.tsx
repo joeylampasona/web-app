@@ -153,7 +153,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
         }}
       >
         {TABS.map((tab) => {
-          const isCentre = tab.key === "search";
+          // Search gets the raised pill. It was the middle of five tabs and the
+          // name said so; with six it sits right of centre, which is a cost we
+          // took knowingly to keep Today in the bar. The pill marks the tab,
+          // not the midpoint.
+          const isRaised = tab.key === "search";
           const isActive = active === tab.key;
           return (
             <button
@@ -172,7 +176,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <span
                 aria-hidden
                 style={
-                  isCentre
+                  isRaised
                     ? {
                         width: 30, height: 30, borderRadius: "var(--radius-pill)",
                         background: "var(--brand)", color: "var(--on-brand)",
