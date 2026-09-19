@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -81,8 +82,35 @@ class Release:
         }
 
 
+# FRED states the shape it requires, and rejects anything else with a 400
+# before looking at the request. Checking it here turns a silent empty calendar
+# into a sentence naming the problem.
+KEY_SHAPE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def key_problem() -> str:
+    """Why the configured key cannot work, or "" if it looks usable."""
+    key = settings.env(API_KEY_NAME)
+    if not key:
+        return f"{API_KEY_NAME} is not set"
+    if not KEY_SHAPE.match(key):
+        # Never the key itself, and never a prefix of it: this string goes to
+        # the run log, which is public on a public repo.
+        return (f"{API_KEY_NAME} is {len(key)} characters and FRED requires 32 "
+                f"lower-case letters and digits. Re-copy it from "
+                f"fredaccount.stlouisfed.org/apikey and re-save the secret, "
+                f"taking care not to include a trailing space or newline.")
+    return ""
+
+
 def configured() -> bool:
-    return bool(settings.env(API_KEY_NAME))
+    """True only when the key could actually work.
+
+    This used to be `bool(key)`, so a malformed key published
+    `configured: true` beside an empty calendar — the site reporting itself
+    healthy while the section it describes had nothing in it.
+    """
+    return not key_problem()
 
 
 def _get(path: str, params: dict) -> dict:
@@ -120,9 +148,10 @@ def _get(path: str, params: dict) -> dict:
 def fetch(as_of: dt.date, lookahead_days: int | None = None,
           notice=None) -> list[Release]:
     """Scheduled releases from `as_of` forward. Empty when unavailable."""
-    if not configured():
+    problem = key_problem()
+    if problem:
         if notice:
-            notice("FRED not configured; data releases skipped.")
+            notice(f"Data releases skipped: {problem}")
         return []
     horizon = as_of + dt.timedelta(
         days=int(lookahead_days or settings.get("catalysts.lookahead_days", 90)))

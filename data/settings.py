@@ -99,9 +99,18 @@ def env(name: str, default: str = "") -> str:
     opening a new terminal is a trap rather than a security measure. So a
     `secrets:` block in config/settings.local.yaml — which is gitignored, and is
     where a laptop's overrides already live — works too, and survives.
+
+    Whitespace is stripped from whatever is found. A credential never
+    legitimately begins or ends with a space, and pasting one into a secret box
+    picks up a trailing space or newline easily — GitHub stores it verbatim and
+    masks only the key itself, so the stray character is invisible in the logs
+    and in the box. FRED_API_KEY arrived that way and answered every nightly
+    with "the value for variable api_key is not a 32 character alpha-numeric
+    lower-case string", while the site published `configured: true` and an
+    empty calendar for weeks.
     """
     from_env = os.environ.get(name)
-    if from_env:
-        return from_env
+    if from_env and from_env.strip():
+        return from_env.strip()
     stored = (get("secrets", {}) or {}).get(name)
-    return str(stored) if stored else default
+    return str(stored).strip() if stored and str(stored).strip() else default
