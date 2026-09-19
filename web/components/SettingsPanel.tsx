@@ -245,11 +245,10 @@ export function SettingsPanel({
         <p className="caption dim" style={{ margin: 0 }}>
           No prices you looked at, no pages you visited, nothing sold to anybody.
           Switching the Sunday email off stops all mail except the sign-in codes,
-          which are how you get in rather than something we send you.
-          {/* This said "email the address in the disclaimer" and there is no
-              address on the disclaimer, or anywhere else on the site — an
-              instruction pointing at nothing. It goes back when a contact
-              address exists and has been tested. */}
+          which are how you get in rather than something we send you. To have the
+          account and everything on it deleted, email{" "}
+          <a href="mailto:hello@thetape.cc" className="mono"
+             style={{ color: "var(--link)" }}>hello@thetape.cc</a>.
         </p>
       </Section>
 

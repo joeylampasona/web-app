@@ -131,10 +131,18 @@ export default function LegalPage() {
         </p>
       </Section>
 
-      <p className="caption dim" style={{ marginBottom: 0 }}>
-        Questions about anything on this page: raise an issue on the project&rsquo;s
-        repository.
-      </p>
+      <Section title="Getting in touch">
+        <p>
+          Anything on this page, a correction to a number, or a request to delete
+          your account and everything on it:{" "}
+          <a href="mailto:hello@thetape.cc" className="mono"
+             style={{ color: "var(--link)" }}>hello@thetape.cc</a>.
+        </p>
+        <p>
+          Deletion is done by hand and takes a day or two. It removes the account,
+          the watchlist and the saved screens; nothing is kept back.
+        </p>
+      </Section>
     </div>
   );
 }
