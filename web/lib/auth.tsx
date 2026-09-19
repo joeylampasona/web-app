@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
 } from "react";
 import { client, configured } from "./supabase";
 
@@ -9,9 +9,18 @@ import { client, configured } from "./supabase";
  * Auth gates exactly four things: the watchlist, saved custom screens, export
  * and the X-ray. Everything else is open.
  *
- * Sign-in is a magic link. Someone types an email, Supabase sends a one-time
- * link, clicking it lands on /auth/callback with a session. There is no
- * password to store, forget or leak, and this app never sees a credential.
+ * Sign-in is a six-digit code, typed back into whichever copy of the site asked
+ * for it. It used to be a link, and a link cannot sign anyone into the home
+ * screen app: the manifest asks for `display: standalone`, which gives that app
+ * its own storage container, and an emailed link always opens in the browser.
+ * The session then exists in the browser and the app never sees it — not
+ * flakily, but never. A code never leaves the window it was typed into, so it
+ * works the same in Safari, in the installed app, and on a phone reading mail
+ * on a laptop.
+ *
+ * The link still works for anyone who prefers it; /auth/callback still trades
+ * one for a session. There is still no password to store, forget or leak, and
+ * this app never sees a credential.
  *
  * When no project is configured the whole thing degrades to the state it was in
  * before: `signedIn` false, `configured` false, and the sign-up sheet says so
@@ -20,7 +29,10 @@ import { client, configured } from "./supabase";
 export type LinkState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "sent"; email: string }
+  /** A code is out. `checking` is a code being verified; `error` is the last
+   *  one having been refused, which must not throw the reader back to the email
+   *  step — they would only have to type the same address again. */
+  | { kind: "sent"; email: string; checking: boolean; error: string | null }
   | { kind: "error"; message: string };
 
 export interface AuthState {
@@ -35,6 +47,8 @@ export interface AuthState {
   closePrompt: () => void;
   linkState: LinkState;
   sendLink: (email: string) => Promise<void>;
+  /** Trades a code for a session, in this window. */
+  verifyCode: (code: string) => Promise<void>;
   resetLink: () => void;
   signOut: () => Promise<void>;
 }
@@ -47,6 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [ready, setReady] = useState(!configured);
   const [linkState, setLinkState] = useState<LinkState>({ kind: "idle" });
+  /** The address the outstanding code went to. */
+  const sentTo = useRef("");
 
   useEffect(() => {
     const supabase = client();
@@ -101,13 +117,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: address,
+        // The same message carries both: the code for anyone typing it back in
+        // here, the link for anyone who would rather tap it. Which one the
+        // email actually shows is set by the project's email template.
         options: { emailRedirectTo: callback },
       });
       setLinkState(
         error
           ? { kind: "error", message: explain(error.message, callback) }
-          : { kind: "sent", email: address },
+          : { kind: "sent", email: address, checking: false, error: null },
       );
+      if (!error) sentTo.current = address;
     } catch {
       // A network failure or a project that no longer answers. Without this the
       // button sat on "Sending…" for ever, which reads as "working" and is not.
@@ -116,6 +136,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message: "Could not reach the accounts service. Check the connection and "
           + "try again; if it keeps happening, open /auth/check.",
       });
+    }
+  }, []);
+
+  const verifyCode = useCallback(async (code: string) => {
+    const supabase = client();
+    const digits = code.replace(/\D/g, "");
+    // The address the code was sent to. Held in a ref rather than read back out
+    // of state: a setState updater is not a getter, React does not promise to
+    // run it when you call it, and asking the sheet for the address a second
+    // time invites two copies that disagree.
+    const address = sentTo.current;
+
+    if (!supabase || !address) {
+      setLinkState((was) => was.kind === "sent"
+        ? { ...was, checking: false, error: "Accounts are not configured on this deploy." }
+        : was);
+      return;
+    }
+    if (digits.length !== 6) {
+      setLinkState((was) => was.kind === "sent"
+        ? { ...was, checking: false, error: "That code is not six digits." }
+        : was);
+      return;
+    }
+    setLinkState((was) => was.kind === "sent"
+      ? { ...was, checking: true, error: null } : was);
+
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        email: address, token: digits, type: "email",
+      });
+      if (error) {
+        setLinkState((was) => was.kind === "sent"
+          ? { ...was, checking: false, error: explainCode(error.message) }
+          : was);
+      }
+      // On success onAuthStateChange closes the sheet and clears this.
+    } catch {
+      setLinkState((was) => was.kind === "sent"
+        ? { ...was, checking: false,
+            error: "Could not reach the accounts service. Try again." }
+        : was);
     }
   }, []);
 
@@ -138,10 +200,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       closePrompt: () => setPromptOpen(false),
       linkState,
       sendLink,
+      verifyCode,
       resetLink: () => setLinkState({ kind: "idle" }),
       signOut,
     }),
-    [linkState, promptOpen, promptReason, ready, requireSignUp, sendLink, signOut, user],
+    [linkState, promptOpen, promptReason, ready, requireSignUp, sendLink,
+     signOut, user, verifyCode],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -163,6 +227,18 @@ function toUser(raw: { id: string; email?: string } | undefined) {
  * Anything unrecognised is shown as-is: a message we do not understand is still
  * better than a message we have replaced with a guess.
  */
+function explainCode(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("expired") || text.includes("invalid")) {
+    return "That code did not work. Codes last an hour and can only be used "
+      + "once — ask for a fresh one if this was an old message.";
+  }
+  if (text.includes("rate") || text.includes("too many")) {
+    return "Too many attempts. Wait a minute and try again.";
+  }
+  return message;
+}
+
 function explain(message: string, callback: string): string {
   const text = message.toLowerCase();
   if (text.includes("redirect")) {

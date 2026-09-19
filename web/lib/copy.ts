@@ -120,8 +120,8 @@ export const LEGAL =
  * sixteen chances to rename fifteen of them. SITE_NAME is the long form,
  * SITE_SHORT the one a phone home screen has room for.
  */
-export const SITE_NAME = "Base & Breakout";
-export const SITE_SHORT = "Breakout";
+export const SITE_NAME = "The Tape";
+export const SITE_SHORT = "The Tape";
 
 export const TAGLINE = "Bases, breakouts and relative strength, after every close.";
 

@@ -7,21 +7,30 @@ import { useAuth } from "@/lib/auth";
 import { useKeyboardInset } from "@/lib/useKeyboardInset";
 
 /**
- * One email field and one button. Supabase sends a one-time link; clicking it
- * signs the reader in. Nothing here collects or stores a password.
+ * An email field, then a six-digit field. Supabase mails the code; typing it
+ * back here signs the reader in without the session ever having to survive a
+ * trip through another app. That is the whole reason it is a code: an emailed
+ * link opens in the browser, and the installed home-screen app has its own
+ * storage, so a link can sign you into Safari and never into the app.
+ *
+ * Nothing here collects or stores a password.
  */
 export function SignUpSheet() {
   const {
-    configured, promptOpen, promptReason, closePrompt, linkState, sendLink, resetLink,
+    configured, promptOpen, promptReason, closePrompt, linkState, sendLink,
+    verifyCode, resetLink,
   } = useAuth();
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const sending = linkState.kind === "sending";
   const keyboard = useKeyboardInset();
 
   return (
     <Drawer.Root
       open={promptOpen}
-      onOpenChange={(open) => { if (!open) { closePrompt(); resetLink(); } }}
+      onOpenChange={(open) => {
+        if (!open) { closePrompt(); resetLink(); setCode(""); }
+      }}
     >
       <Drawer.Portal>
         <Drawer.Overlay style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)" }} />
@@ -45,23 +54,62 @@ export function SignUpSheet() {
           }}
         >
           <Drawer.Title style={{ fontSize: "var(--size-h3)", fontWeight: 500 }}>
-            {linkState.kind === "sent" ? "Check your email" : promptReason || "Sign up"}
+            {linkState.kind === "sent" ? "Enter the code" : promptReason || "Sign up"}
           </Drawer.Title>
 
           {linkState.kind === "sent" ? (
             <>
               <Drawer.Description className="muted footnote" style={{ marginTop: "var(--gap-sm)" }}>
-                A one-time link is on its way to{" "}
-                <span className="mono">{linkState.email}</span>. Open it on this device and
-                you are in. The link expires in an hour, and nothing is saved until you
-                click it.
+                A six-digit code is on its way to{" "}
+                <span className="mono">{linkState.email}</span>. Type it in here — it
+                works in this window, which a link does not. The code lasts an hour and
+                nothing is saved until you use it.
               </Drawer.Description>
-              <div className="row" style={{ marginTop: "var(--pad-lg)", gap: "var(--gap-sm)" }}>
-                <button type="button" className="control grow" onClick={resetLink}>
-                  Use a different address
-                </button>
-                <button type="button" className="control" onClick={closePrompt}>Close</button>
-              </div>
+              <form
+                onSubmit={(event) => { event.preventDefault(); void verifyCode(code); }}
+                className="stack"
+                style={{ marginTop: "var(--pad-lg)", gap: "var(--gap-sm)" }}
+              >
+                <label className="stack" style={{ gap: "var(--gap-xs)" }}>
+                  <span className="footnote muted">Code</span>
+                  <input
+                    className="control mono"
+                    required
+                    // A numeric keypad, and the one-time-code hint that lets iOS
+                    // offer the digits straight from the message.
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={code}
+                    onChange={(event) => {
+                      setCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                    }}
+                    style={{ width: "100%", letterSpacing: "0.3em",
+                             fontSize: "var(--size-h3)" }}
+                  />
+                </label>
+                <div className="row" style={{ gap: "var(--gap-sm)" }}>
+                  <button type="submit" className="control primary grow"
+                          disabled={linkState.checking || code.length < 6}>
+                    {linkState.checking ? "Checking…" : "Sign me in"}
+                  </button>
+                  <button type="button" className="control"
+                          onClick={() => { resetLink(); setCode(""); }}>
+                    Back
+                  </button>
+                </div>
+                {linkState.error && (
+                  <p className="footnote" style={{ color: "var(--warn)", margin: 0 }}>
+                    {linkState.error}
+                  </p>
+                )}
+                <p className="caption dim" style={{ margin: 0 }}>
+                  The same email carries a link too, if you would rather tap it — but a
+                  link signs you in to the browser, not to the app on your home screen.
+                </p>
+              </form>
             </>
           ) : (
             <>
@@ -98,7 +146,7 @@ export function SignUpSheet() {
                   </label>
                   <div className="row" style={{ gap: "var(--gap-sm)" }}>
                     <button type="submit" className="control primary grow" disabled={sending}>
-                      {sending ? "Sending…" : "Email me a link"}
+                      {sending ? "Sending…" : "Email me a code"}
                     </button>
                     <button type="button" className="control" onClick={closePrompt}>
                       Not now

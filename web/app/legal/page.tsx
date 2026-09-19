@@ -111,7 +111,7 @@ export default function LegalPage() {
         </p>
         <p>
           If you make one, it holds your email address, your watchlist and your saved
-          screens. Sign-in is a one-time emailed link, so there is no password for us to
+          screens. Sign-in is a one-time emailed code, so there is no password for us to
           store or lose. We do not sell anything to anyone, and there is no advertising
           on this site.
         </p>
