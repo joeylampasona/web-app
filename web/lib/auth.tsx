@@ -10,7 +10,7 @@ import { client, configured } from "./supabase";
  * Auth gates exactly four things: the watchlist, saved custom screens, export
  * and the X-ray. Everything else is open.
  *
- * Sign-in is a six-digit code, typed back into whichever copy of the site asked
+ * Sign-in is a numeric code, typed back into whichever copy of the site asked
  * for it. It used to be a link, and a link cannot sign anyone into the home
  * screen app: the manifest asks for `display: standalone`, which gives that app
  * its own storage container, and an emailed link always opens in the browser.
@@ -54,6 +54,20 @@ export interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null);
+
+/**
+ * How many digits a sign-in code can have.
+ *
+ * Supabase decides the real length — Authentication -> Providers -> Email ->
+ * Email OTP Length, anywhere from 6 to 10 — and the browser has no way to ask
+ * it. So accept the whole range rather than hard-coding one end of it. The
+ * input used to cap at six and slice the rest away, which meant a project
+ * configured for eight silently dropped two digits as you typed and then
+ * reported the code as wrong. Truncating input is never the right failure:
+ * take what the reader typed and let the server be the judge.
+ */
+export const CODE_MIN = 6;
+export const CODE_MAX = 10;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -162,9 +176,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : was);
       return;
     }
-    if (digits.length !== 6) {
+    if (digits.length < CODE_MIN || digits.length > CODE_MAX) {
       setLinkState((was) => was.kind === "sent"
-        ? { ...was, checking: false, error: "That code is not six digits." }
+        ? { ...was, checking: false,
+            error: `A code is ${CODE_MIN} to ${CODE_MAX} digits. Check you copied all of it.` }
         : was);
       return;
     }

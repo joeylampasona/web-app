@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { CODE_MAX, CODE_MIN, useAuth } from "@/lib/auth";
 
 /**
  * Signing in, as a page rather than a bottom sheet.
@@ -64,7 +64,7 @@ function SignIn() {
       ) : sent ? (
         <>
           <p className="muted footnote" style={{ margin: 0 }}>
-            A six-digit code is on its way to{" "}
+            A code is on its way to{" "}
             <span className="mono">{linkState.email}</span>. Type it in here — it works
             in this window, which a link does not. The code lasts an hour and nothing
             is saved until you use it.
@@ -83,17 +83,18 @@ function SignIn() {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 pattern="[0-9]*"
-                maxLength={6}
+                maxLength={CODE_MAX}
                 placeholder="000000"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, CODE_MAX))}
                 style={{ width: "100%", letterSpacing: "0.3em",
                          fontSize: "var(--size-h3)" }}
               />
             </label>
             <div className="row" style={{ gap: "var(--gap-sm)" }}>
               <button type="submit" className="control primary grow"
-                      disabled={linkState.checking || code.length < 6}>
+                      disabled={linkState.checking || code.length < CODE_MIN}>
                 {linkState.checking ? "Checking…" : "Sign me in"}
               </button>
               <button type="button" className="control"
@@ -106,10 +107,6 @@ function SignIn() {
                 {linkState.error}
               </p>
             )}
-            <p className="caption dim" style={{ margin: 0 }}>
-              The same email carries a link too, if you would rather tap it — but a link
-              signs you in to the browser, not to the app on your home screen.
-            </p>
           </form>
         </>
       ) : (
