@@ -180,7 +180,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center", gap: 2, padding: "var(--gap-sm) 0",
                 background: "none", border: "none", cursor: "pointer",
-                color: isActive ? "var(--brand)" : "var(--text-muted)",
+                color: isActive ? "var(--brand-ink)" : "var(--text-muted)",
               }}
             >
               <span

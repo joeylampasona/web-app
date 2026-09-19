@@ -55,7 +55,7 @@ export function LearnPanel({ files }: { files: LearnFile[] }) {
                   style={{
                     width: "100%", textAlign: "left", cursor: "pointer",
                     padding: "var(--pad-md) var(--pad-lg)",
-                    borderColor: active ? "var(--brand)" : "var(--border)",
+                    borderColor: active ? "var(--brand-ink)" : "var(--border)",
                     background: active ? "var(--brand-muted)" : "var(--surface-1)",
                   }}
                   aria-pressed={active}

@@ -18,7 +18,7 @@ export function WatchStar({ symbol }: { symbol: string }) {
       }
       style={{
         background: "none", border: "none", cursor: "pointer", padding: 2,
-        color: active ? "var(--brand)" : "var(--text-muted)", lineHeight: 1,
+        color: active ? "var(--brand-ink)" : "var(--text-muted)", lineHeight: 1,
       }}
     >
       {active ? "★" : "☆"}

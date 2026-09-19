@@ -49,7 +49,7 @@ export function CombinePanel({
               style={{
                 minHeight: "var(--h-control)", padding: "var(--pad-md) var(--pad-lg)",
                 cursor: "pointer",
-                borderColor: on ? "var(--brand)" : "var(--border)",
+                borderColor: on ? "var(--brand-ink)" : "var(--border)",
                 background: on ? "var(--brand-muted)" : "var(--surface-1)",
               }}
               onClick={() =>

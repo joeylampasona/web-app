@@ -107,7 +107,7 @@ export function CustomScreenPanel({
                     value={Number(values[param.key] ?? 0)}
                     onChange={(event) =>
                       setValues({ ...values, [param.key]: Number(event.target.value) })}
-                    style={{ flex: 1, accentColor: "var(--brand)" }}
+                    style={{ flex: 1, accentColor: "var(--brand-ink)" }}
                     aria-label={param.label}
                   />
                   <span className="num" style={{ width: 62, textAlign: "right" }}>

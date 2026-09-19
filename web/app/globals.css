@@ -119,7 +119,9 @@ button { font: inherit; color: inherit; }
   --border: var(--on-dark-border);
   --border-strong: var(--on-dark-border);
   --brand: var(--on-dark-brand);
+  --brand-ink: var(--on-dark-brand);
   --brand-muted: var(--on-dark-brand-muted);
+  --on-brand: var(--on-dark-on-brand);
   --gain: var(--on-dark-gain);
   --loss: var(--on-dark-loss);
   --warn: var(--on-dark-warn);
@@ -186,7 +188,7 @@ button { font: inherit; color: inherit; }
 .badge--warn { background: var(--warn-bg); color: var(--warn); }
 .badge--gain { background: var(--gain-muted); color: var(--gain); }
 .badge--loss { background: var(--loss-muted); color: var(--loss); }
-.badge--brand { background: var(--brand-muted); color: var(--brand); }
+.badge--brand { background: var(--brand-muted); color: var(--brand-ink); }
 .badge--provisional {
   background: var(--warn-bg);
   color: var(--provisional);
@@ -386,7 +388,7 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
 }
 .sidenav-item:hover { background: var(--surface-2); color: var(--text-primary); }
 .sidenav-item[aria-current="page"],
-.sidenav-item[data-active="true"] { color: var(--brand); }
+.sidenav-item[data-active="true"] { color: var(--brand-ink); }
 
 .sidenav-link {
   display: block;
@@ -396,4 +398,4 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
   font-size: var(--size-caption);
 }
 .sidenav-link:hover { background: var(--surface-2); color: var(--text-primary); }
-.sidenav-link[aria-current="page"] { color: var(--brand); }
+.sidenav-link[aria-current="page"] { color: var(--brand-ink); }

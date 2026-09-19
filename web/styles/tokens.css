@@ -31,11 +31,23 @@
   --border-stronger:  #3A3D48;
 
   /* Brand */
-  --brand:            #F5A524;
-  --brand-hover:      #FFB944;
-  --brand-muted:      rgba(245,165,36,0.14);
-  --brand-border:     #4A3410;
-  --on-brand:         #2B1A02;  /* text on a solid amber fill */
+  /* Lime splits into a fill and an ink, which amber never needed.
+     #DAFC4F as text on a pale card measures 1.14:1 — invisible — so the two
+     jobs cannot be the same value. The fill is lime in BOTH themes, which is
+     where the identity lives: buttons, chips, the active pill, the hero. Only
+     --brand-ink changes with the theme, and it is only ever small text and
+     thin borders. The reference designs work the same way; there is no lime
+     text anywhere on their light screens.
+
+     The lime is #DAFC4F rather than #D4F94A, a drift of dE 0.9 that no eye
+     will catch: the original sat at dE 29.97 from gain green, just under the
+     30 this palette holds everything to, and a rule waived once is not a rule. */
+  --brand:            #DAFC4F;   /* FILL — both themes */
+  --brand-ink:        #DAFC4F;   /* TEXT and borders — overridden on light */
+  --brand-hover:      #E6FD7C;
+  --brand-muted:      rgba(218,252,79,0.16);
+  --brand-border:     #5A6B12;
+  --on-brand:         #14200A;   /* text on a solid lime fill — always dark */
 
   /* The hero slab: near-black in BOTH themes.
      The reference designs put a dark card at the top of a pale page, and that
@@ -55,14 +67,24 @@
   --on-dark-muted:    #A8AAB8;
   --on-dark-dim:      #74778A;
   --on-dark-border:   #272A36;
-  --on-dark-brand:    #F5A524;
-  --on-dark-brand-muted: rgba(245,165,36,0.16);
+  --on-dark-brand:    #DAFC4F;
+  --on-dark-brand-muted: rgba(218,252,79,0.18);
+  /* Ink for text sitting on a solid brand fill, wherever that fill appears.
+     The hero maps --on-brand onto this: inside the slab the brand is lime
+     even on a pale page, and the light theme's --on-brand is white, which on
+     lime is unreadable. */
+  --on-dark-on-brand: #14200A;
   --on-dark-gain:     #16A34A;
   --on-dark-loss:     #DC2626;
   --on-dark-warn:     #EAB308;
   --radius-hero:      16px;
 
   /* Price semantics — DATA ONLY */
+  /* Gain stays green. Moving it off green to make room for lime was tried and
+     is worse: in light mode only eleven colours clear every constraint and all
+     of them are nearly black, and every green that does fit sits closer to the
+     brand than green itself does. Nudging the lime instead costs dE 0.9 of
+     lime and keeps the convention every trader reads by reflex. */
   --gain:             #16A34A;
   --gain-muted:       rgba(22,163,74,0.12);
   --loss:             #DC2626;
@@ -70,9 +92,9 @@
   --flat:             #6E7180;
 
   /* Chart semantics — constant across every chart on the site */
-  --chart-pivot:      #F5A524;  /* dashed */
-  --chart-base-fill:  rgba(245,165,36,0.14);
-  --chart-base-line:  #F5A524;
+  --chart-pivot:      #DAFC4F;  /* dashed */
+  --chart-base-fill:  rgba(218,252,79,0.16);
+  --chart-base-line:  #DAFC4F;
   --chart-prior-base: #4A4D59;  /* dashed, prior contractions */
   /* Four lines, drawn at two widths: the 9 and 21 thin, the 50 and 200 thick.
      A pair sharing a width has nothing but colour to separate it, so those two
@@ -111,7 +133,7 @@
   /* Quadrant colours — rotation scatter */
   --q-powering:       #16A34A;
   --q-turning:        #38BDF8;
-  --q-cooling:        #F5A524;
+  --q-cooling:        #DAFC4F;
   --q-falling:        #DC2626;
 
   /* Typography */
@@ -164,18 +186,25 @@
   --border-strong:    #D0CEC7;
   --border-stronger:  #B8B6AE;
 
-  --brand:            #B8791A;   /* darkened for contrast on light */
-  --brand-hover:      #9A6414;
-  --brand-muted:      rgba(184,121,26,0.12);
-  --brand-border:     #E8C88A;
-  --on-brand:         #FFFFFF;
+  /* The fill stays lime here. Only the ink changes, and it cannot be a darker
+     lime: every colour in lime's hue band that is readable on a pale card
+     lands within dE 30 of gain green — a dark lime is an olive, and an olive
+     is a green. The nearest hue that clears is 51, a gold, 23 degrees off.
+     That gold appears only as small text and thin borders; every lime surface
+     on this theme is still lime. */
+  --brand:            #DAFC4F;   /* FILL — unchanged from dark */
+  --brand-ink:        #A88F00;   /* gold: dE 30.5 from gain, 3.02:1 on a card */
+  --brand-hover:      #E6FD7C;
+  --brand-muted:      rgba(218,252,79,0.42);
+  --brand-border:     #B9D94A;
+  --on-brand:         #14200A;   /* dark ink on the lime fill */
 
   --gain:             #15803D;
   --loss:             #B91C1C;
 
-  --chart-pivot:      #B8791A;
-  --chart-base-fill:  rgba(184,121,26,0.12);
-  --chart-base-line:  #B8791A;
+  --chart-pivot:      #A88F00;
+  --chart-base-fill:  rgba(218,252,79,0.34);
+  --chart-base-line:  #A88F00;
   --chart-prior-base: #B0B2B8;
   --chart-grid:       #E8E6E0;
   /* The same four, darkened for a light card. Held to the same measured
@@ -191,7 +220,9 @@
   --warn-border:      #E0C48A;
 
   --stage-forming:    #55585F;
+  --stage-breakout:   #15803D;
   --stage-climbing:   #0284C7;
+  --q-powering:       #15803D;
   --q-turning:        #0284C7;
-  --q-cooling:        #B8791A;
+  --q-cooling:        #A88F00;
 }

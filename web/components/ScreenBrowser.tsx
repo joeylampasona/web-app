@@ -72,7 +72,7 @@ export function ScreenBrowser({
               style={{
                 minHeight: "var(--h-control)", padding: "var(--pad-md) var(--pad-lg)",
                 textAlign: "left", cursor: "pointer",
-                borderColor: selected ? "var(--brand)" : "var(--border)",
+                borderColor: selected ? "var(--brand-ink)" : "var(--border)",
                 background: selected ? "var(--brand-muted)" : "var(--surface-1)",
               }}
             >

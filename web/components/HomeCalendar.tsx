@@ -138,7 +138,7 @@ export function HomeCalendar({
               </div>
 
               {day.fomc && (
-                <div className="footnote" style={{ color: "var(--brand)" }}>
+                <div className="footnote" style={{ color: "var(--brand-ink)" }}>
                   {day.fomc.label}
                 </div>
               )}

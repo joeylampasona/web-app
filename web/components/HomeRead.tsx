@@ -34,7 +34,7 @@ import { price } from "@/lib/format";
 function Mark({ score }: { score: -1 | 0 | 1 }) {
   // A glyph as well as a word, so the column scans without relying on colour.
   const face = score === 1 ? "+" : score === -1 ? "−" : "·";
-  const tone = score === 1 ? "var(--brand)"
+  const tone = score === 1 ? "var(--brand-ink)"
              : score === -1 ? "var(--warn)"
              : "var(--text-muted)";
   return (
