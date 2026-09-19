@@ -147,10 +147,31 @@ This is independent of everything above — do it whenever.
    | `NEXT_PUBLIC_SUPABASE_URL` | the Project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon public key |
 
-5. In Supabase: **Authentication → URL Configuration**. Set **Site URL**
-   to your Vercel address, and add `https://your-site.vercel.app/auth/callback`
-   under **Redirect URLs**. Without this the magic links will not work.
-6. Redeploy in Vercel. Accounts are live.
+5. Add one more Vercel variable, `NEXT_PUBLIC_SITE_URL`, set to the
+   site's real address — `https://thetape.cc`. Set it in **every**
+   environment, Preview included, or previews send people to production.
+6. In Supabase: **Authentication → URL Configuration**. Set **Site URL**
+   to `https://thetape.cc` and add `https://thetape.cc/auth/callback`
+   under **Redirect URLs**.
+7. Mail. Supabase's built-in sender is capped at a couple of messages an
+   hour, so sign-in needs custom SMTP: **Authentication → Emails → SMTP
+   Settings**, host `smtp.resend.com`, port `587`, username the literal
+   word `resend`, password a Resend API key, sender `noreply@thetape.cc`.
+   Sending from `onboarding@resend.dev` instead works, but only ever
+   delivers to the address that owns the Resend account.
+8. Paste `supabase/email-templates/magic-link.html` into **Authentication
+   → Emails → Templates → Magic Link**, replacing the body entirely.
+
+   Read this before editing that box. Supabase renders the template with
+   Go's `html/template`, which refuses anything malformed — one missing
+   `>` is enough. When it refuses, `POST /auth/v1/otp` returns 500
+   *before any SMTP connection is opened*. There is nothing in the mail
+   provider's logs, because there was never an email. It looks exactly
+   like a delivery failure and is not one, and it will send you through
+   the port, the username and the API key before you think to suspect
+   the template. The error is in **Logs → Auth**, and it names the
+   problem precisely. Read that first.
+9. Redeploy in Vercel. Accounts are live.
 
 To try it on your own machine first, copy `web/.env.example` to
 `web/.env.local` and fill in the same two values. That file is
