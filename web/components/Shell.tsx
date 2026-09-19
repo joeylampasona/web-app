@@ -18,6 +18,7 @@ const TABS: {
   key: string; label: string; glyph: string; match: string;
   href?: string; destinations?: Destination[];
 }[] = [
+  { key: "home", label: "Today", glyph: "◆", match: "/", href: "/" },
   {
     key: "screens", label: "Screens", glyph: "▦", match: "/screens",
     destinations: [
@@ -68,7 +69,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [openTab, setOpenTab] = useState<string | null>(null);
-  const active = TABS.find((t) => pathname.startsWith(t.match))?.key ?? "screens";
+  // "/" is a prefix of every path, so the home tab cannot be matched by prefix
+  // the way the others are -- it would light up on every page and, being first
+  // in the list, would win. It matches exactly and nothing else does.
+  const active = pathname === "/"
+    ? "home"
+    : TABS.find((t) => t.match !== "/" && pathname.startsWith(t.match))?.key ?? "home";
 
   return (
     <div className="shell">
@@ -91,7 +97,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         }}
       >
         <div className="between shell-width">
-          <Link href="/screens" className="grow">
+          {/* The masthead goes home, which is what every reader already expects
+              it to do. It pointed at the screens list back when that was the
+              landing page. */}
+          <Link href="/" className="grow">
             <div className="row" style={{ gap: "var(--gap-sm)" }}>
               <span
                 aria-hidden
@@ -135,7 +144,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 40,
           background: "var(--surface-1)",
           borderTop: "0.5px solid var(--border)",
-          display: "grid", gridTemplateColumns: "repeat(5, 1fr)",
+          // Follows the tab count. It was pinned at 5, so adding a sixth tab
+          // silently wrapped it onto a second row.
+          display: "grid", gridTemplateColumns: `repeat(${TABS.length}, 1fr)`,
           paddingBottom: "env(safe-area-inset-bottom)",
           paddingLeft: "env(safe-area-inset-left)",
           paddingRight: "env(safe-area-inset-right)",
