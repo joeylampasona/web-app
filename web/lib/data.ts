@@ -2,12 +2,11 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type {
-  BacktestSummary, BreadthCard, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
+  BreadthCard, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
   ScreenFile, StockFile,
 } from "./types";
 
 // The web layer reads static JSON the pipeline wrote. It never queries a
-// database. The one exception is a custom backtest run, which hits an API route.
 //
 // Two locations, in order: web/out when the build fetched it there (Vercel puts
 // nothing above the project root into the deployment), then the repository's
@@ -206,39 +205,6 @@ export function getBreakouts(date: string) {
 
 export function getFollowThrough() {
   return read<FollowThroughFile>("breakouts/followthrough.json");
-}
-
-export function getBacktestOptions() {
-  return read<{
-    options: Record<string, {
-      label: string; control: string;
-      options?: { value: string | number | boolean; label: string }[];
-      min?: number; max?: number; step?: number;
-    }>;
-    defaults: Record<string, unknown>;
-    years: number[];
-  }>("backtest/options.json");
-}
-
-export function getBacktestPresetIndex() {
-  return read<{
-    default_by_screen: Record<string, string>;
-    /** The session these were computed against. */
-    as_of?: string | null;
-    /** Hash to the exact settings it was run with, so a request can be matched
-     *  against what is already computed without recomputing the hash here. */
-    presets?: Record<string, Record<string, unknown>>;
-  }>("backtest/presets/index.json");
-}
-
-export function getBacktestPreset(hash: string): BacktestSummary | null {
-  return read<BacktestSummary>(`backtest/presets/${hash}.json`);
-}
-
-export function getDefaultBacktest(screen: string): BacktestSummary | null {
-  const index = getBacktestPresetIndex();
-  const hash = index?.default_by_screen?.[screen];
-  return hash ? getBacktestPreset(hash) : null;
 }
 
 /** A small index for search: every universe name with its RS and industry. */

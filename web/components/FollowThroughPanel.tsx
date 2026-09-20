@@ -65,8 +65,8 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
         <p className="footnote muted" style={{ margin: 0 }}>
           Every breakout each screen would have shown in the last{" "}
           {Math.round(file.window_days / 30)} months, and what the stock did after.
-          Detected from prices the same way the backtest detects them, so these are
-          the same events, not a second opinion.
+          Detected from prices by the same rules that put a name on a screen, so
+          these are the same events, not a second opinion.
         </p>
         <p className="caption dim" style={{ margin: 0 }}>
           Our data provider&rsquo;s free tier carries no delisted companies, so the

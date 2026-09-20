@@ -30,8 +30,6 @@ const TABS: {
       { href: "/screens/cup_and_handle", title: "Cup and handle", blurb: "A rounded bottom, then a small pause below the lid." },
       { href: "/screens/combine", title: "Combine screens", blurb: "Tick several and see the union." },
       { href: "/screens/custom", title: "Create your own", blurb: "Move every dial yourself." },
-      { href: "/learn", title: "How the screens work", blurb: "The shape, the concepts and the funnel." },
-      { href: "/learn/backtest", title: "Backtest", blurb: "Test the rules on years of data." },
     ],
   },
   {
@@ -53,14 +51,6 @@ const TABS: {
     key: "watchlist", label: "Watchlist", glyph: "☆", match: "/watchlist",
     destinations: [
       { href: "/watchlist", title: "Your watchlist", blurb: "Up to 50 tickers, bucketed by stage." },
-    ],
-  },
-  {
-    key: "learn", label: "Learn", glyph: "◎", match: "/learn",
-    destinations: [
-      { href: "/learn", title: "How it works", blurb: "The anatomy of a breakout, screen by screen." },
-      { href: "/learn/backtest", title: "Backtest", blurb: "Settings, result and the trades." },
-      { href: "/legal", title: "Disclaimer", blurb: "What the numbers mean, and what they do not." },
     ],
   },
 ];
@@ -146,20 +136,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <main>{children}</main>
 
-      <footer
-        style={{
-          borderTop: "0.5px solid var(--border)",
-          padding: "var(--pad-lg)",
-          paddingBottom: "var(--page-bottom)",
-        }}
-      >
-        <div className="stack shell-width" style={{ gap: "var(--gap-xs)" }}>
-          <p className="caption dim" style={{ margin: 0 }}>{LEGAL}</p>
-          <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
-            What that means, in full
-          </Link>
-        </div>
-      </footer>
+      {/* The home page carries the disclaimer in full, at the bottom of its own
+          content. Repeating the short version immediately underneath it stacked
+          two disclaimers saying the same thing, so home opts out and every other
+          page keeps it. */}
+      {pathname !== "/" && (
+        <footer
+          style={{
+            borderTop: "0.5px solid var(--border)",
+            padding: "var(--pad-lg)",
+            paddingBottom: "var(--page-bottom)",
+          }}
+        >
+          <div className="stack shell-width" style={{ gap: "var(--gap-xs)" }}>
+            <p className="caption dim" style={{ margin: 0 }}>{LEGAL}</p>
+            <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
+              What that means, in full
+            </Link>
+          </div>
+        </footer>
+      )}
 
       <nav
         aria-label="Primary"

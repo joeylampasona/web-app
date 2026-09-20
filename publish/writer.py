@@ -7,8 +7,6 @@ import pathlib
 import shutil
 from typing import Any
 
-from backtest import engine, metrics
-from backtest.settings import OPTIONS, BacktestSettings
 from catalysts import events as ev
 from catalysts import iv as ivmod
 from catalysts import news as newsmod
@@ -25,8 +23,8 @@ VERSION = 1
 
 DISCLAIMER = (
     "A screening and market-analytics tool. Not investment advice. We are not a "
-    "registered investment adviser. Historical figures are backtests and are "
-    "hypothetical.")
+    "registered investment adviser. A stock on a screen matches a shape; that is "
+    "not a prediction. Prices are end-of-day, not live.")
 
 TRADE_STEPS = [
     {"step": 1, "title": "Buy the breakout", "text": "As it pushes through the pivot.",
@@ -83,7 +81,6 @@ def _bars_for(market: Market, symbol: str, limit: int) -> list[list]:
 
 def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             calendar: ev.Calendar, iv_rows: list, diff_payload: dict,
-            backtests: dict[str, dict] | None = None,
             follow: dict | None = None,
             insiders: dict[str, dict] | None = None,
             news: dict[str, list[dict]] | None = None,
@@ -267,36 +264,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "concepts": [c.__dict__ for c in spec.concepts],
             "funnel": param_module.funnel_steps(key),
             "funnel_preface": "Every number below is a dial you can move in Filters.",
-            "funnel_callout": {
-                "text": "Don't take our word for it — test it on years of data.",
-                "cta": "Backtest", "href": "/learn/backtest",
-            },
             "params": [p.to_json() for p in spec.params],
             "trade_steps": TRADE_STEPS,
             "trade_steps_preface": TRADE_STEPS_PREFACE,
         }))
-
-    # ---- backtest presets ---------------------------------------------
-    written.append(_write(out / "backtest" / "options.json", {
-        "options": OPTIONS,
-        "defaults": BacktestSettings.defaults().to_json(),
-        "years": sorted({d.year for d in market.calendar}),
-    }))
-    for key, payload in (backtests or {}).items():
-        written.append(_write(out / "backtest" / "presets" / f"{key}.json", payload))
-    if backtests:
-        # The settings of every preset, not just its hash. A custom run on a host
-        # without Python has to know whether the combination it was asked for has
-        # already been computed, and it cannot recompute this hash to find out —
-        # that would be a second implementation of the key, in another language,
-        # free to drift. Matching on the settings themselves cannot drift.
-        written.append(_write(out / "backtest" / "presets" / "index.json",
-                              {"default_by_screen": {
-                                  s: BacktestSettings.parse({"screen": s}).hash()
-                                  for s in param_module.SCREEN_KEYS},
-                               "as_of": market.as_of.isoformat() if market.as_of else None,
-                               "presets": {key: payload.get("settings", {})
-                                           for key, payload in backtests.items()}}))
 
     # ---- what happened to the breakouts we showed ---------------------
     if follow:

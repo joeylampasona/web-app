@@ -109,8 +109,8 @@ export function copy(key: CopyKey | string): string {
 
 export const LEGAL =
   "A screening and market-analytics tool. Not investment advice. We are not a " +
-  "registered investment adviser. Historical figures are backtests and are " +
-  "hypothetical.";
+  "registered investment adviser. A stock on a screen matches a shape; that is " +
+  "not a prediction. Prices are end-of-day, not live.";
 
 /**
  * The site's name, in one place.

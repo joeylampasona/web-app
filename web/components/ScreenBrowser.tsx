@@ -88,16 +88,6 @@ export function ScreenBrowser({
         })}
       </div>
 
-      <div className="row wrap" style={{ gap: "var(--gap-sm)", marginBottom: "var(--gap-md)" }}>
-        <Link href="/learn" className="control footnote" style={{ minHeight: "var(--h-control)" }}>
-          How the screens work
-        </Link>
-        <Link href="/learn/backtest" className="control footnote"
-              style={{ minHeight: "var(--h-control)" }}>
-          Backtest these rules
-        </Link>
-      </div>
-
       <div className="row wrap" style={{ gap: "var(--gap-sm)", marginBottom: "var(--gap-lg)" }}>
         <div className="row" style={{ gap: 0 }}>
           <button type="button" className="control" aria-pressed={view === "grid"}

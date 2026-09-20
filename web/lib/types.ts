@@ -205,29 +205,6 @@ export interface ParamSpec {
   unit: string; funnel_title: string; funnel_text: string; help: string;
 }
 
-export interface BacktestSummary {
-  settings: Record<string, unknown>;
-  hash: string;
-  provisional: boolean; provisional_line: string;
-  survivorship_safe: boolean;
-  survivorship_line: string;
-  notes: string[];
-  starting_capital: number; ending_capital: number; multiple: number | null;
-  years: number;
-  metrics: { key: string; label: string; value: number | null; unit: string;
-             help: string; provisional: boolean }[];
-  summary: string;
-  yearly: { year: number; return_pct: number; start_equity: number; end_equity: number }[];
-  gross_mean_return_pct: number; net_mean_return_pct: number;
-  cost_bps_round_trip: number;
-  benchmark: { symbol: string; buy_and_hold_return_pct: number | null; help: string };
-  trades: {
-    ticker: string; entry_date: string; entry_price: number; exit_date: string;
-    exit_price: number; shares: number; return_pct: number;
-    gross_return_pct: number; r_multiple: number; exit_reason: string; pnl: number;
-  }[];
-}
-
 export interface BreakoutOutcome {
   symbol: string; name: string; breakout_date: string; sessions_since: number;
   breakout_close: number; pivot: number; last_close: number;

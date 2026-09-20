@@ -339,68 +339,10 @@ def _next_earnings_map(market, symbols):
     return out
 
 
-def cmd_backtest(args) -> int:
-    from backtest import engine, metrics
-    from backtest.settings import BacktestSettings
-    from data.market import load
-    from patterns.params import SCREENS
-    conn = _conn()
-    run = store.start_run(conn, "backtest")
-    payload = {
-        "screen": args.screen, "enter": args.enter, "positions": args.positions,
-        "stop_pct": args.stop, "exit_rule": args.exit_rule, "risk": args.risk,
-        "risk_pct": args.risk, "starting_capital": args.capital, "period": args.period,
-        "skip_weak_markets": args.skip_weak, "skip_earnings_7d": args.skip_earnings,
-    }
-    payload.pop("risk")
-    config = BacktestSettings.parse({k: v for k, v in payload.items() if v is not None})
-
-    market = load(conn, include_all=True)
-    earnings = _next_earnings_map(market, market.universe) if config.skip_earnings_7d else {}
-    result = engine.run(market, config, earnings)
-    summary = metrics.summarise(result)
-
-    if getattr(args, "as_json", False):
-        import json
-        path = settings.out_dir() / "backtest" / "presets" / f"{config.hash()}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(summary, default=str), encoding="utf-8")
-        print(json.dumps(summary, default=str))
-        store.finish_run(conn, run, "ok", f"{len(summary['trades'])} trades")
-        return 0
-
-    _banner(f"Backtest — {SCREENS[config.screen].name}")
-    print(f"  enter {config.enter} · {config.positions} positions · stop "
-          f"{config.stop_pct:g}% · {config.exit_rule} · risk {config.risk_pct:g}% · "
-          f"period {config.period}")
-    print(f"  each position is about ${config.position_size(config.starting_capital):,.0f} "
-          f"at {config.risk_pct:g}% risk with a {config.stop_pct:g}% stop")
-    print()
-    print(metrics.render(summary))
-
-    _banner("Year by year")
-    for row in summary["yearly"]:
-        bar = "█" * max(0, min(40, int(abs(row["return_pct"]) / 2)))
-        print(f"  {row['year']}{row['return_pct']:>9.2f}%  {bar}")
-
-    _banner(f"Trades ({len(summary['trades'])}) — losers included")
-    print(f"  {'Ticker':<8}{'Entry':<12}{'Price':>9}  {'Exit':<11}{'Price':>9}"
-          f"{'Return':>9}{'R':>7}  Reason")
-    print("  " + "─" * 86)
-    for t in summary["trades"][:25]:
-        print(f"  {t['ticker']:<8}{t['entry_date']:<12}{t['entry_price']:>9,.2f}"
-              f"  {t['exit_date']:<11}{t['exit_price']:>9,.2f}{t['return_pct']:>8.2f}%"
-              f"{t['r_multiple']:>7.2f}  {t['exit_reason']}")
-    if len(summary["trades"]) > 25:
-        print(f"  … and {len(summary['trades']) - 25} more")
-    store.finish_run(conn, run, "ok", f"{len(summary['trades'])} trades")
-    return 0
-
-
-def _pipeline(conn, with_backtests: bool = True):
+def _pipeline(conn, with_followthrough: bool = True):
     """The nightly sequence, shared by `publish` and `all`."""
-    from backtest import engine, metrics
-    from backtest.settings import BacktestSettings
+    from backtest import engine       # the replay engine; the backtest feature is gone,
+                                      # but follow-through still derives candidates from it
     from catalysts import events as ev, iv as ivmod
     from data.adapters import get_adapter
     from data.market import load
@@ -452,7 +394,6 @@ def _pipeline(conn, with_backtests: bool = True):
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
     iv_rows = ivmod.compute(calendar, population, names, adapter)
 
-    backtests: dict[str, dict] = {}
     follow: dict = {}
     # Read from the cache the catalysts stage fills; publish never fetches.
     # Fetching is limited to names on a screen, because each one costs SEC
@@ -465,28 +406,18 @@ def _pipeline(conn, with_backtests: bool = True):
     desk_run = desk_mod.latest_run(conn)
     insider_rows = insiders_mod.summary(conn, market.universe)
     news_rows = news_mod.by_symbol(conn, market.universe)
-    if with_backtests:
-        earnings = {s: e.date for s in market.universe
-                    if (e := calendar.next_earnings(s)) is not None}
-        # Four backtests over years of prices, and nothing to show for the best
-        # part of a minute. Silence that long is indistinguishable from a hang,
-        # so say what is happening and tick as each one lands.
-        print(f"  → Replaying {len(SCREEN_KEYS)} default backtests over "
-              f"{len(market.calendar):,} sessions. A minute or so.", flush=True)
-        timeline = engine.rs_timeline(market)      # computed once, reused per screen
-        for index, screen in enumerate(SCREEN_KEYS, 1):
-            config = BacktestSettings.parse({"screen": screen})
-            run_out = engine.run(market, config, earnings, timeline)
-            summary = metrics.summarise(run_out)
-            backtests[config.hash()] = summary
-            print(f"    {index}/{len(SCREEN_KEYS)}  {screen} — "
-                  f"{len(summary.get('trades', []))} trades", flush=True)
-        print("  → Checking what happened to recent breakouts.", flush=True)
+    if with_followthrough:
+        # The relative-strength timeline is the expensive part and the only
+        # piece the four default backtests and follow-through ever shared.
+        # With the backtests gone it is computed for follow-through alone.
+        print(f"  → Replaying the RS timeline over {len(market.calendar):,} "
+              f"sessions to check recent breakouts. A minute or so.", flush=True)
+        timeline = engine.rs_timeline(market)
         follow = followthrough.compute(market, timeline)
         for key, row in follow["screens"].items():
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
-    return (market, bundle, result, changes, calendar, iv_rows, backtests,
+    return (market, bundle, result, changes, calendar, iv_rows,
             follow, insider_rows, news_rows, desk_rows, desk_run)
 
 
@@ -494,12 +425,12 @@ def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()
     run = store.start_run(conn, "publish")
-    (market, bundle, result, changes, calendar, iv_rows, backtests,
+    (market, bundle, result, changes, calendar, iv_rows,
      follow, insider_rows, news_rows, desk_rows, desk_run) = _pipeline(conn)
     from catalysts import releases as rel
     release_rows = rel.load(conn, market.as_of)
 
-    written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
+    written = writer.publish(market, bundle, result, calendar, iv_rows, changes,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
                              releases=release_rows)

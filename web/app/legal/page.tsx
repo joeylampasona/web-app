@@ -54,34 +54,19 @@ export default function LegalPage() {
         </p>
       </Section>
 
-      <Section title="Every historical figure is hypothetical">
+      <Section title="What we show about past breakouts">
         <p>
-          Backtest results describe what a set of rules would have done on past data.
-          They are simulations. No money was placed, no order was filled, and nothing
-          about them carries forward.
+          The &ldquo;Did it work?&rdquo; page replays breakouts this site showed and
+          reports what the price did afterwards. It is a record of outcomes, not a
+          strategy return: no position sizing, no costs, no entry or exit you could
+          actually have got. It does not tell you what the next one will do.
         </p>
         <p>
-          Two limitations are large enough that we badge the numbers{" "}
-          <strong>provisional</strong> wherever they appear rather than footnote them:
-        </p>
-        <ul className="stack" style={{ gap: "var(--gap-xs)", paddingLeft: "1.1rem", margin: 0 }}>
-          <li>
-            <strong>Survivorship bias.</strong> Our data source&rsquo;s free tier carries
-            no delisted companies. Every backtest here only ever saw names that survived
-            to today, and the companies that failed — the ones a real strategy would have
-            been holding — are simply absent. Every return figure is flattered by this,
-            and we cannot tell you by how much.
-          </li>
-          <li>
-            <strong>Approximate earnings dates.</strong> Historical earnings dates are
-            projected backwards on a quarterly cadence from the next known date, so any
-            rule that avoids earnings is avoiding an estimate of them.
-          </li>
-        </ul>
-        <p>
-          Costs are modelled as a flat round-trip figure. Slippage, partial fills, borrow
-          costs, taxes and the difference between a closing price and the price you would
-          actually have got are not modelled at all.
+          One limitation is large enough to state rather than footnote.{" "}
+          <strong>Survivorship bias.</strong> Our data source&rsquo;s free tier carries
+          no delisted companies, so every historical figure here only ever saw names
+          that survived to today. The companies that failed are simply absent, every
+          figure is flattered by this, and we cannot tell you by how much.
         </p>
       </Section>
 

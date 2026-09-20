@@ -207,7 +207,7 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: python -m cli catalysts
 
-      - name: Precompute default backtests and publish
+      - name: Check recent breakouts and publish
         id: publish
         if: steps.gate.outputs.run == 'true'
         run: python -m cli publish

@@ -213,13 +213,7 @@ export default function Home() {
       )}
 
       <section className="stack" style={{ gap: "var(--gap-md)" }}>
-        <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-          <h2 style={{ fontSize: "var(--size-h3)", margin: 0 }}>The screens</h2>
-          <Link href="/learn" className="footnote"
-                style={{ textDecoration: "underline", whiteSpace: "nowrap" }}>
-            How they work
-          </Link>
-        </div>
+        <h2 style={{ fontSize: "var(--size-h3)", margin: 0 }}>The screens</h2>
         <div className="grid-auto">
           {(meta?.screens ?? []).map((screen) => (
             <Link
@@ -245,6 +239,51 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <HomeDisclaimer />
     </div>
+  );
+}
+
+/** The short version, where everybody lands. The full text lives at /legal.
+ *
+ * It sits at the bottom of the home page rather than behind a tab because a
+ * disclaimer nobody passes is a disclaimer nobody reads. Three things only:
+ * what this is not, what a screen result is not, and where the numbers come
+ * from — each the subject of a full section on /legal, which this links to
+ * rather than replaces.
+ */
+function HomeDisclaimer() {
+  return (
+    <section
+      className="stack"
+      style={{
+        gap: "var(--gap-sm)",
+        marginTop: "var(--gap-lg)",
+        paddingTop: "var(--pad-lg)",
+        borderTop: "1px solid var(--border)",
+      }}
+    >
+      <div className="eyebrow">Before you act on any of this</div>
+      <p className="footnote muted" style={{ margin: 0 }}>
+        {SITE_NAME} is a screening tool, not an investment adviser. Nothing here
+        is advice, nothing here accounts for your circumstances, and there is no
+        order-placing code in it.
+      </p>
+      <p className="footnote muted" style={{ margin: 0 }}>
+        A stock on a screen matches a <em>shape</em>. That is not a prediction
+        that the shape resolves upward, or at all. Prices are end-of-day, not
+        live, and can be wrong, late or missing — verify anything that matters
+        against your broker.
+      </p>
+      <p className="footnote muted" style={{ margin: 0 }}>
+        Trading carries risk, including losing more than you put in. Past
+        performance does not indicate future results.{" "}
+        <Link href="/legal" style={{ color: "var(--link)", textDecoration: "underline" }}>
+          Read the full disclaimer
+        </Link>
+        .
+      </p>
+    </section>
   );
 }
