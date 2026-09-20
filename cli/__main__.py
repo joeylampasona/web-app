@@ -40,6 +40,10 @@ def main(argv: list[str] | None = None) -> int:
     p_bt.add_argument("--skip-earnings", dest="skip_earnings", action="store_true", default=None)
     p_bt.add_argument("--no-skip-earnings", dest="skip_earnings", action="store_false")
 
+    p_q = sub.add_parser("quotes",
+                         help="delayed intraday prices for the names on a screen")
+    p_q.add_argument("--out", help="where to write the file "
+                                   "(default: the out/ tree's quotes.json)")
     sub.add_parser("publish", help="write the out/ JSON tree")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")
 

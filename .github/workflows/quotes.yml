@@ -1,0 +1,79 @@
+# A delayed price for the names on a screen, during the session.
+#
+# Separate from the nightly on purpose. The nightly is the product: it builds
+# the universe, ranks, detects and publishes, and it is end-of-day because the
+# things it measures are end-of-day. This job knows nothing about any of that.
+# It reads the screens the nightly already published, fetches one number per
+# name, and writes one small file to its own branch.
+#
+# Its own branch matters. The nightly force-pushes a freshly built tree over
+# `data` every night; anything this wrote there would be erased, then silently
+# reappear fifteen minutes later. Two publishers, two branches, no argument.
+name: Intraday quotes
+
+on:
+  schedule:
+    # Every fifteen minutes through the US session. 13:00-21:00 UTC covers
+    # 09:30-16:00 New York in both halves of the year, so no clock change is
+    # needed twice a year and the edges cost a few requests for nothing.
+    - cron: "*/15 13-21 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  # A quote run that has been overtaken is worthless — the point of it is to
+  # be recent — so a newer one cancels an older one rather than queueing.
+  group: intraday-quotes
+  cancel-in-progress: true
+
+jobs:
+  quotes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+
+      # Only the screens are needed, and only to learn which names to ask
+      # about. A shallow single-branch clone of the published tree is far
+      # cheaper than rebuilding anything.
+      - name: Fetch the published screens
+        run: |
+          git clone --depth 1 --branch data --single-branch \
+            "https://github.com/${GITHUB_REPOSITORY}" out
+          rm -rf out/.git
+          echo "screens: $(ls out/screens/*.json 2>/dev/null | wc -l | tr -d ' ')"
+
+      - name: Fetch delayed quotes
+        run: python -m cli quotes
+
+      - name: Publish to the quotes branch
+        run: |
+          # A fresh single-commit repository each time, like the data branch.
+          # This file is worth nothing the moment it is superseded, so keeping
+          # its history would be paying to store staleness.
+          mkdir -p send && cp out/quotes.json send/quotes.json
+          cd send
+          python3 -c "
+          import json
+          d = json.load(open('quotes.json'))
+          print(f\"publishing {d['count']} quotes, fetched {d['fetched_at']}\")
+          "
+          git init -q -b quotes
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Quotes $(date -u +%FT%TZ)"
+          git push -q --force \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            HEAD:refs/heads/quotes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

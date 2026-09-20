@@ -568,6 +568,54 @@ def _pipeline(conn, with_followthrough: bool = True):
             news_rows, desk_rows, desk_run)
 
 
+def cmd_quotes(args) -> int:
+    """Write a delayed price for every name currently on a screen.
+
+    Runs on its own schedule during the session, separate from the nightly.
+    It reads the screens the nightly already published and writes one small
+    file; it never touches the database, the detectors or the rest of the
+    tree, so it cannot corrupt an end-of-day figure by running at an odd
+    moment.
+    """
+    import pathlib
+
+    from catalysts import quotes as quotesmod
+
+    out = settings.out_dir()
+    screens = out / "screens"
+    if not screens.is_dir():
+        print("No published screens to quote. Run the nightly first.")
+        return 1
+
+    symbols: set[str] = set()
+    for path in sorted(screens.glob("*.json")):
+        if path.stem == "diff":
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        for stage in (payload.get("setups") or {}).values():
+            for row in stage:
+                if row.get("symbol"):
+                    symbols.add(row["symbol"])
+
+    if not symbols:
+        print("The published screens list no names; nothing to quote.")
+        return 1
+
+    _banner(f"Quotes — {len(symbols):,} names on a screen")
+    payload = quotesmod.collect(symbols, notice=lambda m: print(f"  → {m}", flush=True))
+
+    target = pathlib.Path(args.out) if getattr(args, "out", None) else out / "quotes.json"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, separators=(",", ":")))
+    print(f"  wrote {target} — {payload['count']:,} quotes")
+    # A file of nothing is worse than no file: the page would show a delayed
+    # price section that is permanently empty and say nothing about why.
+    return 0 if payload["count"] else 1
+
+
 def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()

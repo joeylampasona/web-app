@@ -32,6 +32,7 @@ from data.types import OptionChain, OptionContract, OptionExpiry
 log = logging.getLogger(__name__)
 
 BASE = "https://cdn.cboe.com/api/global/delayed_quotes/options"
+QUOTE_BASE = "https://cdn.cboe.com/api/global/delayed_quotes/quotes"
 TIMEOUT = 30
 
 # A thousand-odd names go through here on a nightly, one request each. This is
@@ -91,7 +92,10 @@ def _endpoint_symbol(symbol: str) -> str:
 
 
 def _fetch(symbol: str) -> dict | None:
-    url = f"{BASE}/{_endpoint_symbol(symbol)}.json"
+    return _fetch_json(f"{BASE}/{_endpoint_symbol(symbol)}.json", symbol)
+
+
+def _fetch_json(url: str, symbol: str) -> dict | None:
     agent = (settings.get("edgar.user_agent")
              or settings.env("EDGAR_USER_AGENT", "")
              or "tape-research")
@@ -110,6 +114,35 @@ def _fetch(symbol: str) -> dict | None:
     except Exception as exc:                       # noqa: BLE001
         log.debug("cboe %s: %s", symbol, exc)
         return None
+
+
+def quote(symbol: str) -> dict | None:
+    """One delayed price for one company, or None.
+
+    Deliberately not the option chain. That endpoint carries three thousand
+    contracts and is the wrong thing to fetch every fifteen minutes to read a
+    single number off the top of it.
+
+    Delayed, and the caller must say so on the page. The site is an end-of-day
+    product and this does not change that: it exists so a screen can show where
+    price sits against a pivot during the session, not to turn a nightly scan
+    into a live feed.
+    """
+    payload = _fetch_json(f"{QUOTE_BASE}/{_endpoint_symbol(symbol)}.json", symbol)
+    if not payload:
+        return None
+    data = payload.get("data") or {}
+    last = _number(data.get("current_price")) or _number(data.get("close"))
+    if last <= 0:
+        return None
+    previous = _number(data.get("prev_day_close"))
+    return {
+        "last": round(last, 4),
+        "prev_close": round(previous, 4) if previous > 0 else None,
+        "change_pct": (round(100.0 * (last / previous - 1.0), 2)
+                       if previous > 0 else None),
+        "at": data.get("last_trade_time") or None,
+    }
 
 
 def _number(value) -> float:
