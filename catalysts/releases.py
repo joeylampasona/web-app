@@ -23,6 +23,7 @@ import datetime as dt
 import json
 import logging
 import re
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -33,7 +34,10 @@ log = logging.getLogger(__name__)
 
 BASE = "https://api.stlouisfed.org/fred"
 API_KEY_NAME = "FRED_API_KEY"
-TIMEOUT = 30
+# A paged walk asks for several thousand rows and FRED takes its time over
+# the later offsets. Thirty seconds was enough for one page and not for six.
+TIMEOUT = 90
+RETRY_PAUSE = 3
 
 # Substrings, lowercased, matched against the release name. Not a curated
 # calendar — the dates all come from FRED either way. This only decides what a
@@ -155,17 +159,43 @@ PAGE = 1000
 MAX_PAGES = 8
 
 
+def _page(start: dt.date, offset: int) -> dict:
+    """One page, retried once. FRED is occasionally slow rather than down."""
+    params = {
+        "include_release_dates_with_no_data": "true",
+        "realtime_start": start.isoformat(),
+        "sort_order": "asc",
+        "limit": PAGE,
+        "offset": offset,
+    }
+    try:
+        return _get("/releases/dates", params)
+    except ReleasesUnavailable:
+        time.sleep(RETRY_PAUSE)
+        return _get("/releases/dates", params)
+
+
 def _all_release_dates(start: dt.date, notice=None) -> list[dict]:
-    """Every scheduled release date from `start`, across pages."""
+    """Every scheduled release date from `start`, across pages.
+
+    A page that fails ends the walk but keeps what came before it. The first
+    version raised straight out of the loop, so one slow page threw away every
+    page already in hand: the run that introduced this printed "Data releases
+    skipped: The read operation timed out" and published the previous night's
+    truncated calendar, with the pagination it was testing never exercised.
+    Nine hundred good rows are worth more than none.
+    """
     rows: list[dict] = []
     for page in range(MAX_PAGES):
-        payload = _get("/releases/dates", {
-            "include_release_dates_with_no_data": "true",
-            "realtime_start": start.isoformat(),
-            "sort_order": "asc",
-            "limit": PAGE,
-            "offset": page * PAGE,
-        })
+        try:
+            payload = _page(start, page * PAGE)
+        except ReleasesUnavailable as exc:
+            if not rows:
+                raise                       # nothing salvaged; the caller decides
+            if notice:
+                notice(f"Data releases: kept {len(rows):,} rows; page "
+                       f"{page + 1} failed ({exc}).")
+            return rows
         batch = payload.get("release_dates") or []
         rows.extend(batch)
         # A short page is the last page. FRED also reports the total, so a
