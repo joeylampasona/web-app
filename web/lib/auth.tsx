@@ -8,7 +8,7 @@ import { client, configured } from "./supabase";
 
 /**
  * Auth gates exactly four things: the watchlist, saved custom screens, export
- * and the X-ray. Everything else is open.
+ * Everything else is open.
  *
  * Sign-in is a numeric code, typed back into whichever copy of the site asked
  * for it. It used to be a link, and a link cannot sign anyone into the home

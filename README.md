@@ -217,18 +217,35 @@ run says out loud that it has proved only half. `tools/test_check_paywall.py`
 points the check at fake projects broken in each of those ways and requires it
 to fail every one.
 
-**What is actually behind the wall.** Gamma, so far. The rule is one rule,
-applied in both places gamma is published: the five deepest option books are
-free in full, and everything below them is gated. Whole rows rather than
-truncated ones — a clipped row shows the format, a complete one shows the
-work — and the page says how many names it is not showing.
+**What is actually behind the wall.**
+
+| | Free | Gated |
+|---|---|---|
+| Gamma | the five deepest option books, in full | the rest of the board, and every other name's strikes |
+| Seasonals | the benchmark's grid | the eleven sector grids |
+| Analyst estimates | that a company has coverage | the estimates |
+| X-ray | — | every base a stock has built |
+| Backtests | the result and all its caveats | the trade list and the year-by-year breakdown |
+| Screens | everything | — |
+
+Screens stay entirely free, deliberately. They could be gated by stage — free
+sees what broke out, paid sees what is forming — and it would not hold: a
+stock's own page carries its setup and its stage, so a few hundred fetches
+rebuild the withheld list exactly. Making it real means stripping setups from
+the stock pages too, which guts the free site. A gate that a script walks
+through is worse than no gate, because it invites being paid for one.
+
+Samples are whole objects rather than truncated ones wherever there is a
+sample at all. A clipped row shows the format; a complete one shows the work,
+and the work is what is being sold. Estimates and the X-ray have no sample —
+there is no ranking to show the top of, and a partial X-ray is not a smaller
+reading but a wrong one.
 
 Applying it in both places is the load-bearing part. Gating the board while
 leaving each stock page public would read as a paywall and not be one: the
 board is a ranking of those pages, so a few hundred fetches rebuild it exactly.
-`tools/check_public_data.py` is what holds that line. It reads a built tree and
-fails if the public board carries more than the free sample, or if any stock
-file publishes gamma for a name outside it. The nightly runs it on the tree it
+`tools/check_public_data.py` is what holds that line — one rule per row of the
+table above, each of them "open the file and look". The nightly runs it on the tree it
 is about to push — the last moment that push can be stopped — and the paywall
 workflow runs it against the data branch that is actually live, which is a
 different claim: a hand-run publish or a night that predates the check would

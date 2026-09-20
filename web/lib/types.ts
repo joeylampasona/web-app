@@ -333,6 +333,10 @@ export interface StockFile {
    *  from `forecast` being null, which means nobody covers it — a fact about
    *  the company, not about what you have paid for. */
   forecast_gated?: boolean;
+  /** This stock has completed bases and they are behind the paywall. Empty
+   *  `base_history` plus this flag false means there is genuinely nothing to
+   *  compare the current structure with. */
+  xray_gated?: boolean;
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are

@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { AuthGate } from "./AuthGate";
 import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { GatedForecastPanel } from "./GatedForecastPanel";
+import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
@@ -19,7 +19,6 @@ import { ShapeReadout } from "./ShapeReadout";
 import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
 import { WatchStar } from "./WatchStar";
-import { XRayChart } from "./XRayChart";
 import { QuadrantBadge } from "./Badges";
 import { compactMoney, rsText } from "@/lib/format";
 import { planMovingAverages } from "@/lib/movingAverages";
@@ -283,15 +282,9 @@ export function StockDetail({ stock, run }: {
           halving it would defeat the point of showing them together. */}
       <section>
         <div className="eyebrow">X-ray</div>
-        <AuthGate
-          reason="See every base this stock has built"
-          blurb="The X-ray puts all of them on one chart, so you can see how this
-                 structure compares with the ones before it."
-        >
-          <div className="card">
-            <XRayChart bars={stock.bars} bases={stock.base_history} />
-          </div>
-        </AuthGate>
+        <GatedXRay symbol={stock.symbol} bars={stock.bars}
+                   bases={stock.base_history}
+                   locked={Boolean(stock.xray_gated)} />
       </section>
     </div>
   );

@@ -112,7 +112,7 @@ function SignIn() {
       ) : (
         <>
           <p className="muted footnote" style={{ margin: 0 }}>
-            Watchlists, saved custom screens, export and the base X-ray need an account.
+            Watchlists, saved custom screens and export need an account.
             Everything else on the site is open.
           </p>
           <form

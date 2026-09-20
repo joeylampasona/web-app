@@ -286,6 +286,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
 
     # ---- stocks -------------------------------------------------------
     bar_limit = int(settings.get("publish.stocks_bars", 180))
+    xray_bases: dict[str, list] = {}
     for symbol in market.universe:
         # Every name in the universe gets its price history, not only the ones
         # currently on a screen. Search reaches all of them, and a page reached
@@ -293,6 +294,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # the stock still has a price, it just has no pivot drawn over it. This
         # was the other way round, and it cost about 27MB to put right.
         limit = bar_limit
+        primary_setup = (setups_by_symbol.get(symbol) or [None])[0]
+        if primary_setup is not None and primary_setup.base_history:
+            xray_bases[symbol] = primary_setup.base_history
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit, insiders, news, desk,
@@ -539,7 +543,13 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "defaults": BacktestSettings.defaults().to_json(),
         "years": sorted({d.year for d in market.calendar}),
     }))
-    for key, payload in (backtests or {}).items():
+    # The result stays free; the trade list and the year-by-year breakdown are
+    # the work behind it and do not. Every caveat travels with the free half —
+    # provisional, survivorship, the notes — because a result shown without
+    # them would be a better-looking lie than the one this site set out to tell.
+    public_backtests, backtest_gated = gatedmod.backtest_documents(backtests, as_of)
+    gated_documents.extend(backtest_gated)
+    for key, payload in public_backtests.items():
         written.append(_write(out / "backtest" / "presets" / f"{key}.json", payload))
     if backtests:
         # The settings of every preset, not just its hash. A custom run on a host
@@ -609,6 +619,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # upload happens in the publish command, after this tree has been checked;
     # staging it as files first means a night's gated content can be looked at
     # before it goes anywhere, and re-uploaded without re-running the scan.
+    gated_documents.extend(gatedmod.xray_documents(xray_bases, as_of))
     gatedmod.stage(gated_documents)
     return written
 
@@ -885,7 +896,12 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "sma200": _sma_tail(market, symbol, 200, bar_limit),
         "setups": [s.to_json() for s in setups],
         "primary_setup": primary.to_json() if primary else None,
-        "base_history": primary.base_history if primary else [],
+        # Behind the paywall, so empty here and fetched by anyone entitled.
+        # It used to sit in this file in full while the page above it said
+        # "account needed" — a gate on the interface with the data underneath
+        # it, which is not a gate.
+        "base_history": [],
+        "xray_gated": bool(primary and primary.base_history),
         "catalyst_roadmap": [e.to_json(market.as_of) for e in events],
         "insiders": (insiders or {}).get(symbol),
         # Where open interest concentrates gamma. Absent for any name with

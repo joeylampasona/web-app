@@ -152,6 +152,55 @@ def forecast_documents(forecasts: dict[str, dict] | None,
             if payload]
 
 
+def xray_documents(bases: dict[str, list], as_of: dt.date) -> list[Document]:
+    """Every base a stock has built, per company.
+
+    Gated whole. There is no sample to take: the X-ray is a comparison between
+    one company's bases, so a version of it with some of them missing is not a
+    smaller reading, it is a wrong one.
+    """
+    return [Document(f"stocks/xray/{symbol.lower()}.json", history, as_of)
+            for symbol, history in sorted(bases.items()) if history]
+
+
+# The parts of a backtest that are the work rather than the claim. The headline
+# stays free on purpose: this site's own out-of-sample results are the argument
+# that it is honest about itself, and hiding them would be asking to be paid on
+# trust by a product whose whole pitch is that it does not ask for that.
+BACKTEST_GATED_KEYS = ("trades", "yearly")
+
+
+def split_backtest(payload: dict) -> tuple[dict, dict | None]:
+    """(what everyone sees, what a subscriber sees) for one preset.
+
+    The free half keeps every caveat — provisional, survivorship, the notes —
+    because those travel with the number and a version of the result without
+    them would be a better-looking lie.
+    """
+    gated = {key: payload[key] for key in BACKTEST_GATED_KEYS if key in payload}
+    if not gated:
+        return payload, None
+    public = {key: value for key, value in payload.items()
+              if key not in BACKTEST_GATED_KEYS}
+    public["gated"] = True
+    public["gated_counts"] = {key: len(value) if isinstance(value, list) else 1
+                              for key, value in gated.items()}
+    return public, gated
+
+
+def backtest_documents(backtests: dict[str, dict] | None,
+                       as_of: dt.date) -> tuple[dict[str, dict], list[Document]]:
+    """Public presets, and the documents holding what was taken out of them."""
+    public: dict[str, dict] = {}
+    documents: list[Document] = []
+    for key, payload in (backtests or {}).items():
+        head, tail = split_backtest(payload)
+        public[key] = head
+        if tail is not None:
+            documents.append(Document(f"backtest/{key}.json", tail, as_of))
+    return public, documents
+
+
 # --------------------------------------------------------------- staging
 
 def stage(documents: Iterable[Document], directory: pathlib.Path | None = None

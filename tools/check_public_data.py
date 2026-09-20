@@ -24,6 +24,14 @@ Seasonals. The benchmark's grid is free, the sector grids are not.
 
 Analyst estimates. No free sample at all, so no stock file may carry one.
 
+The X-ray. Gated whole — a stock's bases are a comparison between themselves,
+so a partial one is not a smaller reading but a wrong one. This is the gate
+that was decorative for months: the page said "account needed" while every
+base sat in the same public file underneath it.
+
+Backtests. The result is free and the trade list and yearly breakdown are not,
+so no preset may still carry those keys.
+
 Every rule here is the same shape: something is supposed to be absent from a
 public file, and this opens the file and looks. A gate that is only enforced in
 a component is a gate on the interface, not on the data — which is what the
@@ -39,7 +47,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from publish.gated import FREE_GAMMA_ROWS, FREE_SEASONAL_SYMBOL  # noqa: E402
+from publish.gated import (BACKTEST_GATED_KEYS, FREE_GAMMA_ROWS,  # noqa: E402
+                           FREE_SEASONAL_SYMBOL)
 
 
 def _load(path: pathlib.Path):
@@ -99,6 +108,7 @@ def check(out: pathlib.Path) -> list[str]:
     stocks = sorted((out / "stocks").glob("*.json"))
     leaked: list[str] = []
     forecast_leaked: list[str] = []
+    xray_leaked: list[str] = []
     marked = 0
     forecast_marked = 0
     for path in stocks:
@@ -115,6 +125,8 @@ def check(out: pathlib.Path) -> list[str]:
             forecast_marked += 1
         if payload.get("forecast"):
             forecast_leaked.append(symbol)
+        if payload.get("base_history"):
+            xray_leaked.append(symbol)
 
     print(f"  stocks/             {len(stocks)} file(s)   "
           f"{len(free)} public gamma / {marked} gated   "
@@ -133,6 +145,28 @@ def check(out: pathlib.Path) -> list[str]:
          "to anyone who fetches the files.")
     leak(forecast_leaked, "analyst estimates",
          "Estimates have no free sample; the whole panel is gated.")
+    leak(xray_leaked, "base history",
+         "The X-ray is gated whole. This is the field that made the old "
+         "account gate decorative for months.")
+
+    presets = sorted((out / "backtest" / "presets").glob("*.json"))
+    preset_leaked: list[str] = []
+    for path in presets:
+        if path.name == "index.json":
+            continue
+        payload = _load(path)
+        if "__unreadable__" in payload:
+            failures.append(f"{path.name} could not be read: {payload['__unreadable__']}")
+            continue
+        present = [key for key in BACKTEST_GATED_KEYS if payload.get(key)]
+        if present:
+            preset_leaked.append(f"{path.stem} ({', '.join(present)})")
+    print(f"  backtest/presets/   {max(len(presets) - 1, 0)} preset(s)   "
+          f"{len(preset_leaked)} carrying gated keys")
+    if preset_leaked:
+        failures.append(
+            f"{len(preset_leaked)} backtest preset(s) still publish "
+            f"{' and '.join(BACKTEST_GATED_KEYS)}: {', '.join(preset_leaked)}.")
 
     # The staging directory is not part of the tree, and a tree that contains
     # it has had the gated content copied into the thing that gets pushed.
