@@ -138,18 +138,125 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
               </span>
               <PriceChange value={b.now_pct} />
             </div>
+            <Range worst={b.worst_pct} peak={b.peak_pct} now={b.now_pct} />
             <div className="row wrap caption dim" style={{ gap: "var(--gap-sm)" }}>
               <span>broke out {b.breakout_date}</span>
               <span>· {b.sessions_since} sessions</span>
-              <span>· peak <span className="num">{b.peak_pct > 0 ? "+" : ""}{b.peak_pct}%</span></span>
-              <span>· worst <span className="num">{b.worst_pct > 0 ? "+" : ""}{b.worst_pct}%</span></span>
               <span>· RS then {rsText(b.rs_at_breakout ?? "not ranked yet")}</span>
-              {b.failed_fast && <span className="badge">closed back under the pivot</span>}
-              {b.now_below_pivot && <span className="badge">below the pivot now</span>}
+              {b.failed_fast && (
+                <span className="badge" style={{
+                  color: "var(--warn)", borderColor: "var(--warn-border)",
+                  background: "var(--warn-bg)",
+                }}>
+                  closed back under the pivot
+                </span>
+              )}
+              {b.now_below_pivot && (
+                <span className="badge badge--loss">below the pivot now</span>
+              )}
             </div>
           </TickerLink>
         ))}
       </section>
+    </div>
+  );
+}
+
+/** Where the breakouts landed, as one bar rather than two opposed cells.
+ *
+ * "76 above" and "97 below" in separate boxes are two numbers to hold in your
+ * head and compare. As one track they are a proportion you read in a glance,
+ * which is the actual question — did more of them work than not.
+ *
+ * Muted deliberately. This page exists to be read by somebody who might not
+ * like the answer, and a bright green half would be the page arguing with
+ * them.
+ */
+function Distribution({ row }: { row: FollowThroughScreen }) {
+  const total = row.settled || 1;
+  const upShare = (row.up / total) * 100;
+  return (
+    <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+      <div className="between caption">
+        <span style={{ color: "var(--gain)" }}>
+          <span className="num">{row.up}</span> above where they broke out
+          <span className="dim"> · {upShare.toFixed(0)}%</span>
+        </span>
+        <span style={{ color: "var(--loss)", textAlign: "right" }}>
+          <span className="num">{row.down}</span> below
+          <span className="dim"> · {(100 - upShare).toFixed(0)}%</span>
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={`${row.up} of ${row.settled} above where they broke out`}
+        style={{
+          display: "flex",
+          // NOT className="row": that sets align-items:center, and an empty
+          // span in a centred flex row has no content so it collapsed to zero
+          // height. The widths were right the whole time — 159px and 198px of
+          // a 358px track — and the bar rendered as a flat grey line.
+          alignItems: "stretch",
+          height: 8, borderRadius: "var(--radius-pill)", overflow: "hidden",
+          background: "var(--border-stronger)", gap: 1,
+        }}
+      >
+        <span style={{ width: `${upShare}%`, height: "100%",
+                       background: "var(--gain)", opacity: 0.75 }} />
+        <span style={{ flexGrow: 1, height: "100%",
+                       background: "var(--loss)", opacity: 0.6 }} />
+      </div>
+    </div>
+  );
+}
+
+/** Worst, peak, and where it sits now — on one line.
+ *
+ * The three numbers were three separate figures in a row of text, and reading
+ * them meant doing the arithmetic yourself: was -12% near the bottom of its
+ * range or near the top? The track answers that without the reader computing
+ * anything. The numbers stay, because the picture is not precise enough to
+ * replace them.
+ */
+function Range({ worst, peak, now }: { worst: number; peak: number; now: number }) {
+  const lo = Math.min(worst, peak, now);
+  const hi = Math.max(worst, peak, now);
+  const span = hi - lo || 1;
+  const at = (v: number) => ((v - lo) / span) * 100;
+  // Zero is the line that matters: above it the trade was up, below it down.
+  const zero = lo <= 0 && hi >= 0 ? at(0) : null;
+
+  return (
+    <div className="stack" style={{ gap: 2, marginTop: 4 }}>
+      <div style={{ position: "relative", height: 12 }}>
+        <div style={{
+          position: "absolute", top: 5, left: 0, right: 0, height: 2,
+          background: "var(--border-stronger)", borderRadius: "var(--radius-pill)",
+        }} />
+        {zero !== null && (
+          <div title="flat" style={{
+            position: "absolute", top: 1, left: `${zero}%`, width: 1, height: 10,
+            background: "var(--text-muted)",
+          }} />
+        )}
+        <div title={`worst ${worst}%`} style={{
+          position: "absolute", top: 3, left: `${at(worst)}%`, width: 2, height: 6,
+          background: "var(--loss)", transform: "translateX(-1px)",
+        }} />
+        <div title={`peak ${peak}%`} style={{
+          position: "absolute", top: 3, left: `${at(peak)}%`, width: 2, height: 6,
+          background: "var(--gain)", transform: "translateX(-1px)",
+        }} />
+        <div title={`now ${now}%`} style={{
+          position: "absolute", top: 2, left: `${at(now)}%`, width: 8, height: 8,
+          borderRadius: "50%", background: "var(--brand)",
+          border: "1.5px solid var(--surface-1)", transform: "translateX(-4px)",
+        }} />
+      </div>
+      <div className="between caption dim">
+        <span className="num">{worst > 0 ? "+" : ""}{worst}% worst</span>
+        <span className="num">{peak > 0 ? "+" : ""}{peak}% peak</span>
+      </div>
     </div>
   );
 }
@@ -165,13 +272,10 @@ function Summary({ row }: { row: FollowThroughScreen }) {
   }
   return (
     <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+      <Distribution row={row} />
       <div className="grid-2">
         <Cell label="Broke out" value={String(row.settled)}
               note={row.too_soon ? `${row.too_soon} more too recent to judge` : undefined} />
-        <Cell label="Above where they broke out" value={`${row.up}`}
-              note={`${row.share_up_pct}% of them`} />
-        <Cell label="Below it" value={`${row.down}`}
-              note={`${(100 - (row.share_up_pct ?? 0)).toFixed(1)}% of them`} />
         <Cell label="Closed back under the pivot" value={`${row.failed_fast}`}
               note={`${row.share_failed_pct}% within a fortnight`} />
       </div>
