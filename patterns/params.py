@@ -305,11 +305,6 @@ def _shape_common() -> list[ParamSpec]:
     return [_SHAPE_LOOKBACK, _MIN_SHAPE, _CONVERGENCE, _SWING, _MIN_RS, _FRESH]
 
 
-def _flag_common() -> list[ParamSpec]:
-    return [_MIN_POLE, _MAX_POLE_SESSIONS, _MAX_CHANNEL, _POLE_VOLUME,
-            _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
-
-
 def _wedge_params() -> list[ParamSpec]:
     return _shape_common() + [_WEDGE_VOLUME]
 
@@ -689,41 +684,6 @@ SCREENS: dict[str, ScreenSpec] = {
         ],
     ),
     # ------------------------------------------------------------ shapes
-    "bull_flag": ScreenSpec(
-        key="bull_flag", name="Bull flag",
-        shape="A sharp advance, then a short shallow drift against it.",
-        description=(
-            "A flag is a pause inside a move, and the move is the point: a quiet "
-            "fortnight with nothing in front of it is not a flag. This screen "
-            "measures the pole first — a run of at least 15% — and only then asks "
-            "whether the drift after it is short and shallow enough to be a pause "
-            "rather than the move ending. The level shown is the top of the drift. "
-            + _NO_EDGE_NOTE),
-        params=_flag_common(),
-        concepts=[
-            Concept("The pole", "The advance the pause interrupts.", "pole"),
-            Concept("The flag", "A short drift down or sideways after it.", "flag"),
-            Concept("The level", "The top of that drift.", "pivot"),
-        ],
-    ),
-    "bear_flag": ScreenSpec(
-        key="bear_flag", name="Bear flag",
-        shape="A sharp decline, then a short shallow drift back up against it.",
-        description=(
-            "The mirror of the bull flag, and the first screen on this site that "
-            "reads downward. Its stages are named for that: a fresh BREAKDOWN, not "
-            "a fresh breakout, and \"falling\" where the others say \"climbing\". "
-            "The level shown is the bottom of the drift, and progress is measured "
-            "as price falling away from it. Nothing here is a suggestion to short "
-            "anything; there is no order-placing code on this site and never will "
-            "be. " + _NO_EDGE_NOTE),
-        params=_flag_common(),
-        concepts=[
-            Concept("The pole", "The decline the pause interrupts.", "pole"),
-            Concept("The flag", "A short drift up or sideways after it.", "flag"),
-            Concept("The level", "The bottom of that drift.", "pivot"),
-        ],
-    ),
     "falling_wedge": ScreenSpec(
         key="falling_wedge", name="Falling wedge",
         shape="Both trendlines falling, the upper one falling faster.",

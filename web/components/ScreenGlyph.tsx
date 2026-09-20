@@ -101,28 +101,6 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
     ),
     label: "A rounded bottom, then a small pause",
   },
-  "/screens/bull_flag": {
-    label: "A sharp rise, then a short drift down",
-    // The pole does the talking: steep, then a small tilted pause.
-    art: (
-      <>
-        <path d="M3 20 L10 5" />
-        <path d="M10 6.5 L17 9 L17 14.5 L10 12 Z" />
-        <path d="M17 11.5 L21.5 9.5" strokeDasharray="2 1.6" />
-      </>
-    ),
-  },
-  "/screens/bear_flag": {
-    label: "A sharp fall, then a short drift up",
-    // The mirror, so the pair reads as a pair at a glance.
-    art: (
-      <>
-        <path d="M3 4 L10 19" />
-        <path d="M10 17.5 L17 15 L17 9.5 L10 12 Z" />
-        <path d="M17 12.5 L21.5 14.5" strokeDasharray="2 1.6" />
-      </>
-    ),
-  },
   "/screens/falling_wedge": {
     label: "Both lines falling, the upper one faster",
     art: (
@@ -362,10 +340,10 @@ export function hasGlyph(href: string): boolean {
  * the pipeline, so they cannot drift silently.
  */
 const SHORT_SCREENS = new Set([
-  "/screens/bear_flag", "/screens/rising_wedge", "/screens/descending_triangle",
+  "/screens/rising_wedge", "/screens/descending_triangle",
 ]);
 const LONG_SCREENS = new Set([
-  "/screens/bull_flag", "/screens/falling_wedge", "/screens/triangle",
+  "/screens/falling_wedge", "/screens/triangle",
   "/screens/squeeze",
 ]);
 

@@ -747,22 +747,6 @@ def _converging(sub, params):
     )
 
 
-def _flag(bullish: bool):
-    def finder(sub, params):
-        return shapemod.find_flag(
-            sub,
-            max_flag_sessions=int(params.get("max_flag_sessions", 7)),
-            min_flag_sessions=int(params.get("min_flag_sessions", 3)),
-            min_pole_pct=float(params.get("min_pole_pct", 10.0)),
-            max_pole_sessions=int(params.get("max_pole_sessions", 5)),
-            max_retrace=float(params.get("max_retrace", 0.50)),
-            max_channel_pct=float(params.get("max_channel_pct", 3.0)),
-            min_pole_volume=float(params.get("min_pole_volume", 1.0)),
-            bullish=bullish,
-        )
-    return finder
-
-
 def _squeeze(sub, params):
     return shapemod.find_squeeze(
         sub,
@@ -783,8 +767,6 @@ DETECTORS = {
     # rising wedge with a falling one would have half its "fresh" column
     # meaning a breakout and half meaning a breakdown, and the stage counts
     # would be the sum of two different things.
-    "bull_flag": _shape_screen({shapemod.BULL_FLAG}, stages.LONG, _flag(True)),
-    "bear_flag": _shape_screen({shapemod.BEAR_FLAG}, stages.SHORT, _flag(False)),
     "falling_wedge": _shape_screen({shapemod.FALLING_WEDGE}, stages.LONG, _converging),
     "rising_wedge": _shape_screen({shapemod.RISING_WEDGE}, stages.SHORT, _converging),
     "triangle": _shape_screen({shapemod.SYMMETRICAL, shapemod.ASCENDING},
@@ -805,8 +787,6 @@ SCREEN_DIRECTION = {
     "ipo": stages.LONG,
     "flat_base": stages.LONG,
     "cup_and_handle": stages.LONG,
-    "bull_flag": stages.LONG,
-    "bear_flag": stages.SHORT,
     "falling_wedge": stages.LONG,
     "rising_wedge": stages.SHORT,
     "triangle": stages.LONG,

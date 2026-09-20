@@ -102,15 +102,14 @@
   --screen-highs:       #1D7EED;   /* blue sky, IPO base */
   --screen-comeback:    #AA8EF6;   /* multi-year */
   --screen-classic:     #E212E2;   /* cup and handle */
-  /* The shape screens. Grouped by family the way the base screens are — two
-     flags share a hue, two wedges share one, two triangles share one — because
+  /* The shape screens. Grouped by family the way the base screens are: the
+     two wedges share a hue and the two triangles share one, because
      the thing the colour should tell you at a glance is what KIND of structure
      it is. Direction is already carried by the arrow beside the name, so
      spending a second colour channel on it would be saying the same thing
      twice and would collide with the gain/loss greens and reds. Squeeze gets
      a neutral: it is the one screen with no direction and no geometry, and a
      quiet colour is the honest description of it. */
-  --screen-flag:        #F97316;   /* bull flag, bear flag */
   --screen-wedge:       #2DD4BF;   /* falling wedge, rising wedge */
   --screen-triangle:    #818CF8;   /* triangle, descending triangle */
   --screen-squeeze:     #A8A29E;   /* squeeze */
@@ -248,7 +247,6 @@
   --screen-classic:     #D105B2;
   /* Darkened for light mode: the dark-mode values sit at 2:1 or worse on a
      near-white card, and these are read as small dots and 11px labels. */
-  --screen-flag:        #C2410C;
   --screen-wedge:       #0F766E;
   --screen-triangle:    #4F46E5;
   --screen-squeeze:     #78716C;

@@ -54,8 +54,6 @@ ASCENDING = "ascending_triangle"
 DESCENDING = "descending_triangle"
 RISING_WEDGE = "rising_wedge"
 FALLING_WEDGE = "falling_wedge"
-BULL_FLAG = "bull_flag"
-BEAR_FLAG = "bear_flag"
 SQUEEZE = "squeeze"
 
 #: Which way each shape is conventionally read. See DIRECTION above.
@@ -65,8 +63,6 @@ DIRECTION = {
     DESCENDING: "short",
     RISING_WEDGE: "short",
     FALLING_WEDGE: "long",
-    BULL_FLAG: "long",
-    BEAR_FLAG: "short",
     SQUEEZE: "long",           # directionless; the level taken is the ceiling
 }
 
@@ -83,10 +79,6 @@ CONVERGENCE_RATIO = 0.70
 # generous, and above 1.0 they are diverging.
 MIN_TOUCHES_PER_LINE = 2
 
-# How far a flag may trade beyond the end of its own pole. A flag is a pause
-# at the top of a move; a window that makes a materially higher high is still
-# in the move, and the pole was cut in the wrong place.
-FLAG_OVERSHOOT = 0.03
 
 # How much room to leave beyond the far side of a shape before calling it
 # broken. A stop sitting exactly on the low gets taken out by one wick on one
@@ -504,144 +496,6 @@ def find_converging(bars: list[Bar], lookback: int, threshold_pct: float = 3.0,
         sessions=end - start + 1,
         height=widest or None, stop=stop,
     )
-
-
-def find_flag(bars: list[Bar], max_flag_sessions: int = 7,
-              min_flag_sessions: int = 3, min_pole_pct: float = 10.0,
-              max_pole_sessions: int = 5, min_pole_sessions: int = 3,
-              max_retrace: float = 0.50,
-              max_channel_pct: float = 3.0,
-              min_pole_volume: float = 1.0,
-              ema_window: int = 20,
-              bullish: bool = True) -> Shape | None:
-    """A sharp run, then a shallow drift against it.
-
-    The pole is the point. A three-week sideways drift with nothing in front of
-    it is a pause, not a flag, and the thing that makes a flag worth naming is
-    that it interrupts a move rather than that it is narrow. So the pole is
-    measured first and the drift is only examined if one is there.
-
-    The drift must also go the RIGHT way: a bull flag drifts down or sideways
-    after a rise. A drift that keeps rising is not a flag, it is the advance
-    continuing, and calling it a flag would put every strong stock on the screen.
-    """
-    n = len(bars)
-    if n < max_pole_sessions + min_flag_sessions + 2:
-        return None
-
-    best: Shape | None = None
-    for flag_len in range(min_flag_sessions, max_flag_sessions + 1):
-        flag_start = n - flag_len
-        pole_end = flag_start - 1
-        if pole_end <= 0:
-            break
-        for pole_len in range(min_pole_sessions, max_pole_sessions + 1):
-            pole_start = pole_end - pole_len
-            if pole_start < 0:
-                break
-            a = bars[pole_start].close
-            b = bars[pole_end].close
-            if a <= 0:
-                continue
-            move = 100.0 * (b / a - 1.0)
-            if bullish and move < min_pole_pct:
-                continue
-            if not bullish and move > -min_pole_pct:
-                continue
-
-            flag_bars = bars[flag_start:]
-            flag_high = max(x.high for x in flag_bars)
-            flag_low = min(x.low for x in flag_bars)
-            pole_span = abs(b - a)
-            if pole_span <= 0:
-                continue
-
-            # How much of the pole the drift has given back.
-            retrace = ((b - flag_low) / pole_span if bullish
-                       else (flag_high - b) / pole_span)
-            if retrace < 0 or retrace > max_retrace:
-                continue
-
-            # The pole has to end at the pole's own extreme. Without this the
-            # window can be cut mid-advance: a "pole" ending halfway up the
-            # rally, and a "flag" that then swallows the rest of the rally AND
-            # the collapse after it. That case reached a retrace of exactly
-            # 0.50 by coincidence and was published as a bull flag — a 25-point
-            # decline wearing the name of a consolidation.
-            if bullish and flag_high > b * (1.0 + FLAG_OVERSHOOT):
-                continue
-            if not bullish and flag_low < b * (1.0 - FLAG_OVERSHOOT):
-                continue
-
-            # The flag has to be TIGHT. A drift that wanders 9% between its own
-            # high and low is a pullback, not a pause, whatever its retrace of
-            # the pole works out at.
-            if flag_high > 0:
-                channel = 100.0 * (flag_high - flag_low) / flag_high
-                if channel > max_channel_pct:
-                    continue
-
-            # The pole has to carry volume. A 10% move nobody traded is a gap
-            # or a thin print, and it is the volume that makes the advance
-            # evidence of anything.
-            pole_bars = bars[pole_start:pole_end + 1]
-            prior = [x.volume for x in bars[max(0, pole_start - 50):pole_start]
-                     if x.volume]
-            if prior and min_pole_volume > 0:
-                inside = [x.volume for x in pole_bars if x.volume]
-                normal = mean(prior)
-                if not inside or normal <= 0:
-                    continue
-                if (mean(inside) / normal) < min_pole_volume:
-                    continue
-
-            # And the flag has to hold the 20-day line — for a bull flag the
-            # close stays above it, for a bear flag below. A "pause" that has
-            # already lost its own short average is the move ending.
-            if ema_window:
-                line = ema([x.close for x in bars], ema_window)
-                level_ema = line[-1]
-                if level_ema is not None:
-                    if bullish and flag_bars[-1].close < level_ema:
-                        continue
-                    if not bullish and flag_bars[-1].close > level_ema:
-                        continue
-
-            # And that it drifts against the pole rather than extending it.
-            last = flag_bars[-1].close
-            if bullish and last > flag_bars[0].high:
-                continue
-            if not bullish and last < flag_bars[0].low:
-                continue
-
-            highs = [(flag_start + i, x.high) for i, x in enumerate(flag_bars)]
-            lows = [(flag_start + i, x.low) for i, x in enumerate(flag_bars)]
-            upper, lower = fit(highs), fit(lows)
-            if upper is None or lower is None:
-                continue
-
-            kind = BULL_FLAG if bullish else BEAR_FLAG
-            direction = DIRECTION[kind]
-            level = flag_high if bullish else flag_low
-            shape = Shape(
-                kind=kind, start_idx=flag_start, end_idx=n - 1,
-                upper=upper, lower=lower, level=level, direction=direction,
-                convergence=1.0,           # a flag is a channel, not a wedge
-                depth_pct=(100.0 * (flag_high - flag_low) / flag_high
-                           if flag_high > 0 else 0.0),
-                sessions=flag_len,
-                pole_pct=move, pole_sessions=pole_len,
-                # A flag projects the pole, not the flag: that is the whole
-                # arithmetic of the pattern.
-                height=abs(bars[pole_end].close - bars[pole_start].close) or None,
-                stop=((flag_low - _atr_pad(bars, n - 1)) if bullish
-                      else (flag_high + _atr_pad(bars, n - 1))),
-            )
-            # Prefer the biggest pole: the same drift after a 40% run is a more
-            # distinctive thing than after a 16% one.
-            if best is None or abs(move) > abs(best.pole_pct or 0.0):
-                best = shape
-    return best
 
 
 def bandwidth(bars: list[Bar], window: int = 20,
