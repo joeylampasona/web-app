@@ -24,9 +24,17 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import sys
 import urllib.error
 import urllib.request
+
+# Run as a script, sys.path[0] is tools/ rather than the repository root, so
+# `from data import store` fails and the flag sweep quietly reports that it
+# cannot import the pipeline. The root is one level up from this file.
+_ROOT = str(pathlib.Path(__file__).resolve().parent.parent)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 TIMEOUT = 30
 RULE = "─" * 68
@@ -201,10 +209,6 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
-
-
 def probe_flag_gates() -> None:
     """How each bull-flag gate cuts the field, on live prices.
 
@@ -259,3 +263,7 @@ def probe_flag_gates() -> None:
     for width in (3, 4, 5, 6, 8, 10, 12, 15, 20):
         print(f"      pause may wander {width:>2}% high-to-low          "
               f"{count(max_channel_pct=float(width)):4d}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
