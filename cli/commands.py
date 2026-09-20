@@ -587,7 +587,11 @@ def cmd_quotes(args) -> int:
         print("No published screens to quote. Run the nightly first.")
         return 1
 
-    symbols: set[str] = set()
+    # Nearest its pivot first. The file exists to answer "is this breaking out
+    # right now", and that question is live for a name sitting half a percent
+    # under its level and academic for one thirty per cent past it. A name on
+    # several screens keeps its closest reading.
+    distance: dict[str, float] = {}
     for path in sorted(screens.glob("*.json")):
         if path.stem == "diff":
             continue
@@ -597,15 +601,23 @@ def cmd_quotes(args) -> int:
             continue
         for stage in (payload.get("setups") or {}).values():
             for row in stage:
-                if row.get("symbol"):
-                    symbols.add(row["symbol"])
+                symbol = row.get("symbol")
+                if not symbol:
+                    continue
+                gap = row.get("now_vs_pivot_pct")
+                # No reading at all goes to the back rather than to the front,
+                # which is where a missing value sorted as zero would land it.
+                rank = abs(float(gap)) if gap is not None else 9_999.0
+                if symbol not in distance or rank < distance[symbol]:
+                    distance[symbol] = rank
 
-    if not symbols:
+    if not distance:
         print("The published screens list no names; nothing to quote.")
         return 1
 
-    _banner(f"Quotes — {len(symbols):,} names on a screen")
-    payload = quotesmod.collect(symbols, notice=lambda m: print(f"  → {m}", flush=True))
+    ordered = sorted(distance, key=lambda s: (distance[s], s))
+    _banner(f"Quotes — {len(ordered):,} names on a screen, nearest pivot first")
+    payload = quotesmod.collect(ordered, notice=lambda m: print(f"  → {m}", flush=True))
 
     target = pathlib.Path(args.out) if getattr(args, "out", None) else out / "quotes.json"
     target.parent.mkdir(parents=True, exist_ok=True)

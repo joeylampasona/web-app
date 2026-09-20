@@ -18,15 +18,34 @@ import datetime as dt
 
 from catalysts import cboe
 
-#: Names on no screen are not fetched. The file exists to answer "is this
-#: setup breaking out right now", and a stock that is not on a screen has
-#: nothing for the answer to be about.
-MAX_SYMBOLS = 900
+#: How many names one sweep will ask about. The cap has to leave the job
+#: finishing well inside its own cadence: at roughly half a second a name it
+#: is a few minutes, and a run still going when the next one starts is a run
+#: that never publishes.
+MAX_SYMBOLS = 600
 
 
 def collect(symbols, notice=None) -> dict:
-    """Fetch a delayed quote per symbol. Returns the published payload."""
-    wanted = sorted({s.upper() for s in symbols})[:MAX_SYMBOLS]
+    """Fetch a delayed quote per symbol. Returns the published payload.
+
+    `symbols` is taken in the order given and truncated, so the caller decides
+    who matters. That ordering is the whole design: the first sweep asked
+    alphabetically, which is a ranking by nothing, and spent its budget on the
+    letter A while the names actually near a breakout sat past the cut.
+    """
+    # Reset per call: these counts describe this sweep, and a process that
+    # fetched chains earlier would otherwise fold its own tally into them.
+    cboe.OUTCOMES.clear()
+    seen: set[str] = set()
+    wanted: list[str] = []
+    for symbol in symbols:
+        upper = str(symbol).upper()
+        if upper in seen:
+            continue
+        seen.add(upper)
+        wanted.append(upper)
+        if len(wanted) >= MAX_SYMBOLS:
+            break
     rows: dict[str, dict] = {}
     asked = 0
     for symbol in wanted:
@@ -38,8 +57,16 @@ def collect(symbols, notice=None) -> dict:
             rows[symbol] = found
 
     if notice:
+        # Always, not only on failure. A hit rate that quietly slides from
+        # ninety per cent to twelve is exactly what happened the first time
+        # this ran, and a bare success count cannot show it.
+        outcomes = ", ".join(f"{k} {v:,}" for k, v in
+                             sorted(cboe.OUTCOMES.items(), key=lambda kv: -kv[1]))
+        notice(f"quotes: outcomes — {outcomes or 'none recorded'}")
         if rows:
-            notice(f"quotes: {len(rows):,} of {len(wanted):,} names answered.")
+            share = 100.0 * len(rows) / max(1, len(wanted))
+            notice(f"quotes: {len(rows):,} of {len(wanted):,} names answered "
+                   f"({share:.0f}%).")
         else:
             # Loud for the usual reason: an empty quotes file and a market that
             # has not moved look identical from the outside.

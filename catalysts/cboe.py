@@ -18,6 +18,7 @@ than from documentation, because this surface has none worth the name.
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import logging
 import re
@@ -35,15 +36,28 @@ BASE = "https://cdn.cboe.com/api/global/delayed_quotes/options"
 QUOTE_BASE = "https://cdn.cboe.com/api/global/delayed_quotes/quotes"
 TIMEOUT = 30
 
-# A thousand-odd names go through here on a nightly, one request each. This is
-# a CDN and not a rate-limited API, but a thousand requests as fast as the
-# runner can issue them is rude and is the kind of thing that gets a free
-# source closed to everybody. A tenth of a second costs the stage under two
-# minutes and keeps it obviously well-behaved.
-PAUSE = 0.1
+# A thousand-odd names go through here, one request each. A tenth of a second
+# was too fast: the first intraday run answered for sixty names beginning with
+# A, nothing at all through B to M, then recovered at N — the signature of an
+# edge throttling a burst and then forgiving it. Nothing said so, because a
+# throttled request and a company with no listed options both came back as
+# None.
+PAUSE = 0.3
+
+# What a refusal looks like, and how long to stand back when one arrives.
+# Retried once only: if the source is pushing back, the answer is to slow down
+# and accept the miss, not to argue with it harder.
+THROTTLED = (429, 403, 503)
+THROTTLE_PAUSE = 5.0
 
 # One connection, reused. Establishing a TLS session per name would cost more
 # than the requests themselves.
+#: What happened to every request made in this process. Counted because the
+#: alternative already cost a day: a throttled request and a company with no
+#: listed options both return None, and without these the two are the same
+#: silence.
+OUTCOMES: "collections.Counter[str]" = collections.Counter()
+
 _SESSION: requests.Session | None = None
 _LOCK = threading.Lock()
 
@@ -99,21 +113,32 @@ def _fetch_json(url: str, symbol: str) -> dict | None:
     agent = (settings.get("edgar.user_agent")
              or settings.env("EDGAR_USER_AGENT", "")
              or "tape-research")
-    try:
-        response = _session().get(url, timeout=TIMEOUT, headers={
-            "User-Agent": str(agent),
-            "Accept": "application/json",
-        })
-        time.sleep(PAUSE)
-        if response.status_code != 200:
-            # 404 is ordinary: plenty of companies have no listed options.
-            if response.status_code != 404:
-                log.debug("cboe %s: HTTP %s", symbol, response.status_code)
+    headers = {"User-Agent": str(agent), "Accept": "application/json"}
+    for attempt in (1, 2):
+        try:
+            response = _session().get(url, timeout=TIMEOUT, headers=headers)
+            time.sleep(PAUSE)
+            code = response.status_code
+            if code == 200:
+                OUTCOMES["ok"] += 1
+                return response.json()
+            if code in THROTTLED and attempt == 1:
+                OUTCOMES["throttled"] += 1
+                time.sleep(THROTTLE_PAUSE)
+                continue
+            # 404 is ordinary: plenty of companies have no listed options and
+            # no quote here. It is the one miss that means something about the
+            # company rather than about us.
+            OUTCOMES["missing" if code == 404 else f"http_{code}"] += 1
+            if code != 404:
+                log.debug("cboe %s: HTTP %s", symbol, code)
             return None
-        return response.json()
-    except Exception as exc:                       # noqa: BLE001
-        log.debug("cboe %s: %s", symbol, exc)
-        return None
+        except Exception as exc:                   # noqa: BLE001
+            OUTCOMES["error"] += 1
+            log.debug("cboe %s: %s", symbol, exc)
+            return None
+    OUTCOMES["gave_up"] += 1
+    return None
 
 
 def quote(symbol: str) -> dict | None:
