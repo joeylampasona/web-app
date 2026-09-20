@@ -423,6 +423,12 @@ export interface Headline {
  *  article was filed against. One story usually names several. */
 export interface MarketHeadline extends Headline {
   tickers: string[];
+  /** "analysis" | "legal" | "release" — what sort of thing was published. */
+  kind?: string;
+  /** Per ticker: "setting_up", "failing", or null when it is on no screen. */
+  status?: Record<string, string | null>;
+  /** The article names one of the largest companies this site tracks. */
+  prominent?: boolean;
 }
 
 export interface NewsFile {

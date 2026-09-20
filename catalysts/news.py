@@ -35,7 +35,7 @@ def fetch(conn: sqlite3.Connection, since_days: int = 14,
           notice=None) -> int:
     """Pull recent market-wide articles into the cache. Returns rows written."""
     if settings.get("data.provider") == "synthetic":
-        return 0
+        return _synthetic(conn, notice)
 
     from data.adapters.polygon import PolygonError, PolygonGroupedAdapter
     adapter = PolygonGroupedAdapter()
@@ -175,3 +175,149 @@ def market_wide(by_symbol_rows: dict[str, list[dict]],
     for article in out:
         article["tickers"] = sorted(article["tickers"])
     return out[:limit]
+
+
+def _synthetic(conn: sqlite3.Connection, notice=None) -> int:
+    """Headlines for the offline fixture.
+
+    The fifth surface that could not be checked offline. Like the option spot,
+    the volume spikes, the insider filings and the analyst estimates, this
+    returned zero on the synthetic provider — so the news page, the home-page
+    news card and every classification built on a headline rendered empty on
+    every local build.
+
+    The shapes matter, not just the volume: the legal and press-release
+    headlines are here because the feed really does carry them and separating
+    them from company analysis is the reason the classifier exists. A fixture
+    with only clean analyst headlines could not test that at all.
+    """
+    import random                                  # noqa: PLC0415
+
+    from data import store                         # noqa: PLC0415
+
+    rng = random.Random(20260922)
+    symbols = [r[0] for r in conn.execute(
+        "SELECT symbol FROM universe WHERE passed = 1 ORDER BY symbol")]
+    if not symbols:
+        symbols = [r["symbol"] for r in store.ticker_rows(conn)][:400] \
+            if hasattr(store, "ticker_rows") else []
+    if not symbols:
+        return 0
+
+    publishers = ["Reuters", "Bloomberg", "Associated Press", "Barron's",
+                  "MarketWatch", "Investor's Business Daily", "The Wall Street "
+                  "Journal", "Seeking Alpha", "Benzinga", "GlobeNewswire",
+                  "Business Wire", "PR Newswire", "Zacks"]
+    analysis = [
+        "{sym} clears a three-month base on heavy volume",
+        "What {name} told investors about next quarter",
+        "{name} lifts guidance as orders accelerate",
+        "Analysts raise targets on {sym} after the print",
+        "{name} margins widen for a third straight quarter",
+        "{sym} names a new chief financial officer",
+        "Why {name} is outrunning its industry this year",
+        "{name} announces a $2bn buyback",
+        "{sym} slides as a rival takes share",
+        "{name} opens a second plant in Arizona",
+    ]
+    legal = [
+        "DEADLINE ALERT: Investors in {sym} with losses are urged to contact "
+        "counsel before the deadline",
+        "CLASS ACTION filed on behalf of {name} shareholders",
+        "{name} faces LAWSUIT over disclosures, firm says",
+        "SHAREHOLDER ALERT: Investigation into {sym} announced",
+        "INVESTOR DEADLINE approaching in the {name} securities litigation",
+    ]
+    releases = [
+        "{name} to present at the Cowen technology conference",
+        "{name} schedules third quarter results for next month",
+        "{name} declares a quarterly dividend of $0.24 per share",
+        "{name} completes acquisition of a logistics business",
+    ]
+
+    now = dt.datetime.now(dt.timezone.utc)
+    written = 0
+    for index in range(320):
+        symbol = rng.choice(symbols)
+        name = f"{symbol} Holdings"
+        roll = rng.random()
+        pool, publisher_pool = analysis, publishers[:9]
+        if roll > 0.82:
+            pool, publisher_pool = legal, publishers[9:12]
+        elif roll > 0.66:
+            pool, publisher_pool = releases, publishers[9:12]
+        title = rng.choice(pool).format(sym=symbol, name=name)
+        published = (now - dt.timedelta(
+            hours=rng.randint(0, 14 * 24), minutes=rng.randint(0, 59)))
+        tickers = [symbol]
+        if rng.random() < 0.25:
+            tickers.append(rng.choice(symbols))
+        conn.execute(
+            "INSERT OR REPLACE INTO news"
+            "(article_id, symbol, published_at, title, publisher, url, fetched_at)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (f"syn-{index}", tickers[0],
+             published.isoformat(timespec="seconds"), title,
+             rng.choice(publisher_pool),
+             f"https://example.invalid/{symbol.lower()}/{index}",
+             now.isoformat(timespec="seconds")))
+        written += 1
+        for extra in tickers[1:]:
+            conn.execute(
+                "INSERT OR REPLACE INTO news"
+                "(article_id, symbol, published_at, title, publisher, url, fetched_at)"
+                " VALUES (?,?,?,?,?,?,?)",
+                (f"syn-{index}", extra,
+                 published.isoformat(timespec="seconds"), title,
+                 rng.choice(publisher_pool),
+                 f"https://example.invalid/{symbol.lower()}/{index}",
+                 now.isoformat(timespec="seconds")))
+            written += 1
+    conn.commit()
+    if notice:
+        notice(f"news: {written:,} synthetic rows (fixture).")
+    return written
+
+
+# ---------------------------------------------------------------- kinds
+#
+# Three kinds of headline arrive in this feed and they are not the same thing
+# to a reader:
+#
+#   analysis   somebody wrote about the company
+#   legal      a law firm advertising for plaintiffs. "DEADLINE ALERT",
+#              "CLASS ACTION", "SHAREHOLDER ALERT" — these are paid wire
+#              releases, they cluster after any sharp fall, and there are often
+#              six of them for one event. They are not news about the business.
+#   release    the company's own wire: results dates, dividends, conferences.
+#              Factual, scheduled, and rarely a reason to do anything.
+#
+# Matched on the headline rather than the publisher, because the wires carry
+# all three. A publisher-based rule would throw away real reporting that
+# happened to cross PR Newswire.
+
+LEGAL_MARKERS = (
+    "deadline alert", "class action", "shareholder alert", "investor alert",
+    "securities litigation", "investor deadline", "lawsuit", "investigation into",
+    "law firm", "investors with losses", "class period",
+)
+
+RELEASE_MARKERS = (
+    "to present at", "schedules", "declares a quarterly dividend",
+    "announces the date", "conference call", "to report", "annual meeting",
+    "completes acquisition", "appoints", "to participate in",
+)
+
+ANALYSIS = "analysis"
+LEGAL = "legal"
+RELEASE = "release"
+
+
+def classify_headline(title: str) -> str:
+    """Which of the three a headline is. Cheap, deterministic, checkable."""
+    lowered = (title or "").lower()
+    if any(marker in lowered for marker in LEGAL_MARKERS):
+        return LEGAL
+    if any(marker in lowered for marker in RELEASE_MARKERS):
+        return RELEASE
+    return ANALYSIS

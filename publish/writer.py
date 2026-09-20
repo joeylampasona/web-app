@@ -241,7 +241,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # the news endpoint is queried market-wide once a night regardless.
     written.append(_write(out / "news.json", {
         "as_of": as_of.isoformat(),
-        "articles": newsmod.market_wide(news or {}),
+        "articles": _news_articles(newsmod.market_wide(news or {}), market, result),
     }))
 
     # Broad-market indexes and the regime check, for the home page. Both are
@@ -584,6 +584,61 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
     payload["members_detail"] = members
     return payload
 
+
+# How far down the market-cap ranking still counts as a name most readers
+# recognise. Not a hardcoded list of tickers: that would need maintaining and
+# would be wrong within a quarter.
+NEWS_LARGE_CAP_RANK = 25
+
+
+def _news_articles(articles: list[dict], market: Market,
+                   result: scan.ScanResult) -> list[dict]:
+    """Headlines, with the context the site already knows about their tickers.
+
+    Three additions, all of them facts this site holds anyway:
+
+      kind          analysis, a law firm's wire, or the company's own release
+      status        per ticker: setting up, broke down, or neither
+      prominent     the article names one of the largest companies we track
+
+    None of this ranks or scores the articles. The order stays the order they
+    were published, which remains the only ordering here that is a fact.
+    """
+    live = {stages.FORMING, stages.FRESH, stages.CLIMBING}
+    setting_up: set[str] = set()
+    failing: set[str] = set()
+    for setup in result.all_setups():
+        if setup.direction == stages.SHORT:
+            # A short setup resolving is a breakdown; it belongs with failing
+            # rather than with names that are setting up to rise.
+            if setup.stage in live:
+                failing.add(setup.symbol)
+            continue
+        if setup.stage in live:
+            setting_up.add(setup.symbol)
+        elif setup.stage == stages.PLAYED_OUT:
+            failing.add(setup.symbol)
+        if "failed_poke" in (setup.flags or []):
+            failing.add(setup.symbol)
+    # A name doing both is setting up: the live structure is the current state
+    # and the played-out one is history.
+    failing -= setting_up
+
+    ranked = sorted(market.caps.items(), key=lambda kv: -(kv[1] or 0.0))
+    prominent = {symbol for symbol, _ in ranked[:NEWS_LARGE_CAP_RANK]}
+
+    out: list[dict] = []
+    for article in articles:
+        tickers = article.get("tickers") or []
+        out.append({
+            **article,
+            "kind": newsmod.classify_headline(article.get("title", "")),
+            "status": {t: ("setting_up" if t in setting_up
+                           else "failing" if t in failing else None)
+                       for t in tickers},
+            "prominent": any(t in prominent for t in tickers),
+        })
+    return out
 
 def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    setups_by_symbol: dict, calendar: ev.Calendar, bar_limit: int,
