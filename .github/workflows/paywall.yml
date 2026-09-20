@@ -1,0 +1,37 @@
+# Does the paywall actually withhold?
+#
+# Runs on every push and every night. It asks for gated content the way an
+# outsider would — no token, a nonsense token, the public anon key — and fails
+# if any of them comes back with content.
+#
+# It exists because the gate already on this site shipped the data it was
+# hiding: the page said "account needed" and the withheld numbers were in the
+# same HTML. That was invisible for weeks and was found by measuring rather
+# than by reading, so the measurement is the part worth keeping.
+name: Paywall holds
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+jobs:
+  withholds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Ask for what should be refused
+        env:
+          # Both are public by design: the anon key identifies the project,
+          # not a person, and the point of this check is that holding it
+          # grants nothing. No service-role key appears here, and if one ever
+          # does the check stops meaning anything.
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: python tools/check_paywall.py

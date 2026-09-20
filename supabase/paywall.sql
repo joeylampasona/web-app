@@ -93,3 +93,44 @@ grant execute on function public.is_subscriber() to authenticated, anon;
 comment on function public.is_subscriber() is
   'True when the caller has a live subscription or trial. The single source of '
   'truth for entitlement; policies and server routes both use it.';
+
+-- ------------------------------------------------------------ gated content
+
+-- Content that only subscribers may read.
+--
+-- One table of documents rather than a table per section, because the
+-- pipeline already produces exactly this: named JSON files. Keeping that shape
+-- means the nightly writes what it already has and the website asks for a path
+-- it already knows, with no translation layer in between to disagree with
+-- either of them.
+--
+-- The important line is the policy. Entitlement is checked by the database on
+-- every row, not by a server route that might forget — and there is no server
+-- route on this site today that authenticates at all, so relying on one to be
+-- written correctly would be the weaker half of this design.
+create table if not exists public.gated_content (
+  -- The path the pipeline would have written to, e.g. 'market/gamma.json'.
+  path        text primary key,
+  payload     jsonb not null,
+  -- The session the content describes, so a stale row can be spotted without
+  -- parsing the payload.
+  as_of       date,
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists gated_content_as_of_idx
+  on public.gated_content (as_of);
+
+alter table public.gated_content enable row level security;
+
+-- Subscribers read. Everyone else gets zero rows — not an error, which would
+-- leak the fact that the row exists, but an empty result.
+drop policy if exists "subscribers read gated content" on public.gated_content;
+create policy "subscribers read gated content" on public.gated_content
+  for select
+  using (public.is_subscriber());
+
+-- No insert, update or delete policy, deliberately, exactly as with
+-- subscriptions. The nightly writes these rows with the service-role key,
+-- which bypasses row-level security; nothing holding the anon key can write
+-- here, including a subscriber.
