@@ -19,11 +19,12 @@ than from documentation, because this surface has none worth the name.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
 import re
-import urllib.error
-import urllib.request
+import threading
+import time
+
+import requests
 
 from data import settings
 from data.types import OptionChain, OptionContract, OptionExpiry
@@ -32,6 +33,26 @@ log = logging.getLogger(__name__)
 
 BASE = "https://cdn.cboe.com/api/global/delayed_quotes/options"
 TIMEOUT = 30
+
+# A thousand-odd names go through here on a nightly, one request each. This is
+# a CDN and not a rate-limited API, but a thousand requests as fast as the
+# runner can issue them is rude and is the kind of thing that gets a free
+# source closed to everybody. A tenth of a second costs the stage under two
+# minutes and keeps it obviously well-behaved.
+PAUSE = 0.1
+
+# One connection, reused. Establishing a TLS session per name would cost more
+# than the requests themselves.
+_SESSION: requests.Session | None = None
+_LOCK = threading.Lock()
+
+
+def _session() -> requests.Session:
+    global _SESSION                                # noqa: PLW0603
+    with _LOCK:
+        if _SESSION is None:
+            _SESSION = requests.Session()
+        return _SESSION
 
 # How many near-the-money contracts make up an expiry's implied-volatility
 # reading. Matches what the previous source used, so the High IV screen does
@@ -74,18 +95,18 @@ def _fetch(symbol: str) -> dict | None:
     agent = (settings.get("edgar.user_agent")
              or settings.env("EDGAR_USER_AGENT", "")
              or "tape-research")
-    request = urllib.request.Request(url, headers={
-        "User-Agent": str(agent),
-        "Accept": "application/json",
-    })
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        # 404 is ordinary: plenty of companies have no listed options.
-        if exc.code != 404:
-            log.debug("cboe %s: HTTP %s", symbol, exc.code)
-        return None
+        response = _session().get(url, timeout=TIMEOUT, headers={
+            "User-Agent": str(agent),
+            "Accept": "application/json",
+        })
+        time.sleep(PAUSE)
+        if response.status_code != 200:
+            # 404 is ordinary: plenty of companies have no listed options.
+            if response.status_code != 404:
+                log.debug("cboe %s: HTTP %s", symbol, response.status_code)
+            return None
+        return response.json()
     except Exception as exc:                       # noqa: BLE001
         log.debug("cboe %s: %s", symbol, exc)
         return None
