@@ -591,25 +591,53 @@ def cmd_quotes(args) -> int:
     # right now", and that question is live for a name sitting half a percent
     # under its level and academic for one thirty per cent past it. A name on
     # several screens keeps its closest reading.
+    from publish import gated as gatedmod
+
     distance: dict[str, float] = {}
-    for path in sorted(screens.glob("*.json")):
-        if path.stem == "diff":
-            continue
-        try:
-            payload = json.loads(path.read_text())
-        except (OSError, ValueError):
-            continue
+    free: set[str] = set()
+
+    def absorb(payload: dict, public: bool) -> None:
         for stage in (payload.get("setups") or {}).values():
             for row in stage:
                 symbol = row.get("symbol")
                 if not symbol:
                     continue
+                if public:
+                    free.add(symbol)
                 gap = row.get("now_vs_pivot_pct")
                 # No reading at all goes to the back rather than to the front,
                 # which is where a missing value sorted as zero would land it.
                 rank = abs(float(gap)) if gap is not None else 9_999.0
                 if symbol not in distance or rank < distance[symbol]:
                     distance[symbol] = rank
+
+    for path in sorted(screens.glob("*.json")):
+        if path.stem == "diff":
+            continue
+        try:
+            absorb(json.loads(path.read_text()), public=True)
+        except (OSError, ValueError):
+            continue
+
+    # The published screens are the free sample now, so reading only those
+    # would quote the free names and leave a subscriber's own rows as the only
+    # ones on the page with no live price — the paid half of the product with
+    # worse data than the free half. So the full lists are read back from the
+    # gated store, and the result is split the same way everything else is.
+    gated_screens = gatedmod.fetch("screens/")
+    for payload in gated_screens.values():
+        absorb(payload, public=False)
+    if gated_screens:
+        print(f"  read {len(gated_screens)} gated screen list(s); "
+              f"{len(distance) - len(free)} name(s) beyond the free sample")
+    elif any((json.loads(p.read_text()).get("gated")
+              for p in screens.glob("*.json") if p.stem != "diff")):
+        # Loud, because the failure is invisible in the output: the sweep
+        # succeeds, publishes a shorter file, and nothing says the subscriber
+        # half is missing.
+        print("  WARNING: the screens are gated but the gated store could not "
+              "be read. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or "
+              "subscribers get no intraday price on the names they paid for.")
 
     if not distance:
         print("The published screens list no names; nothing to quote.")
@@ -619,13 +647,36 @@ def cmd_quotes(args) -> int:
     _banner(f"Quotes — {len(ordered):,} names on a screen, nearest pivot first")
     payload = quotesmod.collect(ordered, notice=lambda m: print(f"  → {m}", flush=True))
 
+    quotes = payload.get("quotes") or {}
+    locked = {symbol: quote for symbol, quote in quotes.items()
+              if symbol not in free}
+    payload["quotes"] = {symbol: quote for symbol, quote in quotes.items()
+                         if symbol in free}
+    payload["count"] = len(payload["quotes"])
+    payload["gated_count"] = len(locked)
+
     target = pathlib.Path(args.out) if getattr(args, "out", None) else out / "quotes.json"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(payload, separators=(",", ":")))
-    print(f"  wrote {target} — {payload['count']:,} quotes")
+    print(f"  wrote {target} — {payload['count']:,} public quotes")
+
+    if locked:
+        document = gatedmod.Document(
+            "market/quotes.json",
+            {**{k: v for k, v in payload.items() if k != "quotes"},
+             "count": len(locked), "quotes": locked},
+            dt.date.today())
+        # sweep=False, and it matters. This writes under market/, the delete is
+        # by prefix and date, and a Monday run sweeping market/ would remove
+        # Friday's gamma and seasonals for carrying an older session.
+        report = gatedmod.upload([document], dt.date.today(), sweep=False)
+        print(f"  {report.render()}")
+        if report.configured and not report.ok:
+            return 1
+
     # A file of nothing is worse than no file: the page would show a delayed
     # price section that is permanently empty and say nothing about why.
-    return 0 if payload["count"] else 1
+    return 0 if (payload["count"] or locked) else 1
 
 
 def cmd_publish(args) -> int:

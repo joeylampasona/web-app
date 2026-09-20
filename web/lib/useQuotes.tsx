@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useAuth } from "./auth";
+import { client } from "./supabase";
 
 /** One delayed price. `change_pct` is null when there is no previous close to
  *  compare against — which is not the same as unchanged. */
@@ -30,17 +32,40 @@ const POLL_MS = 7 * 60 * 1000;
 
 export function QuotesProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<QuoteSet>(EMPTY);
+  const { signedIn, ready: authReady } = useAuth();
 
   useEffect(() => {
     let alive = true;
+
+    /** The names a subscriber can see on a screen and a free reader cannot.
+     *  Fetched separately because they are published separately — the public
+     *  file carries the free sample's prices and nothing else, so without this
+     *  the paid half of every screen would be the only rows on the page with
+     *  no live price beside them. */
+    const paid = async (): Promise<Record<string, Quote>> => {
+      const supabase = client();
+      if (!supabase || !signedIn) return {};
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return {};
+      const response = await fetch("/api/gated?path=market%2Fquotes.json", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!response.ok) return {};
+      const body = await response.json();
+      return (body?.payload?.quotes ?? {}) as Record<string, Quote>;
+    };
+
     const load = async () => {
       try {
         const response = await fetch("/api/quotes");
         if (!response.ok) throw new Error(String(response.status));
         const body = await response.json();
+        // Not Promise.all: a failure here must not lose the public quotes,
+        // which are the ones every reader gets.
+        const extra = await paid().catch(() => ({}));
         if (!alive) return;
         setState({
-          quotes: body.quotes ?? {},
+          quotes: { ...(body.quotes ?? {}), ...extra },
           fetched_at: body.fetched_at ?? null,
           ready: true,
         });
@@ -50,13 +75,14 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
         if (alive) setState((prev) => ({ ...prev, ready: true }));
       }
     };
+    if (!authReady) return;
     load();
     const timer = setInterval(load, POLL_MS);
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [signedIn, authReady]);
 
   return <QuotesContext.Provider value={state}>{children}</QuotesContext.Provider>;
 }

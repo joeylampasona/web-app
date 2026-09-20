@@ -371,7 +371,34 @@ class Upload:
         return "\n".join(lines)
 
 
-def upload(documents: list[Document], as_of: dt.date) -> Upload:
+def fetch(prefix: str) -> dict[str, Any]:
+    """Read back gated documents under a path prefix, as the writer.
+
+    For the jobs that need to know what was gated — the intraday sweep has to
+    quote the names the public screens no longer list, or a subscriber's own
+    rows are the only ones on the page without a live price.
+    """
+    url = (os.environ.get("SUPABASE_URL")
+           or os.environ.get("NEXT_PUBLIC_SUPABASE_URL") or "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or ""
+    if not url or not key:
+        return {}
+    status, body = _call(
+        "GET",
+        f"{url}/rest/v1/{TABLE}?select=path,payload&path=like.{prefix}*",
+        key)
+    if status != 200:
+        return {}
+    try:
+        rows = json.loads(body)
+    except ValueError:
+        return {}
+    return {row["path"]: row["payload"] for row in rows
+            if isinstance(row, dict) and "path" in row}
+
+
+def upload(documents: list[Document], as_of: dt.date,
+           sweep: bool = True) -> Upload:
     """Upsert tonight's documents and delete anything left over from before.
 
     The delete is not housekeeping. Without it a name that drops out of the
@@ -406,6 +433,14 @@ def upload(documents: list[Document], as_of: dt.date) -> Upload:
             report.problems.append(
                 f"writing {len(batch)} document(s) starting at "
                 f"{batch[0]['path']}: HTTP {status} {body[:200]}")
+
+    if not sweep:
+        # For a writer that owns a fixed set of paths and overwrites them in
+        # place — the intraday sweep writes one. Letting it sweep would be a
+        # quiet disaster: it writes under market/, and the delete is by prefix
+        # and date, so a Monday quote run would remove Friday's gamma and
+        # seasonals for carrying an older session.
+        return report
 
     # Not after a failed write. The sweep deletes what tonight's upload was
     # supposed to replace, so running it when some of that upload did not land

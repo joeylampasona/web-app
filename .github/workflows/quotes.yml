@@ -53,6 +53,15 @@ jobs:
           echo "screens: $(ls out/screens/*.json 2>/dev/null | wc -l | tr -d ' ')"
 
       - name: Fetch delayed quotes
+        env:
+          # The data branch carries the free sample of each screen now, so the
+          # full lists are read back from the gated store to decide who to
+          # quote — otherwise a subscriber's own rows are the only ones on the
+          # page without a live price, and the paid half of the product has
+          # worse data than the free half. The result is split the same way:
+          # free names to the quotes branch, the rest to gated_content.
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python -m cli quotes
 
       - name: Publish to the quotes branch

@@ -242,6 +242,16 @@ Fresh breakouts are never trimmed. That stage is the daily feed, it is
 published separately for the home page anyway, and it is how the site is
 found.
 
+The intraday quote sweep is split the same way. It reads the free lists from
+the data branch and the rest from the gated store, quotes every name on a
+screen, and writes the free ones to the `quotes` branch and the rest to
+`gated_content`. Without that second half the paid rows would be the only ones
+on a screen with no live price beside them — the subscriber half of the
+product carrying worse data than the free half. It uploads with the stale-row
+sweep turned off, deliberately: it writes under `market/`, the sweep deletes
+by prefix and date, and a Monday quote run sweeping `market/` would remove
+Friday's gamma and seasonals for carrying an older session.
+
 **One path is left open, knowingly.** A stock's own page still carries its own
 setup and stage, so fetching all five hundred of them rebuilds the screen
 lists. The aggregate files are closed — the search index and the industry and
