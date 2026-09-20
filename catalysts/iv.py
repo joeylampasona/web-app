@@ -51,6 +51,32 @@ class IVRow:
             "week_of": self.week_of, "neighbours": self.neighbours,
         }
 
+    @classmethod
+    def from_json(cls, payload: dict, as_of: dt.date | None = None) -> "IVRow":
+        """Rebuild a row from its published form.
+
+        `as_of`, when given, re-dates the countdown against that session rather
+        than trusting the one stored with the row. A row read back on a later
+        session would otherwise say "in 27 days" about a date that is now 26
+        away, which is the kind of small lie that survives for weeks because
+        nothing ever contradicts it.
+        """
+        event_date = dt.date.fromisoformat(payload["event_date"])
+        days = (payload["days_until"] if as_of is None
+                else (event_date - as_of).days)
+        return cls(
+            ticker=payload["ticker"], name=payload["name"],
+            event_type=payload["event_type"], event_label=payload["event_label"],
+            event_date=event_date, confirmed=payload["confirmed"],
+            days_until=days,
+            catalyst_expiry=dt.date.fromisoformat(payload["catalyst_expiry"]),
+            catalyst_iv=float(payload["catalyst_iv"]),
+            neighbour_iv=float(payload["neighbour_iv"]),
+            iv_richness=float(payload["iv_richness"]),
+            iv_band=payload["iv_band"], dots=int(payload["dots"]),
+            week_of=payload["week_of"], neighbours=payload.get("neighbours") or [],
+        )
+
 
 BAND_LABELS = {"very_high": "Very high", "high": "High",
                "moderate": "Moderate", "low": "Low"}
@@ -81,7 +107,8 @@ def _bracketing(chain: OptionChain, target: dt.date):
 
 def compute(calendar: Calendar, symbols, names: dict[str, str],
             adapter: DataAdapter | None = None,
-            gamma_out: dict | None = None) -> list[IVRow]:
+            gamma_out: dict | None = None,
+            stats: dict | None = None) -> list[IVRow]:
     """Implied-volatility richness per name, and optionally gamma alongside it.
 
     `gamma_out`, when given, is filled with one GammaProfile per symbol whose
@@ -89,25 +116,49 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
     second return value because the chain download is the expensive part of
     this stage and both readings come from it: asking for gamma separately
     would fetch every chain twice.
+
+    `stats`, when given, is filled with counts of what happened on the way.
+    Without it, "no name returned usable open interest" is a true statement
+    covering two completely different faults — nobody answered the phone, or
+    everybody answered and none of them had the field — and the fix differs.
+    The counts cost nothing and are the difference between a diagnosis and a
+    guess the next time this section renders empty.
     """
     from catalysts import gamma as gammamod          # noqa: PLC0415 - avoids a cycle
     from data import settings as settingsmod         # noqa: PLC0415
 
     adapter = adapter or get_adapter()
     rate = float(settingsmod.get("catalysts.risk_free_rate", 0.0) or 0.0)
+    counts = stats if stats is not None else {}
+    for key in ("asked", "no_event", "chain_none", "chain_error",
+                "chain_empty", "chain_ok", "gamma_ok"):
+        counts.setdefault(key, 0)
+
     rows: list[IVRow] = []
     for symbol in sorted(set(symbols)):
+        counts["asked"] += 1
         event: Event | None = calendar.next_owned(symbol)
         if event is None:
+            counts["no_event"] += 1
             continue                              # rule 3
         try:
             chain = adapter.get_option_chain(symbol)
         except NotImplementedError:
             chain = None
         except Exception:                         # noqa: BLE001
+            # Still swallowed -- one bad name must not end the sweep -- but no
+            # longer invisible. This branch firing for every name is what a
+            # throttled night looks like, and it used to be indistinguishable
+            # from a market with no listed options.
+            counts["chain_error"] += 1
             chain = None
         if chain is None:
+            counts["chain_none"] += 1
             continue
+        if not chain.rows:
+            counts["chain_empty"] += 1
+        else:
+            counts["chain_ok"] += 1
         # Before the IV-specific tests below. A chain whose expiries do not
         # bracket the event still has open interest at strikes, and that is a
         # separate reading from whether the event is priced richly.
@@ -115,6 +166,7 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
             found = gammamod.profile(chain, calendar.as_of, rate)
             if found is not None:
                 gamma_out[symbol] = found
+                counts["gamma_ok"] += 1
         if not chain.expiries:
             continue
         bracket, neighbours = _bracketing(chain, event.date)
@@ -150,3 +202,75 @@ COPY = {
     "footer": "Macro days — CPI, FOMC, payrolls — are skipped. They light up the whole "
               "tape and tell you nothing about one name.",
 }
+
+
+# How long a stored set stays usable. Implied volatility moves daily, so an
+# old set is a worse answer than a fresh one — but it is a far better answer
+# than the empty page a throttled night produces, and the rows carry their own
+# session so the site can say which night they describe.
+MAX_AGE_DAYS = 4
+
+#: One blob in the existing kv table rather than a table of its own. These rows
+#: are written whole, read whole, and never queried by column, so a table would
+#: be a schema change earning nothing.
+KV_KEY = "iv.rows"
+
+
+def store(conn, rows: list[IVRow], as_of: dt.date) -> int:
+    """Keep what was computed, so publish never has to fetch it again.
+
+    The catalysts stage reaches the network and publish does not — the same
+    split gamma, forecasts and the earnings cache already use. Implied
+    volatility was the one reading that ignored it: `compute` ran in both
+    stages, so a night Yahoo throttled the second run published zero rows over
+    the several hundred the first run had just found, and every step went
+    green. That is what this exists to stop.
+    """
+    import json                                   # noqa: PLC0415
+
+    payload = {
+        "as_of": as_of.isoformat(),
+        "stored_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "rows": [r.to_json() for r in rows],
+    }
+    from data import store as storemod            # noqa: PLC0415
+    storemod.set_kv(conn, KV_KEY, json.dumps(payload, separators=(",", ":")))
+    return len(rows)
+
+
+def load(conn, as_of: dt.date, max_age_days: int = MAX_AGE_DAYS
+         ) -> tuple[list[IVRow], dt.date | None]:
+    """Stored rows, and the session they describe.
+
+    Returns an empty list and None when there is nothing usable, which the
+    caller must be able to tell apart from "the market has no rich options" —
+    the reason the session comes back alongside the rows rather than being
+    buried in them.
+
+    Rows whose event has already passed are dropped: a countdown that has run
+    out is not a catalyst, and re-dating it would print a negative.
+    """
+    import json                                   # noqa: PLC0415
+    from data import store as storemod            # noqa: PLC0415
+
+    raw = storemod.get_kv(conn, KV_KEY, "")
+    if not raw:
+        return [], None
+    try:
+        payload = json.loads(raw)
+        stored_as_of = dt.date.fromisoformat(payload["as_of"])
+    except (TypeError, ValueError, KeyError):
+        return [], None
+    if (as_of - stored_as_of).days > max_age_days:
+        return [], None
+
+    out: list[IVRow] = []
+    for item in payload.get("rows") or []:
+        try:
+            row = IVRow.from_json(item, as_of=as_of)
+        except (TypeError, ValueError, KeyError):
+            continue
+        if row.days_until < 0:
+            continue
+        out.append(row)
+    return out, stored_as_of

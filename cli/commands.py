@@ -320,7 +320,19 @@ def cmd_catalysts(args) -> int:
 
     from catalysts import gamma as gammamod
     gamma_profiles: dict = {}
-    rows = ivmod.compute(calendar, population, names, adapter, gamma_out=gamma_profiles)
+    iv_stats: dict = {}
+    rows = ivmod.compute(calendar, population, names, adapter,
+                         gamma_out=gamma_profiles, stats=iv_stats)
+    # Persist before printing. This is the only stage allowed to reach the
+    # network, so if these rows are not kept here they do not exist.
+    if rows:
+        ivmod.store(conn, rows, market.as_of)
+    else:
+        # Same reasoning as the gamma notice below: an empty High IV page and a
+        # market with no rich options look identical from the outside.
+        print("  → implied volatility: no name returned a usable chain. The "
+              "High IV section will fall back to the last stored night.",
+              flush=True)
     if gamma_profiles:
         kept = gammamod.store(conn, gamma_profiles)
         total_oi = sum(g.open_interest for g in gamma_profiles.values())
@@ -331,6 +343,15 @@ def cmd_catalysts(args) -> int:
         # everything reports fine. Open interest is the field most likely to
         # arrive as NaN, and a silent zero here looks identical to a market
         # with no options in it.
+        # Which of the two it is, in numbers. "Either ... or" was honest and
+        # useless: the fix for a throttled source and a source that dropped a
+        # field are different, and a night of counts settles it in one line.
+        print(f"  → gamma: of {iv_stats.get('asked', 0):,} names asked, "
+              f"{iv_stats.get('no_event', 0):,} had no dated event, "
+              f"{iv_stats.get('chain_error', 0):,} errored, "
+              f"{iv_stats.get('chain_none', 0):,} returned nothing, "
+              f"{iv_stats.get('chain_empty', 0):,} came back with no rows, "
+              f"{iv_stats.get('chain_ok', 0):,} carried rows.", flush=True)
         print("  → gamma: no name returned usable open interest. Either the "
               "source stopped supplying it or every chain was empty — the "
               "gamma section will be blank.", flush=True)
@@ -475,9 +496,22 @@ def _pipeline(conn, with_followthrough: bool = True):
     calendar = ev.build(market, market.universe, adapter, desk_earnings=desk_dates,
                         conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
     ev.attach(calendar, result.all_setups())
-    names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
-    iv_rows = ivmod.compute(calendar, population, names, adapter)
     # Read, never fetch: publish must not depend on Yahoo being up.
+    #
+    # This line used to call ivmod.compute, which fetches. It therefore asked
+    # Yahoo for several hundred option chains a second time, minutes after the
+    # catalysts stage had already asked for them — and on a night Yahoo
+    # answered the second run with HTTP 429, every chain came back None, the
+    # bare `except` inside compute swallowed it, and publish wrote zero rows
+    # over the 567 the catalysts stage had just found. Every step reported
+    # success.
+    iv_rows, iv_as_of = ivmod.load(conn, market.as_of)
+    if iv_as_of is not None and iv_as_of < market.as_of:
+        print(f"  → implied volatility: using the {iv_as_of} set, "
+              f"the most recent one stored.", flush=True)
+    elif not iv_rows:
+        print("  → implied volatility: nothing stored; the High IV section "
+              "will be empty. Run the catalysts stage.", flush=True)
     from catalysts import gamma as gammamod
     gamma_rows = gammamod.load(conn, market.universe, market.as_of)
     from catalysts import forecast as forecastmod
