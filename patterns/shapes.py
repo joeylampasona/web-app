@@ -546,8 +546,11 @@ def find_flag(bars: list[Bar], max_flag_sessions: int = 7,
     it: a stock that has just moved 10% in four days is by construction a
     volatile stock, and one ordinary session breaks a 3% band. Seven of every
     eight candidates died on that test alone, and the screen listed two names.
-    Eight percent recovers essentially all of them; past eight the count stops
-    moving, so it is the point where loosening stops buying anything.
+    Eight is the ceiling the pole itself implies: the smallest advance that
+    qualifies is ten per cent, so a pause permitted to swing wider than that is
+    not a pause. Loosening past eight does keep finding names — sixteen at
+    eight, twenty-one at twelve, measured on live prices — but those are the
+    ones where the pause is as violent as the advance.
 
     The bear mirror is deliberately absent. It found nothing, the site has no
     short-side machinery, and the argument for keeping this one — that a strong

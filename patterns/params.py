@@ -273,12 +273,16 @@ _MAX_CHANNEL = ParamSpec(
     kind="percent", default=8.0, minimum=1.0, maximum=20.0, step=0.5, unit="%",
     funnel_title="The pause is orderly",
     funnel_text="High to low across the pause is no more than {value}%.",
-    help="The pause should be calmer than the run that caused it, but not by "
-         "much: a stock that has just moved ten per cent in four days is a "
-         "volatile stock, and one ordinary session will break a narrow band. "
-         "At three per cent this test alone removed seven of every eight "
-         "candidates and the screen listed two names in the whole market. "
-         "Past eight per cent, loosening it stops finding anything new.")
+    help="The pause has to be calmer than the run that caused it, and the run "
+         "is at least ten per cent — so a pause allowed to swing wider than "
+         "that is not a pause, it is the move breaking down. Eight leaves "
+         "margin under the smallest pole that qualifies. Loosening further "
+         "does keep finding names (sixteen at eight per cent, twenty-one at "
+         "twelve), but they are the ones where the pause is as violent as the "
+         "advance, which is the thing this screen is supposed to exclude. "
+         "Three per cent was the opposite mistake: it asked the pause to be "
+         "calmer than any real stock manages and left two names on the whole "
+         "market.")
 
 _POLE_VOLUME = ParamSpec(
     key="min_pole_volume", label="Volume through the pole", kind="number",
