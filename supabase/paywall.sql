@@ -41,6 +41,21 @@ create table if not exists public.subscriptions (
   updated_at              timestamptz not null default now()
 );
 
+-- Access that no payment is behind: your own account, a friend, a reviewer, a
+-- competition prize. Separate from `status` on purpose. Stripe owns that
+-- column and overwrites it on every webhook, so a comp written into it would
+-- survive exactly until the person's card expired or they cancelled a trial
+-- they never started. This column is written by hand and by nothing else, and
+-- the webhook's upsert names its columns explicitly, so it cannot touch this
+-- one even by accident.
+alter table public.subscriptions
+  add column if not exists comped boolean not null default false;
+
+-- Why, and for whom. Free text, for the person reading this table in a year
+-- wondering who these people are.
+alter table public.subscriptions
+  add column if not exists comped_note text;
+
 create index if not exists subscriptions_status_idx
   on public.subscriptions (status);
 
@@ -76,14 +91,20 @@ as $$
     select 1
     from public.subscriptions s
     where s.user_id = auth.uid()
-      -- past_due is deliberately included. A card that failed this morning is
-      -- a billing problem, not a reason to lock someone out of something they
-      -- have paid for all year; Stripe moves them to canceled or unpaid when
-      -- it gives up, and those are excluded.
-      and s.status in ('trialing', 'active', 'past_due')
-      -- A period end in the past means Stripe has not told us anything since
-      -- it lapsed. Treat silence as expired rather than as still valid.
-      and (s.current_period_end is null or s.current_period_end > now())
+      and (
+        -- Granted by hand, and not subject to anything Stripe has to say.
+        s.comped
+        or (
+          -- past_due is deliberately included. A card that failed this morning
+          -- is a billing problem, not a reason to lock someone out of
+          -- something they have paid for all year; Stripe moves them to
+          -- canceled or unpaid when it gives up, and those are excluded.
+          s.status in ('trialing', 'active', 'past_due')
+          -- A period end in the past means Stripe has not told us anything
+          -- since it lapsed. Treat silence as expired rather than as valid.
+          and (s.current_period_end is null or s.current_period_end > now())
+        )
+      )
   );
 $$;
 
@@ -134,3 +155,102 @@ create policy "subscribers read gated content" on public.gated_content
 -- subscriptions. The nightly writes these rows with the service-role key,
 -- which bypasses row-level security; nothing holding the anon key can write
 -- here, including a subscriber.
+
+-- ------------------------------------------------------------ comping people
+
+-- Lifetime access, granted by hand.
+--
+-- Two of these, so the thing is done by name rather than by pasting a UUID
+-- into an update statement — which is how the wrong person gets access, and
+-- how the right person gets it revoked.
+--
+-- Both are SQL-editor tools and nothing else. Postgres grants EXECUTE on a new
+-- function to PUBLIC by default, which would put "grant myself lifetime
+-- access" one REST call away from every signed-in reader; the revoke below is
+-- the whole reason these are safe to exist. They are deliberately NOT granted
+-- to anon or authenticated afterwards. If you ever want to call one from a
+-- server route, pass the service-role key — do not grant it here.
+
+create or replace function public.grant_lifetime(person_email text,
+                                                 note text default null)
+returns table (email text, user_id uuid, comped boolean, comped_note text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  uid uuid;
+begin
+  select u.id into uid
+    from auth.users u
+   where lower(u.email) = lower(trim(person_email));
+
+  if uid is null then
+    raise exception
+      'No account exists for %. They have to sign in once first — an account '
+      'is created by signing in, not by being granted access.', person_email;
+  end if;
+
+  insert into public.subscriptions (user_id, comped, comped_note, updated_at)
+  values (uid, true, note, now())
+  on conflict (user_id) do update
+    set comped      = true,
+        comped_note = coalesce(excluded.comped_note, subscriptions.comped_note),
+        updated_at  = now();
+
+  return query
+    select lower(trim(person_email)), uid, s.comped, s.comped_note
+      from public.subscriptions s
+     where s.user_id = uid;
+end $$;
+
+revoke all on function public.grant_lifetime(text, text) from public;
+
+comment on function public.grant_lifetime(text, text) is
+  'Give someone permanent access with no payment behind it. SQL editor only — '
+  'EXECUTE is revoked from PUBLIC and granted to nobody.';
+
+
+create or replace function public.revoke_lifetime(person_email text)
+returns table (email text, user_id uuid, comped boolean, status text)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  uid uuid;
+begin
+  select u.id into uid
+    from auth.users u
+   where lower(u.email) = lower(trim(person_email));
+
+  if uid is null then
+    raise exception 'No account exists for %.', person_email;
+  end if;
+
+  -- Only the comp is withdrawn. Someone who was comped and later paid keeps
+  -- what they paid for, because `status` is Stripe's column and this has no
+  -- business touching it.
+  update public.subscriptions s
+     set comped     = false,
+         updated_at = now()
+   where s.user_id = uid;
+
+  return query
+    select lower(trim(person_email)), uid, s.comped, s.status
+      from public.subscriptions s
+     where s.user_id = uid;
+end $$;
+
+revoke all on function public.revoke_lifetime(text) from public;
+
+comment on function public.revoke_lifetime(text) is
+  'Withdraw a comp. Leaves any real Stripe subscription alone.';
+
+-- Who has been comped, and why. Run this on its own whenever you want the list.
+--
+--   select u.email, s.comped_note, s.updated_at
+--     from public.subscriptions s
+--     join auth.users u on u.id = s.user_id
+--    where s.comped
+--    order by s.updated_at desc;

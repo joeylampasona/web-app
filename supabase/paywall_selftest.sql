@@ -24,38 +24,18 @@
 -- --------------------------------------------------- a permanently paid user
 --
 -- The account is created in the dashboard (Authentication > Users > Add user,
--- with a password), and this gives it a subscription that no card and no
--- Stripe event is behind. Nothing else grants entitlement this way; the
--- webhook is the only other writer, and it will never write this row because
--- this person has no Stripe customer.
-do $$
-declare
+-- with a password), and this comps it. No card and no Stripe event is behind
+-- it; the webhook is the only other writer and it never touches the comp
+-- column, so nothing can take this away by accident.
+-- Through grant_lifetime, the same path a comped person goes through, so the
+-- check exercises the real mechanism rather than a fixture that resembles it.
+-- A date far in the future would have worked and would have quietly stopped
+-- testing the comp branch of is_subscriber().
+select * from public.grant_lifetime(
   -- ------------------------------------------------ CHANGE THIS ONE LINE
-  test_email text := 'paywall-selftest@example.com';
+  'paywall-selftest@example.com',
   -- ---------------------------------------------------------------------
-  uid uuid;
-begin
-  select id into uid from auth.users where lower(email) = lower(test_email);
-
-  if uid is null then
-    raise exception
-      'No account exists for %. Create it under Authentication > Users > Add '
-      'user (set a password, and tick the box that confirms the address), '
-      'then run this file again.', test_email;
-  end if;
-
-  insert into public.subscriptions
-    (user_id, status, plan_interval, current_period_end, stripe_customer_id)
-  values
-    (uid, 'active', 'year', timestamptz '2099-01-01 00:00:00+00', null)
-  on conflict (user_id) do update
-    set status             = 'active',
-        plan_interval      = 'year',
-        current_period_end = timestamptz '2099-01-01 00:00:00+00',
-        updated_at         = now();
-
-  raise notice 'Entitled % (%) until 2099.', test_email, uid;
-end $$;
+  'Fixture for the CI paywall check.');
 
 -- ------------------------------------------------------- the sentinel content
 --
@@ -76,7 +56,8 @@ on conflict (path) do update
       as_of      = current_date,
       updated_at = now();
 
--- What you should see: one notice naming the account, and one row affected.
+-- What you should see: one row from grant_lifetime showing comped = true, and
+-- one row below naming the sentinel.
 select path, as_of, updated_at
   from public.gated_content
  where path = 'selftest/entitlement.json';

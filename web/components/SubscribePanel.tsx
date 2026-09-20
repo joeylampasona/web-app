@@ -21,11 +21,23 @@ const TRIAL_DAYS = 7;
 export function SubscribePanel() {
   const { signedIn, ready: authReady, requireSignUp } = useAuth();
   const { ready, active, status, trialEnd, currentPeriodEnd, cancelAtPeriodEnd,
-          startCheckout } = useSubscription();
+          comped, startCheckout } = useSubscription();
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
   if (!authReady || !ready) return null;
+
+  if (comped) {
+    return (
+      <div className="card stack" style={{ gap: "var(--gap-sm)" }}>
+        <div className="eyebrow">Your access</div>
+        <p className="footnote" style={{ margin: 0 }}>
+          You have permanent access to everything. Nothing to pay and nothing
+          to renew.
+        </p>
+      </div>
+    );
+  }
 
   if (active) {
     return (

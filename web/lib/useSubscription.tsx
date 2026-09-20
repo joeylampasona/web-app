@@ -25,11 +25,16 @@ export type SubscriptionState = {
   trialEnd: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  /** Access granted by hand, with no payment behind it. Kept separate from
+   *  `status`, which is Stripe's word and gets overwritten on every webhook —
+   *  a comp written into that column would last until the next event. */
+  comped: boolean;
 };
 
 const EMPTY: SubscriptionState = {
   ready: false, active: false, status: null,
   trialEnd: null, currentPeriodEnd: null, cancelAtPeriodEnd: false,
+  comped: false,
 };
 
 // The same set the database's is_subscriber() accepts. Kept deliberately
@@ -61,21 +66,26 @@ export function useSubscription(): SubscriptionState & {
     (async () => {
       const { data } = await supabase
         .from("subscriptions")
-        .select("status, trial_end, current_period_end, cancel_at_period_end")
+        .select("status, trial_end, current_period_end, cancel_at_period_end, comped")
         .maybeSingle();
       if (!alive) return;
       const status = data?.status ?? null;
       const ends = data?.current_period_end ?? null;
+      const comped = Boolean(data?.comped);
       // A period that has already ended means Stripe has told us nothing since
       // it lapsed. Treat silence as expired, exactly as the policy does.
       const current = !ends || new Date(ends).getTime() > Date.now();
       setState({
         ready: true,
-        active: Boolean(status && LIVE.has(status) && current),
+        // Same disjunction as is_subscriber(), in the same order. If these two
+        // ever disagree the interface offers a subscription to somebody who
+        // already has access, or hides a section that then arrives anyway.
+        active: comped || Boolean(status && LIVE.has(status) && current),
         status,
         trialEnd: data?.trial_end ?? null,
         currentPeriodEnd: ends,
         cancelAtPeriodEnd: Boolean(data?.cancel_at_period_end),
+        comped,
       });
     })();
     return () => { alive = false; };
