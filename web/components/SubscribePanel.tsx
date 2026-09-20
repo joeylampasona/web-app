@@ -57,11 +57,21 @@ export function SubscribePanel() {
     }
     setProblem(null);
     setBusy(plan);
-    const url = await startCheckout(plan);
+    let url: string | null = null;
+    try {
+      url = await startCheckout(plan);
+    } catch (failure) {
+      setBusy(null);
+      // The reason, not a shrug. These are configuration faults and they are
+      // read by whoever is setting this up, which right now is the only
+      // person who can see them.
+      setProblem(failure instanceof Error
+        ? `Could not start checkout — ${failure.message}`
+        : "Could not start checkout.");
+      return;
+    }
     if (!url) {
       setBusy(null);
-      // Never a dead button. If checkout cannot start, say so rather than
-      // leaving someone clicking at nothing.
       setProblem("Could not start checkout. Try again in a moment.");
       return;
     }

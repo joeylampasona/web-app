@@ -32,8 +32,20 @@ function priceFor(plan: string): string | null {
 }
 
 export async function POST(request: Request) {
-  if (!PROJECT_URL || !ANON || !STRIPE_KEY) {
-    return NextResponse.json({ error: "not configured" }, { status: 503 });
+  const missing = [
+    !PROJECT_URL && "NEXT_PUBLIC_SUPABASE_URL",
+    !ANON && "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+    !STRIPE_KEY && "STRIPE_SECRET_KEY",
+  ].filter(Boolean);
+  // The explicit checks as well as the list: the list is for the operator,
+  // and these are what narrow the types for everything below.
+  if (missing.length || !PROJECT_URL || !ANON || !STRIPE_KEY) {
+    // Naming the variable is not a leak — knowing which setting is absent
+    // helps whoever is deploying and gives an outsider nothing. Silence here
+    // cost a debugging round already.
+    return NextResponse.json(
+      { error: "not configured", missing }, { status: 503 },
+    );
   }
 
   const authorization = request.headers.get("authorization") ?? "";
@@ -60,7 +72,15 @@ export async function POST(request: Request) {
   }
   const price = priceFor(plan);
   if (!price) {
-    return NextResponse.json({ error: "unknown plan" }, { status: 400 });
+    const variable = plan === "annual"
+      ? "STRIPE_PRICE_ID_ANNUAL"
+      : plan === "monthly" ? "STRIPE_PRICE_ID_MONTHLY" : null;
+    return NextResponse.json(
+      variable
+        ? { error: "plan not configured", missing: [variable] }
+        : { error: "unknown plan", plan },
+      { status: 400 },
+    );
   }
 
   const form = new URLSearchParams({
@@ -98,8 +118,11 @@ export async function POST(request: Request) {
   if (!response.ok || !payload?.url) {
     // Stripe's message can name the account or the price; it is not for the
     // browser. The server log keeps it.
-    console.error("stripe checkout failed", response.status, payload?.error?.message);
-    return NextResponse.json({ error: "could not start checkout" }, { status: 502 });
+    const detail = payload?.error?.message ?? null;
+    console.error("stripe checkout failed", response.status, detail);
+    return NextResponse.json(
+      { error: "could not start checkout", stripe: detail }, { status: 502 },
+    );
   }
 
   return NextResponse.json({ url: payload.url });

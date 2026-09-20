@@ -101,11 +101,21 @@ export function useSubscription(): SubscriptionState & {
         },
         body: JSON.stringify({ plan }),
       });
-      if (!response.ok) return null;
-      const body = await response.json();
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        // Carried back so the panel can say what went wrong. One message for
+        // every cause meant a misconfigured price and a signed-out reader
+        // looked identical, and the first debugging round was spent in
+        // devtools finding out which.
+        const detail = body?.stripe
+          ?? (Array.isArray(body?.missing) ? `missing ${body.missing.join(", ")}` : null)
+          ?? body?.error
+          ?? `HTTP ${response.status}`;
+        throw new Error(String(detail));
+      }
       return typeof body?.url === "string" ? body.url : null;
-    } catch {
-      return null;
+    } catch (problem) {
+      throw problem instanceof Error ? problem : new Error("checkout failed");
     }
   }, []);
 
