@@ -101,6 +101,17 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
     ),
     label: "A rounded bottom, then a small pause",
   },
+  "/screens/bull_flag": {
+    label: "A sharp rise, then a short drift down",
+    // The pole does the talking: steep, then a small tilted pause.
+    art: (
+      <>
+        <path d="M3 20 L10 5" />
+        <path d="M10 6.5 L17 9 L17 14.5 L10 12 Z" />
+        <path d="M17 11.5 L21.5 9.5" strokeDasharray="2 1.6" />
+      </>
+    ),
+  },
   "/screens/falling_wedge": {
     label: "Both lines falling, the upper one faster",
     art: (
@@ -343,7 +354,7 @@ const SHORT_SCREENS = new Set([
   "/screens/rising_wedge", "/screens/descending_triangle",
 ]);
 const LONG_SCREENS = new Set([
-  "/screens/falling_wedge", "/screens/triangle",
+  "/screens/bull_flag", "/screens/falling_wedge", "/screens/triangle",
   "/screens/squeeze",
 ]);
 

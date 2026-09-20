@@ -269,12 +269,16 @@ _MIN_SQUEEZE = ParamSpec(
          "below which it is treated as noise.")
 
 _MAX_CHANNEL = ParamSpec(
-    key="max_channel_pct", label="Tightest channel the pause must hold",
-    kind="percent", default=3.0, minimum=1.0, maximum=15.0, step=0.5, unit="%",
-    funnel_title="The pause is tight",
+    key="max_channel_pct", label="How far the pause may wander, high to low",
+    kind="percent", default=8.0, minimum=1.0, maximum=20.0, step=0.5, unit="%",
+    funnel_title="The pause is orderly",
     funnel_text="High to low across the pause is no more than {value}%.",
-    help="A drift that wanders nine per cent between its own high and low is a "
-         "pullback, not a pause, whatever fraction of the pole it gave back.")
+    help="The pause should be calmer than the run that caused it, but not by "
+         "much: a stock that has just moved ten per cent in four days is a "
+         "volatile stock, and one ordinary session will break a narrow band. "
+         "At three per cent this test alone removed seven of every eight "
+         "candidates and the screen listed two names in the whole market. "
+         "Past eight per cent, loosening it stops finding anything new.")
 
 _POLE_VOLUME = ParamSpec(
     key="min_pole_volume", label="Volume through the pole", kind="number",
@@ -307,6 +311,17 @@ def _shape_common() -> list[ParamSpec]:
 
 def _wedge_params() -> list[ParamSpec]:
     return _shape_common() + [_WEDGE_VOLUME]
+
+
+def _flag_params() -> list[ParamSpec]:
+    """The dials behind the bull flag.
+
+    `_MAX_CHANNEL` is the one with history: at 3% it left two names on the
+    whole market, because it asked the pause to be calmer than the impulse
+    that caused it. Eight is where loosening stops buying anything.
+    """
+    return [_MIN_POLE, _MAX_POLE_SESSIONS, _MAX_CHANNEL, _POLE_VOLUME,
+            _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
 
 
 _NO_EDGE_NOTE = (
@@ -684,6 +699,25 @@ SCREENS: dict[str, ScreenSpec] = {
         ],
     ),
     # ------------------------------------------------------------ shapes
+    # ------------------------------------------------------------ shapes
+    "bull_flag": ScreenSpec(
+        key="bull_flag", name="Bull flag",
+        shape="A sharp advance, then an orderly pause in it.",
+        description=(
+            "The advance is what this screen selects for: a run of at least 10% "
+            "in three to five sessions, carried on above-average volume, in a "
+            "stock still holding its 20-day line. The pause afterwards only has "
+            "to be orderly. It is listed because every other screen here needs a "
+            "base, and a stock that has just run hard does not have one — so a "
+            "strong name resting after a move is invisible to the rest of the "
+            "site. The level shown is the top of the pause. " + _NO_EDGE_NOTE),
+        params=_flag_params(),
+        concepts=[
+            Concept("The pole", "The advance the pause interrupts.", "pole"),
+            Concept("The pause", "A short, orderly drift after it.", "flag"),
+            Concept("The level", "The top of that drift.", "pivot"),
+        ],
+    ),
     "falling_wedge": ScreenSpec(
         key="falling_wedge", name="Falling wedge",
         shape="Both trendlines falling, the upper one falling faster.",

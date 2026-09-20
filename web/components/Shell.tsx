@@ -29,6 +29,7 @@ const TABS: {
       { href: "/screens/ipo", title: "IPO base", blurb: "A recent listing building its first real base." },
       { href: "/screens/flat_base", title: "Flat base", blurb: "A shallow, level shelf near the highs." },
       { href: "/screens/cup_and_handle", title: "Cup and handle", blurb: "A rounded bottom, then a small pause below the lid." },
+      { href: "/screens/bull_flag", title: "Bull flag", blurb: "A sharp advance, then an orderly pause in it." },
       { href: "/screens/falling_wedge", title: "Falling wedge", blurb: "Both lines falling, the upper one faster." },
       { href: "/screens/rising_wedge", title: "Rising wedge", blurb: "Both lines rising, the lower one faster." },
       { href: "/screens/triangle", title: "Triangle", blurb: "Falling highs against rising or level lows." },

@@ -430,6 +430,7 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
 .screen--ipo            { color: var(--screen-highs); }
 .screen--multi_year     { color: var(--screen-comeback); }
 .screen--cup_and_handle { color: var(--screen-classic); }
+.screen--bull_flag      { color: var(--screen-flag); }
 .screen--falling_wedge,
 .screen--rising_wedge   { color: var(--screen-wedge); }
 .screen--triangle,

@@ -194,6 +194,7 @@ def main() -> int:
     print(f"Contact agent configured: yes ({len(agent)} characters)\n")
     probe_shares(agent)
     probe_open_interest(agent)
+    probe_flag_gates()
     print()
     print(RULE)
     print("Probe complete. Nothing was written.")
@@ -202,3 +203,59 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def probe_flag_gates() -> None:
+    """How each bull-flag gate cuts the field, on live prices.
+
+    The channel width was chosen off the synthetic fixture, which is 523
+    invented names and not a market. This prints the same sweep against
+    whatever the database actually holds, so the number can be picked from
+    real prices instead.
+    """
+    print()
+    print(RULE)
+    print("3. BULL FLAG — what each gate costs, on the live database")
+    print(RULE)
+    try:
+        from data import store
+        from patterns import shapes
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the pipeline: {exc}")
+        return
+    try:
+        conn = store.open_db()
+        symbols = store.universe_symbols(conn)
+        series = {s: b for s, b in store.load_many(conn, symbols).items()
+                  if len(b) >= 120}
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   no usable database here: {exc}")
+        return
+    if not series:
+        print("   the database has no bars — nothing to measure.")
+        return
+    print(f"   {len(series):,} names with enough history\n")
+
+    spec = dict(max_flag_sessions=7, min_flag_sessions=3, min_pole_pct=10.0,
+                max_pole_sessions=5, min_pole_sessions=3, max_retrace=0.50,
+                min_pole_volume=1.0, ema_window=20)
+
+    def count(**over):
+        kw = dict(spec)
+        kw.update(over)
+        return sum(1 for bars in series.values() if shapes.find_flag(bars, **kw))
+
+    print("   one gate at a time, channel held open")
+    for label, over in (
+            ("pole >=10% in 3-5 sessions, flag 3-7",
+             dict(max_channel_pct=100.0, min_pole_volume=0.0, ema_window=0)),
+            ("+ pole volume >= 1x normal", dict(max_channel_pct=100.0, ema_window=0)),
+            ("+ close above the 20-day EMA", dict(max_channel_pct=100.0)),
+    ):
+        print(f"      {label:40} {count(**over):4d}")
+
+    print()
+    print("   then the channel, everything else at spec")
+    for width in (3, 4, 5, 6, 8, 10, 12, 15, 20):
+        print(f"      pause may wander {width:>2}% high-to-low          "
+              f"{count(max_channel_pct=float(width)):4d}")

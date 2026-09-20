@@ -23,6 +23,15 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: pip install -q -r requirements.txt
+
+      # Read-only. The flag sweep needs real prices, and this is where they
+      # are; nothing here writes the cache back.
+      - name: Restore the database
+        uses: actions/cache/restore@v4
+        with:
+          path: var
+          key: market-db-polygon-
+          restore-keys: market-db-polygon-
       - name: Ask the sources what they return
         env:
           # The contact address SEC requires. The probe never prints it.
