@@ -113,6 +113,22 @@ class PolygonGroupedAdapter(DataAdapter):
         return earnings_dates(symbols)
 
     def get_option_chain(self, symbol: str) -> OptionChain | None:
+        """The listed book for one company.
+
+        Cboe first, because it carries the whole book — 3,284 contracts for
+        Apple against the 34 on the nearest expiry that the other source
+        returns — in one request rather than nine. Gamma concentration is a
+        statement about where the whole book anchors, and it was being built
+        out of a few dozen strikes.
+
+        Yahoo remains behind it, not as a formality: this is the section that
+        has already been empty for weeks, and a single source with no fallback
+        is how it got that way.
+        """
+        from catalysts.cboe import chain as cboe_chain    # lazy: network only
+        found = cboe_chain(symbol)
+        if found is not None and found.rows:
+            return found
         from catalysts.yf import option_chain  # lazy: yfinance is optional
         return option_chain(symbol)
 
