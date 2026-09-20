@@ -195,6 +195,16 @@ For accounts, add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 and would be compiled into the pages. `web/.env.example` says the same thing next
 to the variables themselves.
 
+Subscriptions need six more, all server-side and none carrying a
+`NEXT_PUBLIC_` prefix: `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`,
+`STRIPE_PRICE_ID_MONTHLY`, `STRIPE_PRICE_ID_ANNUAL`,
+`STRIPE_WEBHOOK_SECRET` and `NEXT_PUBLIC_SITE_URL`. `web/.env.example`
+says what each one is and what breaks when it is wrong. The entitlement
+itself lives in `supabase/paywall.sql`: one table nobody but Stripe's
+webhook can write, and a policy that decides who may read the gated
+content. `tools/check_paywall.py` asks for that content as an outsider
+would and fails the build if any of it arrives.
+
 Pushing to the branch redeploys the site. The nightly job pushing to `data` does
 not, so the workflow calls a deploy hook after it publishes. Create one in Vercel
 and store it as the `VERCEL_DEPLOY_HOOK` secret; the step does nothing while the
