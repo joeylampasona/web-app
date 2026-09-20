@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
+import { CriteriaMeter } from "./CriteriaMeter";
 import { GammaPanel } from "./GammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
@@ -220,6 +221,13 @@ export function StockDetail({ stock, run }: {
         <div className="eyebrow">Insiders</div>
         <InsiderPanel insiders={stock.insiders} />
       </section>
+
+      {setup?.criteria && (
+        <section>
+          <div className="eyebrow">What lines up</div>
+          <CriteriaMeter criteria={setup.criteria} detailed />
+        </section>
+      )}
 
       <section>
         <div className="eyebrow">Gamma concentration</div>

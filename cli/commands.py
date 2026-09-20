@@ -485,6 +485,7 @@ def _pipeline(conn, with_followthrough: bool = True):
     desk_rows = desk_mod.by_symbol(conn, market.universe)
     desk_run = desk_mod.latest_run(conn)
     insider_rows = insiders_mod.summary(conn, market.universe)
+    insider_recent = insiders_mod.recent(conn, market.universe)
     news_rows = news_mod.by_symbol(conn, market.universe)
     if with_followthrough:
         earnings = {s: e.date for s in market.universe
@@ -508,7 +509,8 @@ def _pipeline(conn, with_followthrough: bool = True):
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
     return (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
-            backtests, follow, insider_rows, news_rows, desk_rows, desk_run)
+            backtests, follow, insider_rows, insider_recent, news_rows,
+            desk_rows, desk_run)
 
 
 def cmd_publish(args) -> int:
@@ -516,14 +518,16 @@ def cmd_publish(args) -> int:
     conn = _conn()
     run = store.start_run(conn, "publish")
     (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
-     backtests, follow, insider_rows, news_rows, desk_rows, desk_run) = _pipeline(conn)
+     backtests, follow, insider_rows, insider_recent, news_rows,
+     desk_rows, desk_run) = _pipeline(conn)
     from catalysts import releases as rel
     release_rows = rel.load(conn, market.as_of)
 
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
-                             releases=release_rows, gamma=gamma_rows)
+                             releases=release_rows, gamma=gamma_rows,
+                             insider_recent=insider_recent)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

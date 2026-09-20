@@ -68,6 +68,9 @@ class Setup:
     #: Heavy volume, a decisive close and a real gain, all in the last bar.
     #: None when there is too little history to say.
     ignition: dict | None = None
+    #: How many of the published checks line up, and which. Never a percentage
+    #: — see the note above `criteria`.
+    criteria: dict | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -128,6 +131,87 @@ def _breakout_metrics(bars: list[Bar], idx: int, ma50: list[float | None]) -> di
         "close_in_range": round(flags.close_in_range(bar), 2),
         "price_vs_50ma_pct": round(100.0 * (bars[-1].close / line - 1.0), 2) if line else None,
         "date": bar.date.isoformat(),
+    }
+
+
+# ---------------------------------------------------------------- criteria
+#
+# WHAT THIS IS NOT: a confidence percentage.
+#
+# A number like "78% confident" asserts a probability, and this site has none
+# to offer. The out-of-sample work behind it found no measurable edge in the
+# structural parts of these patterns — only in relative strength — and the
+# backtest that could have measured a composite score was removed as a page and
+# never scored one anyway. Printing a percentage would be inventing a
+# probability and attaching this site's name to it.
+#
+# So it counts, and it names what it counted. "Six of nine" is the same
+# information a percentage would carry, minus the claim, and the reader can see
+# WHICH six — which is the part that is actually useful, because a setup
+# missing "above its 200-day" is a different thing from one missing "volume has
+# dried up" even at the same tally.
+#
+# Every criterion below is a fact already published on the card. Nothing here
+# computes anything new; it collects what is already shown and says how much of
+# it lines up.
+
+CRITERIA_LABELS = {
+    "rs_leader": "Relative strength of 80 or better",
+    "above_50ma": "Above its 50-day line",
+    "above_200ma": "Above its 200-day line",
+    "full_stack": "Averages fully stacked",
+    "near_pivot": "Within 5% of its pivot",
+    "tightening": "Range tightening through the base",
+    "volume_dryup": "Volume drying up through the base",
+    "accumulation": "More up-volume than down-volume",
+    "near_highs": "Within 15% of its 52-week high",
+}
+
+#: An RS of 80 rather than the screen's own floor. This asks "is it a leader",
+#: which is a fixed question; the screen's min_rs is a dial the reader moves.
+CRITERIA_RS = 80
+CRITERIA_NEAR_PIVOT_PCT = 5.0
+CRITERIA_NEAR_HIGH_PCT = 15.0
+
+
+def criteria(setup: Setup, alignment) -> dict:
+    """Which of the published checks this setup currently meets.
+
+    A criterion that cannot be evaluated is left out of BOTH the tally and the
+    total rather than counted as failed. A stock with under 200 sessions has no
+    200-day average, and scoring it as "not above its 200-day" would be a claim
+    about a line that does not exist — the same absence-is-not-a-failing-grade
+    rule the trend panel already follows.
+    """
+    checks: dict[str, bool] = {}
+
+    rs = setup.rs_rating
+    if isinstance(rs, int):
+        checks["rs_leader"] = rs >= CRITERIA_RS
+    if setup.price_vs_50ma_pct is not None:
+        checks["above_50ma"] = setup.price_vs_50ma_pct > 0
+    if alignment is not None:
+        values = alignment.values
+        if values.get(200) is not None:
+            checks["above_200ma"] = setup.close > values[200]
+        checks["full_stack"] = alignment.stacked
+    if setup.now_vs_pivot_pct is not None:
+        checks["near_pivot"] = abs(setup.now_vs_pivot_pct) <= CRITERIA_NEAR_PIVOT_PCT
+    if setup.tightening_atr_ratio is not None:
+        checks["tightening"] = setup.tightening_atr_ratio > 1.0
+    if setup.volume_dryup_ratio is not None:
+        checks["volume_dryup"] = setup.volume_dryup_ratio > 1.0
+    if setup.up_down_volume_net is not None:
+        checks["accumulation"] = setup.up_down_volume_net > 0
+    if setup.from_52w_high_pct is not None:
+        checks["near_highs"] = setup.from_52w_high_pct <= CRITERIA_NEAR_HIGH_PCT
+
+    met = [k for k, v in checks.items() if v]
+    return {
+        "met": len(met),
+        "total": len(checks),
+        "checks": [{"key": k, "label": CRITERIA_LABELS[k], "met": v}
+                   for k, v in checks.items()],
     }
 
 
@@ -278,6 +362,7 @@ def _build(series: Series, params: Params, structure: bases.Structure,
     spark = ignition(bars)
     setup.ignition = spark
     setup.rvol = spark["rvol"] if spark else None
+    setup.criteria = criteria(setup, alignment)
     if structure.breakout_idx is not None:
         setup.breakout_metrics = _breakout_metrics(bars, structure.breakout_idx, ma50)
     return setup

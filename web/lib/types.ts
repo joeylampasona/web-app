@@ -53,6 +53,7 @@ export interface Setup {
   rvol?: number | null;
   /** Heavy volume, decisive close and a real gain, all in the last session. */
   ignition?: Ignition | null;
+  criteria?: Criteria | null;
   /** "long" or "short" — which way the screen that found it reads its level. */
   direction?: string;
   /** Fitted geometry, on the shape screens only. */
@@ -136,6 +137,33 @@ export interface BacktestSummary {
     exit_price: number; shares: number; return_pct: number;
     gross_return_pct: number; r_multiple: number; exit_reason: string; pnl: number;
   }[];
+}
+
+/** One open-market decision on the market-wide calendar.
+ *
+ *  Distinct from InsiderTrade below, which is the per-stock panel's row and
+ *  carries the mechanics (grants, option exercises, tax withholding) alongside
+ *  the decisions. This calendar only ever holds P and S. */
+export interface InsiderDecision {
+  symbol: string; name: string; traded_at: string;
+  owner: string; role: string; code: string;
+  shares: number | null; price: number | null; value: number | null;
+  direction: "buy" | "sell";
+}
+
+export interface InsiderDay {
+  date: string;
+  buys: number; sells: number;
+  buy_value: number; sell_value: number;
+  rows: InsiderDecision[];
+}
+
+export interface CriteriaCheck { key: string; label: string; met: boolean }
+
+export interface Criteria {
+  met: number;
+  total: number;
+  checks: CriteriaCheck[];
 }
 
 export interface Ignition {

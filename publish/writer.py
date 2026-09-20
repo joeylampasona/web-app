@@ -29,6 +29,20 @@ GAMMA_LEADERBOARD = 60
 # How many names the relative-volume page carries.
 VOLUME_LEADERBOARD = 120
 
+INSIDER_COPY = {
+    "header": "Open-market purchases and sales by officers, directors and 10% "
+              "owners, day by day. Only the decisions — grants, option exercises "
+              "and shares withheld to pay tax are left out, because those happen "
+              "on a vesting schedule nobody chose the date of.",
+    "subhead": "From Form 4, filed within two business days and under penalty of perjury.",
+    "footer": "A purchase is somebody spending their own money on their own company, "
+              "which is the most interesting thing in this file. It is still not a "
+              "recommendation, and insiders are wrong as often as anyone else. "
+              "Institutional dark-pool blocks are not shown: there is no free, "
+              "automatic source for them, and a number with nothing behind it is "
+              "worse than an absence.",
+}
+
 # The colour bands. Stated here rather than in the web layer so the thresholds
 # the page draws and the thresholds anything else reads can never disagree.
 VOLUME_BANDS = [
@@ -128,6 +142,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             desk_run: dict | None = None,
             releases: list | None = None,
             gamma: dict[str, dict] | None = None,
+            insider_recent: list[dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -303,6 +318,46 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "band_labels": ivmod.BAND_LABELS,
         "dots": settings.get("iv.dots", 5),
         "rows": [r.to_json() for r in iv_rows],
+    }))
+
+    # ---- insider decisions, by day ------------------------------------
+    #
+    # Open-market buys and sells only. The grants, option exercises and
+    # tax-withholding sales are stored and shown on the stock page, where there
+    # is room to explain that they happen on a vesting schedule nobody chose.
+    # In a scannable grid they would be most of the rows and none of the signal.
+    #
+    # The dark-pool half of this request has no free, automatic source. FINRA's
+    # ATS data is weekly and delayed by weeks, and inventing a "block" from
+    # daily bars would be a number with nothing behind it.
+    insider_days: dict[str, dict] = {}
+    for row in (insider_recent or []):
+        day = insider_days.setdefault(row["traded_at"], {
+            "date": row["traded_at"], "buys": 0, "sells": 0,
+            "buy_value": 0.0, "sell_value": 0.0, "rows": [],
+        })
+        value = float(row.get("value") or 0.0)
+        if row["code"] == "P":
+            day["buys"] += 1
+            day["buy_value"] += value
+        else:
+            day["sells"] += 1
+            day["sell_value"] += value
+        day["rows"].append({
+            **row,
+            "name": (market.refs[row["symbol"]].name
+                     if row["symbol"] in market.refs else row["symbol"]),
+        })
+    for day in insider_days.values():
+        day["buy_value"] = round(day["buy_value"], 2)
+        day["sell_value"] = round(day["sell_value"], 2)
+        # Biggest first inside a day: a $4m purchase and a $9,000 one are not
+        # the same event and the order should not be an accident of filing.
+        day["rows"].sort(key=lambda r: -(r.get("value") or 0.0))
+    written.append(_write(out / "market" / "insiders.json", {
+        "as_of": as_of.isoformat(),
+        "copy": INSIDER_COPY,
+        "days": sorted(insider_days.values(), key=lambda d: d["date"], reverse=True),
     }))
 
     # ---- relative volume, across the whole universe -------------------
