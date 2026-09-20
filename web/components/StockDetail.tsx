@@ -8,7 +8,7 @@ import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { ForecastPanel } from "./ForecastPanel";
-import { GammaPanel } from "./GammaPanel";
+import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
@@ -273,7 +273,8 @@ export function StockDetail({ stock, run }: {
 
       <section>
         <div className="eyebrow">Gamma concentration</div>
-        <GammaPanel gamma={stock.gamma} />
+        <GatedGammaPanel symbol={stock.symbol} gamma={stock.gamma}
+                         locked={Boolean(stock.gamma_gated)} />
       </section>
       </div>
 

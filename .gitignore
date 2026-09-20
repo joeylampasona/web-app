@@ -234,3 +234,8 @@ config/settings.local.yaml
 
 # Data fetched at build time on Vercel
 web/out/
+
+# Gated content, staged by `python -m cli publish` and uploaded by
+# `python -m cli gated`. Never committed: the whole point is that it is not
+# in a public repository.
+/gated/

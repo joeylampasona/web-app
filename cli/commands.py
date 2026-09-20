@@ -673,8 +673,47 @@ def cmd_publish(args) -> int:
     print("  schema: VALID" if not problems else "  schema: INVALID")
     for problem in problems:
         print(f"    - {problem}")
+    from publish import gated as gatedmod
+    staged = gatedmod.load()
+    _banner("Gated")
+    if staged:
+        print(f"  {len(staged)} document(s) staged under {gatedmod.gated_dir()}")
+        print(f"  free gamma sample: {gatedmod.FREE_GAMMA_ROWS} name(s)")
+        print("  nothing is uploaded here — run `python -m cli gated` for that,")
+        print("  which is a separate step so a Supabase outage cannot stop the")
+        print("  public tree from being published.")
+    else:
+        print("  nothing staged. Every page is public.")
+
     store.finish_run(conn, run, "ok" if not problems else "failed", f"{len(written)} files")
     return 0 if not problems else 1
+
+
+def cmd_gated(args) -> int:
+    """Upload the staged gated documents.
+
+    Separate from publish on purpose. The public tree and the gated store fail
+    in different ways and should not take each other down: a Supabase outage
+    must not stop tonight's session reaching the site, and a schema problem in
+    the public tree must not leave subscribers reading last week's gamma.
+    """
+    from publish import gated as gatedmod
+    staged = gatedmod.load()
+    if not staged:
+        print(f"Nothing staged under {gatedmod.gated_dir()}. Run publish first.")
+        return 1
+
+    as_of = max(document.as_of for document in staged)
+    report = gatedmod.upload(staged, as_of)
+    _banner("Gated upload")
+    print(f"  {report.render()}")
+    if not report.configured:
+        # Not a failure: a local run has no service-role key and should not
+        # pretend to. It is said out loud rather than passed over in silence,
+        # because "uploaded nothing" and "uploaded everything" otherwise look
+        # identical from the outside.
+        return 0
+    return 0 if report.ok else 1
 
 
 def cmd_all(args) -> int:

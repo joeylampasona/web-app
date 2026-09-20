@@ -58,6 +58,19 @@ jobs:
       - name: The paywall check catches a broken paywall
         run: python tools/test_check_paywall.py
 
+      # The nightly checks the tree it is about to push. This checks the tree
+      # that is actually live, which is not the same claim: a hand-run publish,
+      # a reverted commit, or a night that predates the check would all leave
+      # gated content sitting on a public branch with nothing having failed.
+      - name: Fetch the published data branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: published
+
+      - name: Nothing gated is on the public data branch
+        run: python tools/check_public_data.py published
+
       - name: Ask for what should be refused, and for what should be granted
         env:
           # The first two are public by design: the anon key identifies the

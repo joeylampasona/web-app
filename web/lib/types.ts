@@ -323,6 +323,11 @@ export interface StockFile {
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
   gamma: GammaProfile | null;
+  /** This name has gamma and it is behind the paywall. Distinct from `gamma`
+   *  being null, which means there was nothing to publish — most of the
+   *  universe has no listed options at all, and a page that conflated the two
+   *  would advertise a subscription over companies that have nothing to sell. */
+  gamma_gated?: boolean;
   forecast: Forecast | null;
   news: Headline[];
   desk_signals: DeskSignal[];

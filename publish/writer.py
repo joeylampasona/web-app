@@ -14,6 +14,7 @@ from data import classify, settings
 from data.market import Market
 from patterns import detectors, flags as flagsmod, params as param_module
 from patterns import scan, stages
+from publish import gated as gatedmod
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
 from rankings import spark
@@ -161,9 +162,21 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
+    gated_documents: list[gatedmod.Document] = []
     as_of = market.as_of
     breakout_symbols = result.fresh_breakout_symbols()
     theme_names = classify.theme_names()
+
+    # Which option books stay public. Decided once, here, because gamma is
+    # published in two places — the board and each stock page — and the two
+    # disagreeing is precisely how a paywall comes to leak: gating the ranking
+    # while publishing every row it ranks gives the whole thing away to anyone
+    # willing to fetch a few hundred files.
+    gamma_free = gatedmod.free_symbols(gamma)
+    gamma_public = {symbol: payload for symbol, payload in (gamma or {}).items()
+                    if symbol in gamma_free}
+    gamma_locked = {symbol for symbol, payload in (gamma or {}).items()
+                    if symbol not in gamma_free and payload and payload.get("levels")}
 
     # ---- screens ------------------------------------------------------
     for key, setups in result.screens.items():
@@ -277,7 +290,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit, insiders, news, desk,
-                                             gamma, forecasts)))
+                                             gamma_public, forecasts,
+                                             gamma_locked=gamma_locked)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -468,11 +482,25 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                  if payload["spot"] else None),
             "levels": levels,
         })
-    gamma_rows.sort(key=lambda row: -(row["open_interest"] or 0))
+    gamma_rows.sort(key=lambda row: (-(row["open_interest"] or 0), row["symbol"]))
+    board = gamma_rows[:GAMMA_LEADERBOARD]
+
+    # The whole board goes behind the wall; the deepest few books also stay
+    # public, in full. A subscriber renders the page from the gated document
+    # alone rather than stitching a public head onto a private tail, which
+    # would let the two halves come from different runs.
+    gated_documents.extend(gatedmod.gamma_documents(board, gamma, gamma_free, as_of))
+
     written.append(_write(out / "market" / "gamma.json", {
         "as_of": as_of.isoformat(),
+        # The real total, not the number of rows below it. Saying how much is
+        # being withheld is the honest version of a paywall, and the page needs
+        # the figure to say it.
         "count": len(gamma_rows),
-        "rows": gamma_rows[:GAMMA_LEADERBOARD],
+        "rows": [row for row in board if row["symbol"] in gamma_free],
+        "gated": True,
+        "free_rows": gatedmod.FREE_GAMMA_ROWS,
+        "board_rows": len(board),
         "copy": GAMMA_COPY,
     }))
 
@@ -562,6 +590,12 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     if problems:
         meta["schema_problems"] = problems
     written.append(_write(out / "meta.json", meta))
+
+    # Staged outside out/, which is force-pushed to a public branch whole. The
+    # upload happens in the publish command, after this tree has been checked;
+    # staging it as files first means a night's gated content can be looked at
+    # before it goes anywhere, and re-uploaded without re-running the scan.
+    gatedmod.stage(gated_documents)
     return written
 
 
@@ -787,7 +821,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    news: dict[str, list[dict]] | None = None,
                    desk: dict[str, list[dict]] | None = None,
                    gamma: dict[str, dict] | None = None,
-                   forecasts: dict[str, dict] | None = None) -> dict:
+                   forecasts: dict[str, dict] | None = None,
+                   gamma_locked: set[str] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -841,7 +876,15 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # Where open interest concentrates gamma. Absent for any name with
         # no listed options, which is most of the universe, and absent
         # rather than zeroed so the page can tell the two apart.
+        #
+        # Now three states rather than two, because "we have this and you
+        # cannot see it" is a different thing to say than "there is nothing to
+        # see", and a page that conflated them would either advertise a
+        # subscription over names that have no options or stay silent over
+        # names that do. Only the free sample carries a payload here; the rest
+        # is fetched from the gated store by anyone entitled to it.
         "gamma": (gamma or {}).get(symbol),
+        "gamma_gated": symbol in (gamma_locked or set()),
         # Analyst price targets and estimates. Somebody else's opinion, not a
         # reading of ours, which is why it is labelled as such on the page.
         "forecast": (forecasts or {}).get(symbol),

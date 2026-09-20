@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     p_q.add_argument("--out", help="where to write the file "
                                    "(default: the out/ tree's quotes.json)")
     sub.add_parser("publish", help="write the out/ JSON tree")
+    sub.add_parser("gated", help="upload the staged gated/ documents to Supabase")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")
 
     args = parser.parse_args(argv)

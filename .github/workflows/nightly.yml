@@ -286,6 +286,15 @@ jobs:
 
           PY
 
+      # The other half of the paywall check. That one asks the database whether
+      # an outsider is refused; this asks whether the refusal matters, because a
+      # policy that withholds perfectly protects nothing when the same numbers
+      # are sitting in a public JSON file. The tree below is force-pushed to a
+      # public branch whole, so this is the last moment it can be stopped.
+      - name: Nothing gated is in the tree about to be published
+        if: steps.gate.outputs.run == 'true'
+        run: python tools/check_public_data.py out
+
       - name: Publish the data branch
         id: data
         if: steps.gate.outputs.run == 'true'
@@ -321,6 +330,22 @@ jobs:
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
             HEAD:refs/heads/data
           echo "Pushed $(find . -name '*.json' | wc -l | tr -d ' ') files to the data branch."
+
+      # After the public push, deliberately. The two stores fail in different
+      # ways and must not take each other down: a Supabase outage should not
+      # stop tonight's session reaching the site. It is a real step rather than
+      # a best-effort one, though — a silent failure here leaves subscribers
+      # paying for last week's gamma, which is the kind of fault this project
+      # keeps finding weeks late.
+      - name: Upload the gated content
+        if: steps.gate.outputs.run == 'true'
+        env:
+          # Bypasses every row-level security policy, which is correct for the
+          # writer and for nothing else. It exists here and in Vercel's server
+          # environment; it must never reach out/, a log line, or the browser.
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m cli gated
 
       - name: Tell Vercel to rebuild
         # Pushing to the data branch does not trigger a deployment on its own,

@@ -217,6 +217,31 @@ run says out loud that it has proved only half. `tools/test_check_paywall.py`
 points the check at fake projects broken in each of those ways and requires it
 to fail every one.
 
+**What is actually behind the wall.** Gamma, so far. The rule is one rule,
+applied in both places gamma is published: the five deepest option books are
+free in full, and everything below them is gated. Whole rows rather than
+truncated ones — a clipped row shows the format, a complete one shows the
+work — and the page says how many names it is not showing.
+
+Applying it in both places is the load-bearing part. Gating the board while
+leaving each stock page public would read as a paywall and not be one: the
+board is a ranking of those pages, so a few hundred fetches rebuild it exactly.
+`tools/check_public_data.py` is what holds that line. It reads a built tree and
+fails if the public board carries more than the free sample, or if any stock
+file publishes gamma for a name outside it. The nightly runs it on the tree it
+is about to push — the last moment that push can be stopped — and the paywall
+workflow runs it against the data branch that is actually live, which is a
+different claim: a hand-run publish or a night that predates the check would
+otherwise sit there leaking with nothing having failed.
+
+Gated documents are staged to `gated/`, deliberately not under `out/`, because
+`out/` is force-pushed to a public branch whole. `python -m cli gated` uploads
+them, as a step separate from publishing so that a Supabase outage cannot stop
+the night's session reaching the site. It needs `SUPABASE_SERVICE_ROLE_KEY` as
+an **Actions** secret as well as in Vercel's environment — the nightly writes
+the content, the webhook writes entitlement, and both bypass row-level security
+because they are the only writers there are.
+
 Pushing to the branch redeploys the site. The nightly job pushing to `data` does
 not, so the workflow calls a deploy hook after it publishes. Create one in Vercel
 and store it as the `VERCEL_DEPLOY_HOOK` secret; the step does nothing while the
@@ -241,6 +266,9 @@ Secrets it expects, set under Settings → Secrets and variables → Actions:
 - `EDGAR_USER_AGENT` — a contactable address, e.g. `Your Name you@example.com`.
   SEC throttles anonymous callers hard.
 - `DISCORD_WEBHOOK_URL` — optional, for failure alerts
+- `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` — optional. Without
+  them the upload step says out loud that it uploaded nothing, and the site
+  shows the free sample to everybody including subscribers.
 
 Trigger it by hand the first time: Actions → Nightly scan → Run workflow, with
 "Run even if it is not 6pm in New York" left on.

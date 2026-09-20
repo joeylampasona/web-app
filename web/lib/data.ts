@@ -265,8 +265,20 @@ export function getVolumeHeat() {
 export function getGammaBoard() {
   return read<{
     as_of: string;
+    /** Every name that returned usable open interest, not the number of rows
+     *  below. The page says how much is being withheld, which needs the total
+     *  rather than the length of the sample. */
     count: number;
     rows: GammaBoardRow[];
+    /** True once the board moved behind the paywall. Absent in a tree built
+     *  before that, which is why the page treats undefined as "not gated"
+     *  rather than defaulting to locked: an old tree holds the whole board,
+     *  and hiding rows that are already in the file would be theatre. */
+    gated?: boolean;
+    /** How many rows the free sample is meant to be. */
+    free_rows?: number;
+    /** How many rows a subscriber gets. */
+    board_rows?: number;
     copy: { header: string; subhead: string; footer: string };
   }>("market/gamma.json");
 }

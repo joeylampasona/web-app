@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { DataBanner, NoData } from "@/components/DataBanner";
-import { GammaBoard } from "@/components/GammaBoard";
+import { GatedGammaBoard } from "@/components/GatedGammaBoard";
 import { MarketCTA } from "@/components/MarketCTA";
 import { getGammaBoard, getMeta, hasData } from "@/lib/data";
 import { SITE_NAME } from "@/lib/copy";
@@ -31,7 +31,8 @@ export default function GammaPage() {
           carrying a dated event.
         </div>
       ) : (
-        <GammaBoard rows={board.rows} total={board.count} />
+        <GatedGammaBoard rows={board.rows} total={board.count}
+                         gated={Boolean(board.gated)} />
       )}
 
       <p className="caption dim" style={{ marginTop: "var(--pad-lg)" }}>{board.copy.footer}</p>
