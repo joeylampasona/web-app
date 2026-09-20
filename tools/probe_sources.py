@@ -56,10 +56,26 @@ def probe_shares(agent: str) -> None:
     print(RULE)
     # CIKs are public identifiers, not configuration. Hard-coded here because
     # this is a one-off diagnostic, not a code path the site depends on.
-    subjects = {
-        "META": "0001326801", "GOOGL": "0001652044",
-        "BRK.B": "0001067983", "AAPL": "0000320193", "NVDA": "0001045810",
-    }
+    # The names the nightly's own alarm reported dropped for want of a share
+    # count. Resolved through SEC's ticker map rather than hard-coded CIKs,
+    # because "the map does not have this ticker" is itself one of the
+    # candidate explanations and a hard-coded CIK would hide it.
+    wanted = ["KO", "ABT", "SPGI", "NU", "BE", "BRK.B", "META", "AAPL"]
+    subjects: dict[str, str] = {}
+    try:
+        table = _get("https://www.sec.gov/files/company_tickers.json", agent)
+        lookup = {str(row["ticker"]).upper(): f"CIK{int(row['cik_str']):010d}"
+                  for row in table.values()}
+        for symbol in wanted:
+            cik = lookup.get(symbol)
+            if cik:
+                subjects[symbol] = cik
+            else:
+                print(f"{symbol}: NOT IN SEC'S TICKER MAP — this alone would "
+                      f"drop it, whatever its filings say")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   ticker map unavailable: {exc}")
+        return
     concept = ("https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}"
                "/dei/EntityCommonStockSharesOutstanding.json")
     for symbol, cik in subjects.items():
