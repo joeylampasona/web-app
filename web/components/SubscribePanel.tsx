@@ -123,6 +123,15 @@ export function SubscribePanel() {
         saved screens stay yours whether you subscribe or not.
       </p>
 
+      {/* The figures above are the price, not the charge. Stripe adds sales
+          tax from the buyer's address, so the first real payment can be a few
+          percent more than the number they pressed — a small surprise, but a
+          surprise about money, which is the kind people remember. */}
+      <p className="caption dim" style={{ margin: 0 }}>
+        Tax is added where it applies, worked out from your address, so the
+        charge can come to a little more than the figure above.
+      </p>
+
       {busy && <p className="caption dim" style={{ margin: 0 }}>Opening Stripe…</p>}
       {problem && (
         <p className="caption" style={{ margin: 0, color: "var(--loss)" }}>{problem}</p>
