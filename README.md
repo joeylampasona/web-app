@@ -202,8 +202,20 @@ Subscriptions need six more, all server-side and none carrying a
 says what each one is and what breaks when it is wrong. The entitlement
 itself lives in `supabase/paywall.sql`: one table nobody but Stripe's
 webhook can write, and a policy that decides who may read the gated
-content. `tools/check_paywall.py` asks for that content as an outsider
-would and fails the build if any of it arrives.
+content.
+
+`tools/check_paywall.py` then asks for that content from both sides. As an
+outsider, and it fails the build if any of it arrives; and as a test account
+holding a permanent subscription, where it fails if *nothing* arrives. The
+second half matters more than it looks: a dropped table, a policy that denies
+everybody, and a project that is simply unreachable all withhold perfectly,
+and a check that only measures emptiness reports success for all three. Run
+`supabase/paywall_selftest.sql` once to seed the account and the one worthless
+row it asks for, put its address and password in the `PAYWALL_TEST_EMAIL` and
+`PAYWALL_TEST_PASSWORD` secrets, and both halves run. Leave them unset and the
+run says out loud that it has proved only half. `tools/test_check_paywall.py`
+points the check at fake projects broken in each of those ways and requires it
+to fail every one.
 
 Pushing to the branch redeploys the site. The nightly job pushing to `data` does
 not, so the workflow calls a deploy hook after it publishes. Create one in Vercel
