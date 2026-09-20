@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Drawer } from "vaul";
 import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
+import { ScreenGlyph } from "./ScreenGlyph";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface Destination {
@@ -257,11 +258,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     key={destination.href}
                     href={destination.href}
                     onClick={() => setOpenTab(null)}
-                    className="card"
-                    style={{ padding: "var(--pad-md) var(--pad-lg)", minHeight: "var(--h-control)" }}
+                    className="card row"
+                    style={{
+                      padding: "var(--pad-md) var(--pad-lg)",
+                      minHeight: "var(--h-control)", gap: "var(--gap-md)",
+                      alignItems: "center",
+                    }}
                   >
-                    <div>{destination.title}</div>
-                    <div className="caption dim">{destination.blurb}</div>
+                    {/* Muted to sit with the blurb rather than compete with
+                        the title, which is what the eye should reach first. */}
+                    <span style={{ color: "var(--text-muted)", display: "flex" }}>
+                      <ScreenGlyph href={destination.href} />
+                    </span>
+                    <span className="grow">
+                      <span style={{ display: "block" }}>{destination.title}</span>
+                      <span className="caption dim">{destination.blurb}</span>
+                    </span>
                   </Link>
                 ))}
               </div>
@@ -326,7 +338,11 @@ function SideNav({ tabs, pathname, active }: {
                 className="sidenav-link"
                 aria-current={pathname === destination.href ? "page" : undefined}
                 title={destination.blurb}
+                style={{ display: "flex", alignItems: "center", gap: "var(--gap-sm)" }}
               >
+                <span style={{ color: "var(--text-muted)", display: "flex" }}>
+                  <ScreenGlyph href={destination.href} />
+                </span>
                 {destination.title}
               </Link>
             ))}
