@@ -352,7 +352,9 @@ def cmd_catalysts(args) -> int:
               f"{iv_stats.get('chain_error', 0):,} errored, "
               f"{iv_stats.get('chain_none', 0):,} returned nothing, "
               f"{iv_stats.get('chain_empty', 0):,} came back with no rows, "
-              f"{iv_stats.get('chain_ok', 0):,} carried rows.", flush=True)
+              f"{iv_stats.get('chain_ok', 0):,} carried rows, "
+              f"{iv_stats.get('no_spot', 0):,} had no underlying price.",
+              flush=True)
         print("  → gamma: no name returned usable open interest. Either the "
               "source stopped supplying it or every chain was empty — the "
               "gamma section will be blank.", flush=True)

@@ -2,6 +2,7 @@
 for a contactable user agent and it rate-limits at 10 requests a second."""
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import time
@@ -63,6 +64,41 @@ def _ticker_to_cik(session: requests.Session) -> dict[str, str]:
     return out
 
 
+# How old a reported share count may be before it stops meaning anything.
+# Berkshire's dei concept still returns a 2011 figure as its newest entry, and
+# a fifteen-year-old count turned into a market cap is not a worse number, it
+# is a different company's number.
+SHARES_MAX_AGE_DAYS = 400
+
+# Where to look, in order. The dei cover-page concept is the right answer when
+# it exists. It does not always exist: SEC returns a flat 404 for Meta and for
+# Alphabet, both of which simply do not tag it, and those two absences are why
+# neither company had a page on this site. The us-gaap fallbacks carry the
+# whole-company total for exactly those filers — Alphabet's
+# CommonStockSharesOutstanding is 12.23bn across all classes, Meta's basic
+# weighted average is 2.54bn — which is the number a market cap wants.
+_SHARE_CONCEPTS = (
+    ("dei", "EntityCommonStockSharesOutstanding"),
+    ("us-gaap", "CommonStockSharesOutstanding"),
+    ("us-gaap", "WeightedAverageNumberOfSharesOutstandingBasic"),
+)
+
+
+def _newest_share_count(units: list[dict], today: dt.date) -> float | None:
+    """The most recent usable value, or None if the newest one is too old."""
+    dated = [u for u in units if u.get("end") and (u.get("val") or 0) > 0]
+    if not dated:
+        return None
+    latest = max(dated, key=lambda u: u["end"])
+    try:
+        end = dt.date.fromisoformat(latest["end"])
+    except (TypeError, ValueError):
+        return None
+    if (today - end).days > SHARES_MAX_AGE_DAYS:
+        return None
+    return float(latest["val"])
+
+
 def shares_outstanding(symbols: Iterable[str],
                        progress=None) -> dict[str, float]:
     """Latest reported shares outstanding per symbol. Missing symbols are absent.
@@ -86,6 +122,7 @@ def shares_outstanding(symbols: Iterable[str],
     out: dict[str, float] = {}
     refused = 0
     total = len(symbols)
+    today = dt.date.today()
     for index, sym in enumerate(symbols, 1):
         # One request per company at SEC's rate limit is minutes of silence
         # otherwise, which is indistinguishable from a hang.
@@ -94,25 +131,33 @@ def shares_outstanding(symbols: Iterable[str],
         cik = cik_map.get(sym)
         if not cik:
             continue
-        try:
-            resp = session.get(f"{base}/api/xbrl/companyconcept/{cik}/dei/"
-                               f"EntityCommonStockSharesOutstanding.json",
-                               headers={"User-Agent": _user_agent()}, timeout=30)
-            time.sleep(0.11)                       # stay under 10 req/s
-            if resp.status_code != 200:
-                # 404 means SEC has no such filing, which is ordinary. A refusal
-                # is about us, not about the company, and if it happens to every
-                # company it is an outage wearing a per-company disguise.
-                if resp.status_code in (401, 403, 429):
-                    refused += 1
-                continue
-            units = resp.json().get("units", {}).get("shares", [])
-            if not units:
-                continue
-            latest = max(units, key=lambda u: u.get("end", ""))
-            out[sym] = float(latest["val"])
-        except Exception as exc:                   # noqa: BLE001
-            log.debug("EDGAR lookup failed for %s: %s", sym, exc)
+        # Each concept in turn, stopping at the first that answers. Almost
+        # every company is served by the first one and costs a single request;
+        # only the handful that do not tag it pay for the others.
+        for taxonomy, concept in _SHARE_CONCEPTS:
+            try:
+                resp = session.get(
+                    f"{base}/api/xbrl/companyconcept/{cik}/{taxonomy}/{concept}.json",
+                    headers={"User-Agent": _user_agent()}, timeout=30)
+                time.sleep(0.11)                   # stay under 10 req/s
+                if resp.status_code != 200:
+                    # 404 means this company does not tag this concept, which
+                    # is ordinary and is exactly why there is a list of them.
+                    # A refusal is about us, not about the company, and if it
+                    # happens to every company it is an outage wearing a
+                    # per-company disguise.
+                    if resp.status_code in (401, 403, 429):
+                        refused += 1
+                    continue
+                value = _newest_share_count(
+                    resp.json().get("units", {}).get("shares", []), today)
+                if value is None:
+                    continue
+                out[sym] = value
+                break
+            except Exception as exc:               # noqa: BLE001
+                log.debug("EDGAR %s/%s failed for %s: %s",
+                          taxonomy, concept, sym, exc)
 
     # Asked about real companies and told no by all of them: that is SEC
     # refusing us, not the market having no shares outstanding.

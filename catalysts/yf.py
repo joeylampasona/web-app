@@ -57,7 +57,7 @@ def option_chain(symbol: str) -> OptionChain | None:
         expiries = list(ticker.options or [])
         if not expiries:
             return None
-        spot = float(ticker.fast_info.get("last_price") or 0.0)
+        spot = _spot_price(ticker.fast_info)
         rows: list[OptionExpiry] = []
         # Every contract, kept alongside the near-the-money IV summary. The
         # download is the expensive part and it already happened; discarding
@@ -92,6 +92,42 @@ def option_chain(symbol: str) -> OptionChain | None:
         log.debug("option chain failed for %s: %s", symbol, exc)
         return None
 
+
+
+# The keys a spot price has been known to arrive under, in preference order.
+#
+# `last_price` is not among them, and it was the only one we asked for. The
+# call returned None for every name, spot became 0.0, and gamma's profile()
+# returns None the moment spot is not positive — so every company on the site
+# reported "no usable open interest" while the open interest was sitting there
+# untouched. Implied volatility came off the same chains and was fine, because
+# it only uses spot to sort for the near-the-money strikes and guards that with
+# `if spot`. One field name, and the difference between a section that works
+# and a section that has never once had a row in it.
+#
+# Several keys rather than the correct one alone: this is an undocumented
+# surface that has already renamed this field once.
+_SPOT_KEYS = ("lastPrice", "last_price", "regularMarketPrice",
+              "previousClose", "previous_close")
+
+
+def _spot_price(info) -> float:
+    """The underlying's price from a fast-info mapping, or 0.0 if none of the
+    keys it might use carry one."""
+    for key in _SPOT_KEYS:
+        try:
+            value = info.get(key)
+        except Exception:                          # noqa: BLE001
+            continue
+        if value is None:
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            return number
+    return 0.0
 
 
 def _contracts(frame, expiry: dt.date, side: str) -> list[OptionContract]:

@@ -131,7 +131,7 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
     rate = float(settingsmod.get("catalysts.risk_free_rate", 0.0) or 0.0)
     counts = stats if stats is not None else {}
     for key in ("asked", "no_event", "chain_none", "chain_error",
-                "chain_empty", "chain_ok", "gamma_ok"):
+                "chain_empty", "chain_ok", "no_spot", "gamma_ok"):
         counts.setdefault(key, 0)
 
     rows: list[IVRow] = []
@@ -163,6 +163,12 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
         # bracket the event still has open interest at strikes, and that is a
         # separate reading from whether the event is priced richly.
         if gamma_out is not None:
+            # Counted separately because it is the failure that already
+            # happened once: gamma needs the underlying's price and implied
+            # volatility does not, so a broken spot empties one section and
+            # leaves the other looking healthy on the very same fetch.
+            if chain.spot <= 0:
+                counts["no_spot"] += 1
             found = gammamod.profile(chain, calendar.as_of, rate)
             if found is not None:
                 gamma_out[symbol] = found
