@@ -24,6 +24,48 @@ export interface StrongestStock {
   stage: string | null;
 }
 
+/** How much of a group is actually leading, as a bar rather than a sentence.
+ *
+ * "16 of 22 are leaders" and "3 of 22 are leaders" read almost identically at a
+ * glance, and they are the difference between a group that is moving and one
+ * with a single name dragging its average up. The bar makes that the first
+ * thing you see; the sentence stays underneath, because the bar alone does not
+ * say what is being counted.
+ *
+ * The fill is the brand accent rather than the gain colour: this is a measure
+ * of breadth, not of a price going up, and --gain elsewhere on the site always
+ * means the latter.
+ */
+function LeaderShare({ leaders, members }: { leaders: number; members: number }) {
+  const share = members > 0 ? Math.min(Math.max(leaders / members, 0), 1) : 0;
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      <div
+        role="img"
+        aria-label={`${leaders} of ${members} are leaders`}
+        style={{
+          height: 5, borderRadius: "var(--radius-pill)",
+          // --border-stronger, not --surface-3: surface-3 is #FFFFFF on the
+          // light theme, so the unfilled track would have disappeared into the
+          // card it sits on. The border tokens are the theme-aware pair.
+          background: "var(--border-stronger)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${share * 100}%`, height: "100%",
+            background: "var(--brand)", borderRadius: "var(--radius-pill)",
+          }}
+        />
+      </div>
+      <div className="caption dim" aria-hidden>
+        {leaders} of {members} are leaders
+      </div>
+    </div>
+  );
+}
+
 function Card({
   eyebrow, title, href, rs, children,
 }: {
@@ -65,17 +107,13 @@ export function HomeStrongest({
         {industry && (
           <Card eyebrow="Industry" title={industry.name}
                 href={`/industries/${industry.slug}`} rs={industry.rs_rating}>
-            <div className="caption dim">
-              {industry.leaders} of {industry.members} are leaders
-            </div>
+            <LeaderShare leaders={industry.leaders} members={industry.members} />
           </Card>
         )}
         {theme && (
           <Card eyebrow="Theme" title={theme.name}
                 href={`/themes/${theme.slug}`} rs={theme.rs_rating}>
-            <div className="caption dim">
-              {theme.leaders} of {theme.members} are leaders
-            </div>
+            <LeaderShare leaders={theme.leaders} members={theme.members} />
           </Card>
         )}
         {stock && (

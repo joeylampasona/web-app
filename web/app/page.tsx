@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { STAGE_COLOURS } from "@/components/Badges";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { HomeCalendar } from "@/components/HomeCalendar";
 import { HomeNews } from "@/components/HomeNews";
@@ -35,15 +36,65 @@ export const metadata = {
     "Whether the tape is paying for breakouts, what cleared a pivot, and what is dated in the week ahead.",
 };
 
+/** The three live stages of a screen, each with its own dot.
+ *
+ * It was one grey line — "47 forming · 5 fresh · 28 climbing" — which has to be
+ * read left to right to learn anything. The dots reuse the same colours the
+ * stage picker and the stage badges already use, so the same idea keeps the
+ * same colour everywhere rather than gaining a third encoding here.
+ */
+function StageBreakdown({ stages }: { stages: Record<string, number> }) {
+  const parts: { key: string; label: string; value: number }[] = [
+    { key: "forming", label: "forming", value: stages.forming ?? 0 },
+    { key: "fresh_breakout", label: "fresh", value: stages.fresh_breakout ?? 0 },
+    { key: "climbing", label: "climbing", value: stages.climbing ?? 0 },
+  ];
+  return (
+    <div className="row wrap caption dim" style={{ gap: "var(--gap-sm)" }}>
+      {parts.map((part) => (
+        <span key={part.key} className="row" style={{ gap: 5, alignItems: "center" }}>
+          <span
+            aria-hidden
+            style={{
+              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+              background: STAGE_COLOURS[part.key],
+            }}
+          />
+          <span className="num" style={{ color: "var(--text-secondary)" }}>{part.value}</span>
+          <span>{part.label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** What the number means, not what it is. Only the two that have a direction
+ *  take one: "cleared a pivot" is structural progress, "tested one and fell
+ *  back" is resistance. A count with no direction stays plain, because
+ *  colouring everything is the same as colouring nothing. */
+const STAT_TONE: Record<string, string> = {
+  gain: "var(--gain)",
+  warn: "var(--warn)",
+};
+
 function Stat({
-  value, label, note, href,
+  value, label, note, href, tone,
 }: {
   value: string; label: string; note?: string; href?: string;
+  tone?: "gain" | "warn";
 }) {
   const body = (
     <>
       <div className="footnote muted">{label}</div>
-      <div className="num" style={{ fontSize: "var(--size-h2)", lineHeight: 1.2 }}>{value}</div>
+      <div
+        className="num"
+        style={{
+          fontSize: "var(--size-h2)", lineHeight: 1.2,
+          color: tone ? STAT_TONE[tone] : undefined,
+        }}
+      >
+        {value}
+      </div>
       {note && <div className="caption dim">{note}</div>}
     </>
   );
@@ -168,12 +219,14 @@ export default function Home() {
             label="Cleared a pivot"
             note="Anywhere in the universe"
             href="/market/breakouts"
+            tone="gain"
           />
           <Stat
             value={failedPokes === null ? "—" : failedPokes.toFixed(0)}
             label="Tested one and fell back"
             note="The cost of being early"
             href="/market/breadth"
+            tone="warn"
           />
           <Stat
             value={String(freshInScreens)}
@@ -230,11 +283,7 @@ export default function Home() {
                 </span>
                 <span className="num footnote">{screen.total}</span>
               </div>
-              <div className="caption dim">
-                {screen.stages.forming ?? 0} forming ·{" "}
-                {screen.stages.fresh_breakout ?? 0} fresh ·{" "}
-                {screen.stages.climbing ?? 0} climbing
-              </div>
+              <StageBreakdown stages={screen.stages} />
             </Link>
           ))}
         </div>
