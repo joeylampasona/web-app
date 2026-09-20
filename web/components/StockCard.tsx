@@ -127,6 +127,7 @@ export function StockCard({
           symbol={setup.symbol}
           height={chartHeight}
           onReady={handleChartReady}
+          shape={setup.shape}
         />
         )}
       </div>

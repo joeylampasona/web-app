@@ -100,6 +100,11 @@ class Line:
     slope: float               # price per session
     intercept: float           # price at index 0
     touches: int
+    #: The swing points the line was fitted through, as (bar index, price).
+    #: Carried rather than recomputed because the chart marks exactly these —
+    #: a drawn trendline that does not touch the highs it was fitted to is
+    #: the single thing that makes a pattern overlay look made up.
+    points: list[tuple[int, float]] = field(default_factory=list)
 
     def at(self, index: int) -> float:
         return self.intercept + self.slope * index
@@ -109,6 +114,24 @@ class Line:
         if reference_price <= 0:
             return 0.0
         return 100.0 * self.slope / reference_price
+
+
+def _line_json(line: "Line", bars: list[Bar], start: int, end: int) -> dict:
+    """One trendline as the chart needs it: two endpoints and its touches."""
+    def at(index: int) -> dict:
+        index = max(0, min(index, len(bars) - 1))
+        return {"date": bars[index].date.isoformat(),
+                "price": round(line.at(index), 4)}
+
+    return {
+        "from": at(start),
+        "to": at(end),
+        "touches": [
+            {"date": bars[i].date.isoformat(), "price": round(price, 4)}
+            for i, price in line.points
+            if 0 <= i < len(bars)
+        ],
+    }
 
 
 @dataclass
@@ -186,6 +209,15 @@ class Shape:
             "upper_slope_pct": round(self.upper.slope_pct(self.level), 4),
             "lower_slope_pct": round(self.lower.slope_pct(self.level), 4),
             "touches": {"upper": self.upper.touches, "lower": self.lower.touches},
+            # Drawable geometry: each line as the two prices it takes at the
+            # ends of the shape, plus the swing points it passes through.
+            # Published rather than left to be rebuilt in the browser from the
+            # slope percentages — that reconstruction drifts, and a formation
+            # overlay that misses its own highs by a percent is worse than none.
+            "lines": {
+                "upper": _line_json(self.upper, bars, self.start_idx, self.end_idx),
+                "lower": _line_json(self.lower, bars, self.start_idx, self.end_idx),
+            },
             "pole_pct": round(self.pole_pct, 2) if self.pole_pct is not None else None,
             "pole_sessions": self.pole_sessions,
             "squeeze_fired": self.squeeze_fired,
@@ -224,7 +256,8 @@ def fit(points: list[tuple[int, float]]) -> Line | None:
     if denominator <= 0:                      # every point on the same bar
         return None
     slope = sum((p[0] - mean_x) * (p[1] - mean_y) for p in points) / denominator
-    return Line(slope=slope, intercept=mean_y - slope * mean_x, touches=n)
+    return Line(slope=slope, intercept=mean_y - slope * mean_x, touches=n,
+                points=list(points))
 
 
 def _gap(upper: Line, lower: Line, index: int) -> float:

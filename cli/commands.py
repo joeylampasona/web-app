@@ -316,7 +316,8 @@ def cmd_catalysts(args) -> int:
     # throttled before it was given one.
     from catalysts import forecast as forecastmod
     forecastmod.fetch(conn, market.universe, limit=400,
-                      notice=lambda m: print(f"  → {m}", flush=True))
+                      notice=lambda m: print(f"  → {m}", flush=True),
+                      priority=market.caps)
 
     from catalysts import gamma as gammamod
     gamma_profiles: dict = {}

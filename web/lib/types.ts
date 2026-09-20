@@ -26,8 +26,22 @@ export interface ShapeGeometry {
   /** Squeezes only. Which way the compression has been leaning -- a reading,
    *  not a claim about the break. */
   momentum: number | null; momentum_slope: number | null;
+  /** The two fitted trendlines as drawable geometry: each line's price at
+   *  the ends of the shape, and the swing points it was fitted through. */
+  lines?: {
+    upper: ShapeLine | null;
+    lower: ShapeLine | null;
+  } | null;
   volume_vs_prior?: number | null; atr_vs_prior?: number | null;
   notes: string[];
+}
+
+/** One trendline, ready to draw. `touches` are the swings the least-squares
+ *  fit ran through -- not all of them sit on the line. */
+export interface ShapeLine {
+  from: { date: string; price: number };
+  to: { date: string; price: number };
+  touches: { date: string; price: number }[];
 }
 
 export interface Contraction {

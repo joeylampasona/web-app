@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Contraction, Bar } from "@/lib/types";
 import type { MaPlan } from "@/lib/movingAverages";
+import type { ShapeGeometry } from "@/lib/types";
 
 /**
  * The chart semantics are constant across every chart on the site: a dashed
@@ -51,7 +52,7 @@ function token(name: string, fallback = "transparent"): string {
 
 export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
-  movingAverages,
+  movingAverages, shape,
 }: {
   bars: Bar[];
   /** Null when the stock is not on a screen: there is no pivot to draw. */
@@ -70,6 +71,10 @@ export function SetupChart({
    *  leave it out and stay as they were — four extra lines on a chart the size
    *  of a business card is noise. */
   movingAverages?: MaPlan | null;
+  /** The fitted formation, on the shape screens only. Draws the two
+   *  trendlines and marks the swings they were fitted through, so the reader
+   *  can see the structure the screen claims rather than take it on trust. */
+  shape?: ShapeGeometry | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState<number | null>(null);
@@ -88,9 +93,15 @@ export function SetupChart({
     observer.observe(element);
     return () => observer.disconnect();
   }, [responsive]);
-  const [overlay, setOverlay] = useState<{ boxes: (Box & { x1: number; x2: number; y1: number; y2: number })[]; width: number }>(
-    { boxes: [], width: 0 },
-  );
+  const [overlay, setOverlay] = useState<{
+    boxes: (Box & { x1: number; x2: number; y1: number; y2: number })[];
+    /** The swings the formation's lines were fitted through, already in pixels.
+     *  Drawn here rather than as chart markers because the library's markers
+     *  come at one fixed size, which on a card this small is a dot bigger than
+     *  the candles it is annotating. */
+    swings: { x: number; y: number; side: "upper" | "lower" }[];
+    width: number;
+  }>({ boxes: [], swings: [], width: 0 });
 
   const boxes = useMemo<Box[]>(() => {
     if (!contractions.length || pivot === null) return [];
@@ -191,7 +202,39 @@ export function SetupChart({
         });
       }
 
+      // The formation itself. Two straight segments between the endpoints the
+      // publisher computed, never refitted here: the browser has the same
+      // bars but not the same swing detection, and a second opinion about
+      // where the line goes is exactly how an overlay ends up not touching
+      // the highs it claims to be drawn through.
+      if (shape?.lines) {
+        const boundary = shape.direction === "short"
+          ? token("--loss") : token("--gain");
+        for (const side of ["upper", "lower"] as const) {
+          const line = shape.lines[side];
+          if (!line) continue;
+          // The line that the break happens through is the one that matters,
+          // so it is drawn solid and the other dashed. For a long shape that
+          // is the ceiling; for a short one, the floor.
+          const isBoundary = shape.direction === "short"
+            ? side === "lower" : side === "upper";
+          const series = chart.addLineSeries({
+            color: isBoundary ? boundary : token("--text-muted"),
+            lineWidth: isBoundary ? 2 : 1,
+            lineStyle: isBoundary ? lw.LineStyle.Solid : lw.LineStyle.Dashed,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
+          });
+          series.setData([
+            { time: line.from.date, value: line.from.price },
+            { time: line.to.date, value: line.to.price },
+          ] as never);
+        }
+      }
+
       const markers: { time: string; position: string; color: string; shape: string; text: string }[] = [];
+
       if (breakoutDate && bars.some((b) => b.time === breakoutDate)) {
         markers.push({
           time: breakoutDate, position: "aboveBar", color: token("--gain"),
@@ -207,9 +250,36 @@ export function SetupChart({
           });
         }
       }
-      if (markers.length) candles.setMarkers(markers as never);
+      // lightweight-charts requires markers in ascending time order and
+      // silently drops the whole set otherwise, which is how an overlay
+      // disappears without any error to explain it.
+      if (markers.length) {
+        markers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+        candles.setMarkers(markers as never);
+      }
 
-      chart.timeScale().fitContent();
+      // Frame the formation when there is one. fitContent shows every bar
+      // passed in, which for a four-session flag means the thing the chart
+      // exists to show occupies the last few pixels and is unreadable. The
+      // window is padded generously to the left so the move the formation is
+      // a pause in stays on screen — a flag without its pole is just a gap.
+      const framed = (() => {
+        if (!shape?.lines?.upper) return false;
+        const startIdx = bars.findIndex((b) => b.time === shape.lines!.upper!.from.date);
+        if (startIdx < 0) return false;
+        const span = bars.length - startIdx;
+        const from = bars[Math.max(0, startIdx - Math.max(20, span * 2))];
+        if (!from) return false;
+        try {
+          chart.timeScale().setVisibleRange({
+            from: from.time as never, to: bars[bars.length - 1].time as never,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (!framed) chart.timeScale().fitContent();
       onReady?.(() => {
         try {
           return chart.takeScreenshot();
@@ -231,7 +301,17 @@ export function SetupChart({
             return { ...box, x1, x2, y1, y2 };
           })
           .filter(Boolean) as (Box & { x1: number; x2: number; y1: number; y2: number })[];
-        setOverlay({ boxes: projected, width });
+
+        const swings: { x: number; y: number; side: "upper" | "lower" }[] = [];
+        for (const side of ["upper", "lower"] as const) {
+          for (const point of shape?.lines?.[side]?.touches ?? []) {
+            const x = scale.timeToCoordinate(point.date as never);
+            const y = candles.priceToCoordinate(point.price);
+            if (x === null || y === null) continue;
+            swings.push({ x, y, side });
+          }
+        }
+        setOverlay({ boxes: projected, swings, width });
       };
 
       project();
@@ -253,7 +333,8 @@ export function SetupChart({
       disposed = true;
       cleanup();
     };
-  }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady, movingAverages]);
+  }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady,
+      movingAverages, shape]);
 
   return (
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>
@@ -264,6 +345,20 @@ export function SetupChart({
         height={drawnHeight}
         aria-hidden
       >
+        {/* The tops and bottoms the two trendlines were fitted through. Hollow,
+            so a candle underneath still reads; offset off the extreme so the
+            ring sits beside the wick rather than on it. */}
+        {overlay.swings.map((swing, index) => (
+          <circle
+            key={`swing-${index}`}
+            cx={swing.x}
+            cy={swing.y + (swing.side === "upper" ? -4 : 4)}
+            r={2.5}
+            fill="none"
+            stroke="var(--text-muted)"
+            strokeWidth={1}
+          />
+        ))}
         {overlay.boxes.map((box, index) => {
           const current = index === 0;
           return (

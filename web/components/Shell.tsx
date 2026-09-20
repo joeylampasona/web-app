@@ -40,6 +40,7 @@ const TABS: {
       { href: "/screens/custom", title: "Create your own", blurb: "Move every dial yourself." },
     ],
   },
+  { key: "search", label: "Search", glyph: "⌕", match: "/search", href: "/search" },
   {
     key: "market", label: "Market", glyph: "◳", match: "/market",
     destinations: [
@@ -58,7 +59,6 @@ const TABS: {
       { href: "/market/seasonals", title: "Seasonals", blurb: "What each month did, year by year." },
     ],
   },
-  { key: "search", label: "Search", glyph: "⌕", match: "/search", href: "/search" },
   {
     key: "watchlist", label: "Watchlist", glyph: "☆", match: "/watchlist",
     destinations: [
@@ -185,10 +185,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
         }}
       >
         {TABS.map((tab) => {
-          // Search gets the raised pill. It was the middle of five tabs and the
-          // name said so; with six it sits right of centre, which is a cost we
-          // took knowingly to keep Today in the bar. The pill marks the tab,
-          // not the midpoint.
+          // Search gets the raised pill, and sits third of five so the pill is
+          // actually on the midpoint. It had drifted to fourth as tabs were
+          // added, which left a raised circle sitting off-centre — a shape the
+          // eye reads as a mistake rather than as emphasis, because a lifted
+          // control in a symmetrical bar is only legible when it is the axis
+          // of the symmetry.
           const isRaised = tab.key === "search";
           const isActive = active === tab.key;
           return (

@@ -230,9 +230,27 @@ export function StockDetail({ stock, run }: {
               other screen's listing look unexplained. */}
           <div className="stack" style={{ gap: "var(--gap-lg)" }}>
             {shaped.map((s) => (
-              <div key={s.screen} className="stack" style={{ gap: "var(--gap-xs)" }}>
+              <div key={s.screen} className="stack" style={{ gap: "var(--gap-sm)" }}>
                 {shaped.length > 1 && (
                   <div className="footnote muted">{s.screen.replace(/_/g, " ")}</div>
+                )}
+                {/* The formation drawn, next to the numbers describing it. Not
+                    on the card at the top of the page: that one draws whichever
+                    setup the publisher picked as primary, which for a stock on
+                    both a base screen and a shape screen is usually the base —
+                    so the wedge would have been described here and drawn
+                    nowhere. */}
+                {chartBars.length > 0 && (
+                  <SetupChart
+                    bars={chartBars}
+                    pivot={s.pivot}
+                    contractions={[]}
+                    breakoutDate={s.breakout_date}
+                    flags={[]}
+                    symbol={`${stock.symbol}-${s.screen}`}
+                    height="responsive"
+                    shape={s.shape}
+                  />
                 )}
                 <ShapeReadout shape={s.shape} />
               </div>

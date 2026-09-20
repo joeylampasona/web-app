@@ -242,19 +242,31 @@ def load(conn, symbols: Sequence[str]) -> dict[str, dict]:
 
 
 def fetch(conn, symbols: Sequence[str], limit: int | None = None,
-          notice=None) -> tuple[int, int]:
+          notice=None, priority: dict[str, float] | None = None
+          ) -> tuple[int, int]:
     """Ask about the names whose forecasts have aged out. Returns (asked, kept).
 
     `limit` caps how many are asked for in one night. The universe divided by
     the freshness window is the steady-state rate, but the first run has no
     cache at all and would otherwise try every name in one pass — which is how
     the earnings scrape got itself rate-limited before it was given a cache.
+
+    `priority` decides who goes first while the cache is filling — market cap,
+    in practice. Without it the order is whatever order the universe came in,
+    which is alphabetical, and the result is a site where every company from A
+    to D has analyst estimates and Nvidia has none. That is not a small cosmetic
+    fault: the largest companies are the ones a reader is most likely to look
+    up first, so the alphabet was putting the emptiest pages in front of the
+    most traffic. The cache still reaches every name within the freshness
+    window either way; this only settles who waits.
     """
     from data import settings                    # noqa: PLC0415
     if settings.get("data.provider") == "synthetic":
         return _synthetic(conn, symbols, notice)
 
     ask = stale_symbols(conn, symbols)
+    if priority:
+        ask.sort(key=lambda s: -(priority.get(s.upper()) or 0.0))
     if limit is not None:
         ask = ask[:limit]
     if notice:
