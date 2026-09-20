@@ -145,6 +145,43 @@ def _get(path: str, params: dict) -> dict:
         raise ReleasesUnavailable(str(exc)) from exc
 
 
+# FRED caps a page at 1000 rows and pages the rest by offset. One page looked
+# like plenty — until the calendar was checked against its own horizon. Asked
+# for 90 days and sorted ascending, the first page reached 2026-10-27 and
+# stopped: seven weeks of the window, all of November and December, simply
+# absent. Nothing in the response says a page was truncated; the count just
+# happens to be exactly the limit, which is the only tell.
+PAGE = 1000
+MAX_PAGES = 8
+
+
+def _all_release_dates(start: dt.date, notice=None) -> list[dict]:
+    """Every scheduled release date from `start`, across pages."""
+    rows: list[dict] = []
+    for page in range(MAX_PAGES):
+        payload = _get("/releases/dates", {
+            "include_release_dates_with_no_data": "true",
+            "realtime_start": start.isoformat(),
+            "sort_order": "asc",
+            "limit": PAGE,
+            "offset": page * PAGE,
+        })
+        batch = payload.get("release_dates") or []
+        rows.extend(batch)
+        # A short page is the last page. FRED also reports the total, so a
+        # truncation that this loop cannot reach is worth saying out loud
+        # rather than publishing quietly.
+        if len(batch) < PAGE:
+            return rows
+        total = int(payload.get("count") or 0)
+        if total and len(rows) >= total:
+            return rows
+    if notice:
+        notice(f"Data releases: stopped at {len(rows):,} rows after "
+               f"{MAX_PAGES} pages; the calendar may be short at its far end.")
+    return rows
+
+
 def fetch(as_of: dt.date, lookahead_days: int | None = None,
           notice=None) -> list[Release]:
     """Scheduled releases from `as_of` forward. Empty when unavailable."""
@@ -167,19 +204,14 @@ def fetch(as_of: dt.date, lookahead_days: int | None = None,
         # against them yet, so without that flag the endpoint answers with
         # history only. The horizon is applied below, where it belongs.
         today = min(as_of, dt.date.today())
-        payload = _get("/releases/dates", {
-            "include_release_dates_with_no_data": "true",
-            "realtime_start": today.isoformat(),
-            "sort_order": "asc",
-            "limit": 1000,
-        })
+        rows = _all_release_dates(today, notice)
     except ReleasesUnavailable as exc:
         if notice:
             notice(f"Data releases skipped: {exc}")
         return []
 
     out: list[Release] = []
-    for row in payload.get("release_dates") or []:
+    for row in rows:
         try:
             day = dt.date.fromisoformat(str(row["date"]))
         except (KeyError, TypeError, ValueError):
@@ -213,8 +245,17 @@ def fetch(as_of: dt.date, lookahead_days: int | None = None,
                    f"publishes something most weekdays — so treat this as a "
                    f"broken request rather than an empty one.")
         else:
-            notice(f"{len(out):,} scheduled data releases to {horizon} "
-                   f"({flagged:,} of them widely watched).")
+            # The date the calendar actually reaches, not the one it asked for.
+            # This said "to {horizon}" regardless, so a feed truncated seven
+            # weeks short of the window reported the full window and looked
+            # correct. Saying the real last date makes a short answer visible
+            # in the one place somebody reads every night.
+            reached = max(r.date for r in out)
+            short = ("" if reached >= horizon
+                     else f" — short of the {horizon} horizon, so the far end "
+                          f"of the window is missing")
+            notice(f"{len(out):,} scheduled data releases to {reached} "
+                   f"({flagged:,} of them widely watched){short}.")
     return out
 
 
