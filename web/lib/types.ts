@@ -293,6 +293,18 @@ export interface StockFile {
   catalyst_roadmap: CatalystEvent[];
   peers: { industry: { symbol: string; name: string; rs_rating: Rating }[];
            theme: { symbol: string; name: string; rs_rating: Rating }[] };
+  /** Why this stock is on none of the screens, measured against the
+   *  base-and-breakout thresholds. Present only when `setups` is empty --
+   *  there is nothing to explain about a stock that is on a screen. Null when
+   *  it has too little history for the checks to mean anything. */
+  structure_check?: StructureCheckRow[] | null;
+}
+
+/** One line of that answer. `met: null` is a third state and not a failure:
+ *  the check could not be run at all, which is what "needs a base first"
+ *  means. */
+export interface StructureCheckRow {
+  label: string; met: boolean | null; detail: string;
 }
 
 /** A broad-market index row for the home page strip. `above_200` is null when

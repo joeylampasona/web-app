@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { AuthGate } from "./AuthGate";
+import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
@@ -11,7 +12,10 @@ import { GammaPanel } from "./GammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
+import { PeerBars } from "./PeerBars";
+import { RsRing } from "./RsRing";
 import { SetupChart } from "./SetupChart";
+import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
 import { WatchStar } from "./WatchStar";
 import { XRayChart } from "./XRayChart";
@@ -91,6 +95,9 @@ export function StockDetail({ stock, run }: {
                 that was not could not be added to a watchlist from anywhere. */}
             <WatchStar symbol={stock.symbol} withLabel />
             <QuadrantBadge quadrant={stock.quadrant} />
+            {/* The one measure this site's own backtest found an edge in, and
+                it was a grey integer in the metadata line under the name. */}
+            <RsRing rating={stock.rs_rating} />
           </div>
         </div>
         {stock.themes.length > 0 && (
@@ -129,10 +136,7 @@ export function StockDetail({ stock, run }: {
         </div>
       ) : (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <div className="card muted footnote">
-            Not on a screen at the moment — no base, so no pivot to draw. The price
-            and volume are below.
-          </div>
+          <StructureCheck rows={stock.structure_check} name={stock.symbol} />
           {chartBars.length > 0 && (
             <div className="card stack" style={{ padding: "var(--pad-md)",
                                                  gap: "var(--gap-sm)" }}>
@@ -178,34 +182,24 @@ export function StockDetail({ stock, run }: {
       <section>
         <div className="eyebrow">Peers</div>
         <div className="grid-2">
-          <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
+          <div className="card stack" style={{ gap: "var(--gap-sm)" }}>
             <div className="footnote muted">Same industry</div>
-            {stock.peers.industry.map((peer) => (
-              <Link key={peer.symbol} href={`/stocks/${peer.symbol}`} className="between footnote">
-                <span className="mono">{peer.symbol}</span>
-                <span className="num dim">{rsText(peer.rs_rating)}</span>
-              </Link>
-            ))}
-            {stock.peers.industry.length === 0 && <span className="caption dim">None</span>}
+            <PeerBars peers={stock.peers.industry} self={stock.symbol} empty="None" />
           </div>
-          <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
+          <div className="card stack" style={{ gap: "var(--gap-sm)" }}>
             <div className="footnote muted">Same theme</div>
-            {stock.peers.theme.map((peer) => (
-              <Link key={peer.symbol} href={`/stocks/${peer.symbol}`} className="between footnote">
-                <span className="mono">{peer.symbol}</span>
-                <span className="num dim">{rsText(peer.rs_rating)}</span>
-              </Link>
-            ))}
-            {stock.peers.theme.length === 0 && (
-              <span className="caption dim">No themes — common and fine.</span>
-            )}
+            <PeerBars peers={stock.peers.theme} self={stock.symbol}
+                      empty="No themes — common and fine." />
           </div>
         </div>
       </section>
 
       <section>
         <div className="eyebrow">Catalyst roadmap</div>
-        <CatalystTimeline events={stock.catalyst_roadmap} />
+        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <CatalystCountdown events={stock.catalyst_roadmap} />
+          <CatalystTimeline events={stock.catalyst_roadmap} />
+        </div>
       </section>
 
       <section>
