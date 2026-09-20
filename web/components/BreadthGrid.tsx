@@ -21,6 +21,7 @@ export function BreadthGrid({ cards, universe }: { cards: BreadthCard[]; univers
             <div className="num" style={{ fontSize: "var(--size-h2)" }}>
               {card.unit === "percent" ? `${decimal(card.value, 1)}%` : card.value}
             </div>
+            <BreadthBar card={card} />
             <div className="caption dim">{supporting(card, universe)}</div>
             <div className="caption">
               <span className="dim">week over week </span>
@@ -41,6 +42,44 @@ export function BreadthGrid({ cards, universe }: { cards: BreadthCard[]; univers
         ))}
       </div>
     </>
+  );
+}
+
+/* Cards where a HIGH reading is the weak one.
+ *
+ * Everything else here counts something constructive — names near their highs,
+ * names above the 50-day — so more is better and the obvious "green over 50%"
+ * holds. "Near 52-week lows" counts the opposite, and colouring it by the same
+ * rule would paint a market with 80% of its names at yearly lows bright green.
+ * The bar has to know which way each card points. */
+const INVERTED = new Set(["near_52w_lows"]);
+
+/** A gauge under the headline figure.
+ *
+ * Only for percentages: the count cards ("broke out today") have no denominator
+ * on this card, so a bar would need a maximum invented for it.
+ */
+function BreadthBar({ card }: { card: BreadthCard }) {
+  if (card.unit !== "percent") return null;
+  const pct = Math.min(Math.max(card.value, 0), 100);
+  const constructive = INVERTED.has(card.key) ? pct < 50 : pct >= 50;
+  return (
+    <div
+      role="img"
+      aria-label={`${decimal(card.value, 1)} percent`}
+      style={{
+        height: 5, borderRadius: "var(--radius-pill)",
+        background: "var(--border-stronger)", overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          width: `${pct}%`, height: "100%", borderRadius: "var(--radius-pill)",
+          background: constructive ? "var(--gain)" : "var(--warn)",
+          opacity: 0.85,
+        }}
+      />
+    </div>
   );
 }
 

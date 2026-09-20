@@ -42,7 +42,7 @@ export default function SectorsPage() {
                   <tr key={etf.symbol}>
                     <td className="text mono">{etf.symbol}</td>
                     <td>{etf.rs_rating ?? "—"}</td>
-                    <td><PriceChange value={etf.excess_return_pct} digits={1} /></td>
+                    <td><PriceChange value={etf.excess_return_pct} digits={1} badge /></td>
                   </tr>
                 ))}
               </tbody>

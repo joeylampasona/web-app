@@ -238,12 +238,32 @@ export function CalendarPanel({ file, releases }: {
                   <div key={`${row.date}-${row.release_id}-${row.name}`}
                        style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
                     <div className="footnote">{row.name}</div>
-                    <div className="row wrap caption dim" style={{ gap: "var(--gap-xs)" }}>
-                      <span>data release</span>
-                      {row.notable && <span>· widely watched</span>}
+                    {/* Was a run-on caption: "data release · widely watched
+                        FRED". Three different things — what it is, how much it
+                        matters, and where it came from — reading as one
+                        sentence. As chips they keep their own row height on a
+                        narrow screen instead of rewrapping the day's card. */}
+                    <div className="row wrap" style={{ gap: "var(--gap-xs)", marginTop: 3 }}>
+                      <span className="badge" style={{ letterSpacing: "0.04em" }}>
+                        {row.notable && (
+                          <span
+                            aria-hidden
+                            style={{
+                              width: 5, height: 5, borderRadius: "50%",
+                              background: "var(--brand)", flexShrink: 0,
+                            }}
+                          />
+                        )}
+                        Data release
+                      </span>
+                      {row.notable && (
+                        <span className="caption dim">widely watched</span>
+                      )}
                       {row.link && (
                         <a href={row.link} target="_blank" rel="noopener noreferrer"
-                           style={{ textDecoration: "underline" }}>FRED</a>
+                           className="badge" style={{ letterSpacing: "0.04em" }}>
+                          FRED
+                        </a>
                       )}
                     </div>
                   </div>

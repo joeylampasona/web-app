@@ -7,6 +7,45 @@ import type { GroupRow } from "@/lib/types";
 import type { HeatRow } from "@/lib/data";
 import { PriceChange } from "./PriceChange";
 
+/** The 1-99 score, with a gauge under it.
+ *
+ * A column of bare numbers has to be read one at a time and compared in your
+ * head. The bar makes the ranking visible down the column without moving the
+ * number or changing its alignment, which is why it sits underneath rather
+ * than behind: a fill behind digits either washes them out or has to be so
+ * faint it says nothing.
+ *
+ * Semi-transparent so it reads as a gauge rather than a second data series,
+ * and it never replaces the number — the figure stays exact.
+ */
+function ScoreGauge({ value }: { value: number | string | null | undefined }) {
+  const numeric = typeof value === "number" && Number.isFinite(value) ? value : null;
+  const share = numeric === null ? 0 : Math.min(Math.max(numeric, 0), 99) / 99;
+  return (
+    <span className="stack" style={{ gap: 3, minWidth: 34, alignItems: "flex-end" }}>
+      <span className="num">{numeric ?? "—"}</span>
+      {numeric !== null && (
+        <span
+          aria-hidden
+          style={{
+            width: 34, height: 3, borderRadius: "var(--radius-pill)",
+            background: "var(--border-stronger)", overflow: "hidden",
+            display: "block",
+          }}
+        >
+          <span
+            style={{
+              display: "block", height: "100%", width: `${share * 100}%`,
+              background: "var(--text-secondary)", opacity: 0.75,
+              borderRadius: "var(--radius-pill)",
+            }}
+          />
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function StrengthTable({
   strong, weak, kind,
 }: {
@@ -46,9 +85,7 @@ export function StrengthTable({
               <span className="badge">
                 <span className="num">{row.leaders}</span>&nbsp;leaders
               </span>
-              <span className="num" style={{ minWidth: 28, textAlign: "right" }}>
-                {row.rs_rating ?? "—"}
-              </span>
+              <ScoreGauge value={row.rs_rating} />
             </span>
           </Link>
         ))}
