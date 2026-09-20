@@ -1,0 +1,30 @@
+# A read-only diagnostic, run by hand.
+#
+# Two sections of the site are empty for reasons that cannot be reproduced on
+# a development machine, because the sources involved are not reachable from
+# one. This workflow runs the probe where the nightly runs and prints what the
+# sources actually return, so the fix is written against evidence rather than
+# against a guess about an API's shape.
+#
+# It writes nothing: no database, no data branch, no deploy.
+name: Probe data sources
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+      - name: Ask the sources what they return
+        env:
+          # The contact address SEC requires. The probe never prints it.
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+        run: python tools/probe_sources.py

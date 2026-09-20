@@ -104,6 +104,10 @@ class Funnel:
     stages: list[Stage] = field(default_factory=list)
     final: int = 0
     as_of: dt.date | None = None
+    #: Names that fell out of the funnel for a reason that is about us rather
+    #: than about them. Kept separate from the stage counts because a count
+    #: going down by four is invisible and "Meta is not in the universe" is not.
+    lost_leaders: list[str] = field(default_factory=list)
 
     def add(self, name: str, survivors: int, previous: int) -> None:
         self.stages.append(Stage(name, survivors, max(0, previous - survivors)))
@@ -115,6 +119,11 @@ class Funnel:
             lines.append(f"  {s.name.ljust(width)}  {s.survivors:>6,}   (-{s.dropped:,})")
         lines.append("")
         lines.append(f"  {'FINAL'.ljust(width)}  {self.final:>6,}")
+        if self.lost_leaders:
+            lines.append("")
+            lines.append("  ⚠️  Dropped for want of a share count, despite being "
+                         "among the most heavily traded names on the market:")
+            lines.append("      " + ", ".join(self.lost_leaders))
         return "\n".join(lines)
 
 
@@ -291,6 +300,12 @@ def refresh_reference(conn: sqlite3.Connection, adapter: DataAdapter | None = No
 
 # ---------------------------------------------------------------- the floor
 
+# How far down the most-traded ranking still counts as a name whose absence is
+# obviously a fault. Every mega cap sits far inside this; so does anything else
+# a reader would notice missing.
+LEADER_RANK = 150
+
+
 def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str]) -> bool:
     if (row["type"] or "").upper() not in allowed:
         return False
@@ -373,6 +388,26 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     known = [(r, close, adv, shares[r["symbol"]])
              for r, close, adv in priced if shares.get(r["symbol"])]
     funnel.add("has a share count", len(known), len(priced))
+
+    # A share count we could not get is the one gate that can drop a company
+    # for a reason that has nothing to do with the company. Meta, Alphabet and
+    # Berkshire all vanished from the universe this way and nothing said so:
+    # the stage count went down by a few out of two thousand, which is
+    # invisible, and the site simply had no page for Meta.
+    #
+    # The alarm is on measured trading, not a hand-kept list of important
+    # tickers. A list would need maintaining and would be wrong within a
+    # quarter; dollar volume ranks the mega caps at the top by itself, every
+    # night, for free. Anything in the most-traded names of the whole market
+    # that we dropped for want of a share count is a fault on our side.
+    ranked = sorted(priced, key=lambda row: -row[2])[:LEADER_RANK]
+    funnel.lost_leaders = [r["symbol"] for r, _, _ in ranked
+                           if not shares.get(r["symbol"])]
+    if funnel.lost_leaders and notice:
+        notice("⚠️  " + ", ".join(funnel.lost_leaders) + " — among the "
+               f"{LEADER_RANK} most heavily traded names on the market, and "
+               "dropped because no share count came back for them. That is "
+               "our failure to read one, not a fact about the company.")
 
     capped = [row for row in known if row[3] * row[1] > min_cap]
     funnel.add(f"market cap > ${min_cap/1e6:,.0f}M", len(capped), len(known))
