@@ -169,6 +169,156 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  // ---- market pages. Same rule as the screens above: draw the idea, not a
+  // generic chart squiggle, and keep each one distinguishable from its
+  // neighbours at 24px.
+  "/market/breakouts": {
+    label: "Price clearing a level",
+    art: (
+      <>
+        <path d="M2 15 L21 15" strokeDasharray="2.5 2" />
+        <path d="M5 20 L10 16 L14 11 L20 5" />
+        <path d="M15 5 L20 5 L20 10" />
+      </>
+    ),
+  },
+  "/market/news": {
+    label: "Headlines",
+    art: (
+      <>
+        <path d="M3.5 5 L20.5 5 L20.5 19 L3.5 19 Z" />
+        <path d="M6.5 9 L13 9" />
+        <path d="M6.5 12.5 L17.5 12.5" opacity={0.7} />
+        <path d="M6.5 15.5 L15 15.5" opacity={0.7} />
+      </>
+    ),
+  },
+  "/market/calendar": {
+    label: "Dated events",
+    art: (
+      <>
+        <path d="M3.5 6 L20.5 6 L20.5 20 L3.5 20 Z" />
+        <path d="M3.5 10 L20.5 10" />
+        <path d="M8 3.5 L8 6.5" />
+        <path d="M16 3.5 L16 6.5" />
+        <circle cx="12" cy="15" r="1.7" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "/market/followthrough": {
+    label: "What happened afterwards",
+    // One path forked: the same breakout, two outcomes.
+    art: (
+      <>
+        <path d="M2.5 13 L10 13" />
+        <path d="M10 13 L21 6" />
+        <path d="M10 13 L21 19" strokeDasharray="2.5 2" opacity={0.65} />
+        <circle cx="10" cy="13" r="1.6" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "/market/breadth": {
+    label: "How much is participating",
+    art: (
+      <>
+        <path d="M4 20 L4 12" />
+        <path d="M8.7 20 L8.7 7" />
+        <path d="M13.3 20 L13.3 14" />
+        <path d="M18 20 L18 9.5" />
+        <path d="M2 20 L21.5 20" opacity={0.6} />
+      </>
+    ),
+  },
+  "/market/rotation": {
+    label: "Strength against momentum",
+    art: (
+      <>
+        <path d="M12 3 L12 21" opacity={0.45} />
+        <path d="M3 12 L21 12" opacity={0.45} />
+        <path d="M6 17 C10 16, 14 13, 18 7" />
+        <circle cx="18" cy="7" r="1.7" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "/market/sectors": {
+    label: "Strongest and weakest groups",
+    art: (
+      <>
+        <path d="M3 7.5 L17 7.5" />
+        <path d="M3 12 L20.5 12" />
+        <path d="M3 16.5 L10 16.5" />
+      </>
+    ),
+  },
+  "/market/map": {
+    label: "Every industry by size",
+    art: (
+      <>
+        <path d="M3 4.5 L13 4.5 L13 13 L3 13 Z" />
+        <path d="M13 4.5 L21 4.5 L21 9.5 L13 9.5 Z" opacity={0.75} />
+        <path d="M13 9.5 L21 9.5 L21 19.5 L13 19.5 Z" opacity={0.6} />
+        <path d="M3 13 L13 13 L13 19.5 L3 19.5 Z" opacity={0.75} />
+      </>
+    ),
+  },
+  "/market/high-iv": {
+    label: "Rich options pricing",
+    // A cone opening around a dated event: uncertainty priced in.
+    art: (
+      <>
+        <path d="M3 12 L11 12" />
+        <path d="M11 12 L21 4.5" />
+        <path d="M11 12 L21 19.5" />
+        <path d="M11 3 L11 21" strokeDasharray="2 1.8" opacity={0.6} />
+      </>
+    ),
+  },
+  "/market/gamma": {
+    label: "Gamma by strike",
+    // Bars peaking at the money.
+    art: (
+      <>
+        <path d="M4 20 L4 16" />
+        <path d="M8 20 L8 11" />
+        <path d="M12 20 L12 4.5" />
+        <path d="M16 20 L16 10" />
+        <path d="M20 20 L20 15" />
+      </>
+    ),
+  },
+  "/market/volume": {
+    label: "Unusual activity",
+    art: (
+      <>
+        <path d="M3 20 L3 15" opacity={0.6} />
+        <path d="M7 20 L7 16.5" opacity={0.6} />
+        <path d="M11 20 L11 4" />
+        <path d="M15 20 L15 15.5" opacity={0.6} />
+        <path d="M19 20 L19 17" opacity={0.6} />
+      </>
+    ),
+  },
+  "/market/insiders": {
+    label: "Who bought and sold",
+    art: (
+      <>
+        <circle cx="12" cy="8" r="3.4" />
+        <path d="M5.5 20 C5.5 15.2, 18.5 15.2, 18.5 20" />
+      </>
+    ),
+  },
+  "/market/seasonals": {
+    label: "Month by month",
+    art: (
+      <>
+        <path d="M3.5 5.5 L20.5 5.5 L20.5 19.5 L3.5 19.5 Z" />
+        <path d="M3.5 10.5 L20.5 10.5" opacity={0.7} />
+        <path d="M3.5 15 L20.5 15" opacity={0.7} />
+        <path d="M9.5 5.5 L9.5 19.5" opacity={0.7} />
+        <path d="M15 5.5 L15 19.5" opacity={0.7} />
+      </>
+    ),
+  },
   "/screens/combine": {
     label: "Several screens at once",
     art: (

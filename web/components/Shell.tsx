@@ -55,6 +55,7 @@ const TABS: {
       { href: "/market/gamma", title: "Gamma concentration", blurb: "Where the option book anchors the most gamma." },
       { href: "/market/volume", title: "Relative volume", blurb: "Who traded unusually heavily today." },
       { href: "/market/insiders", title: "Insider activity", blurb: "What officers and directors actually bought and sold." },
+      { href: "/market/seasonals", title: "Seasonals", blurb: "What each month did, year by year." },
     ],
   },
   { key: "search", label: "Search", glyph: "⌕", match: "/search", href: "/search" },

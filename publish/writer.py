@@ -18,7 +18,7 @@ from publish import schema
 from rankings import breadth, groups, indexes as index_rows
 from rankings import spark
 from backtest.settings import OPTIONS, BacktestSettings
-from rankings import rotation, rs, treemap
+from rankings import rotation, rs, seasonals, treemap
 
 VERSION = 1
 
@@ -28,6 +28,19 @@ GAMMA_LEADERBOARD = 60
 
 # How many names the relative-volume page carries.
 VOLUME_LEADERBOARD = 120
+
+SEASONAL_COPY = {
+    "header": "What each month actually did, year by year. A grid rather than an "
+              "average, so you can see how many months are behind every number.",
+    "subhead": "Close to close, compounded within the year.",
+    "footer": "This is a record of what happened, not a base rate. Real seasonal "
+              "work uses decades; this site holds under four years, because that "
+              "is what its data tier serves. The average row carries the number of "
+              "months behind it for that reason — an average of three Septembers "
+              "and an average of eighty are different objects, and only the n "
+              "tells them apart. Four observations cannot tell you what the fifth "
+              "will do.",
+}
 
 INSIDER_COPY = {
     "header": "Open-market purchases and sales by officers, directors and 10% "
@@ -318,6 +331,30 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "band_labels": ivmod.BAND_LABELS,
         "dots": settings.get("iv.dots", 5),
         "rows": [r.to_json() for r in iv_rows],
+    }))
+
+    # ---- seasonals ----------------------------------------------------
+    #
+    # The benchmark and the sector ETFs, because a month-by-month grid is a
+    # market-level reading and these are the eleven slices the rest of the site
+    # already ranks. Individual stocks are not here: with under four years of
+    # history a single company's "March" is one or two observations, and a grid
+    # of those would look like a finding.
+    season_symbols = [settings.get("universe.benchmark", "SPY"),
+                      *(settings.get("rankings.sector_etfs", []) or [])]
+    season_rows = []
+    for symbol in season_symbols:
+        bars = market.series.get(symbol) or []
+        grid = seasonals.build(
+            symbol,
+            market.refs[symbol].name if symbol in market.refs else symbol,
+            bars)
+        if grid is not None:
+            season_rows.append(grid.to_json())
+    written.append(_write(out / "market" / "seasonals.json", {
+        "as_of": as_of.isoformat(),
+        "copy": SEASONAL_COPY,
+        "symbols": season_rows,
     }))
 
     # ---- insider decisions, by day ------------------------------------

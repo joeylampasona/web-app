@@ -144,6 +144,21 @@ export interface BacktestSummary {
  *  Distinct from InsiderTrade below, which is the per-stock panel's row and
  *  carries the mechanics (grants, option exercises, tax withholding) alongside
  *  the decisions. This calendar only ever holds P and S. */
+export interface SeasonalCell { month: number; return_pct: number | null; sessions: number }
+export interface SeasonalYear {
+  year: number; months: SeasonalCell[]; year_pct: number | null; partial: boolean;
+}
+export interface SeasonalTally {
+  up: number; down: number;
+  avg_pct: number | null; up_rate: number | null; observations: number;
+}
+export interface SeasonalSymbol {
+  symbol: string; name: string; months: string[];
+  years: SeasonalYear[];
+  tally: Record<string, SeasonalTally>;
+  observed_years: number;
+}
+
 export interface InsiderDecision {
   symbol: string; name: string; traded_at: string;
   owner: string; role: string; code: string;
