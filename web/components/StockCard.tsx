@@ -11,6 +11,7 @@ import { EarningsBadge, FlagBadge, QuadrantBadge, StageBadge } from "./Badges";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { MetricRow } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
+import { DelayedGap } from "./DelayedGap";
 import { MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
 import { TickerLink } from "./StockDrawer";
@@ -177,7 +178,9 @@ export function StockCard({
           stage={setup.stage}
           rs={setup.rs_rating}
           rows={rows.map((row) => ({
-            label: row.label, value: row.value, tone: row.tone,
+            label: row.label,
+            value: typeof row.share === "string" ? row.share : String(row.value),
+            tone: row.tone,
           }))}
           getChart={() => chartRef.current?.() ?? null}
           text={`${setup.symbol} — ${setup.stage.replace("_", " ")}, pivot ${price(
@@ -195,7 +198,16 @@ function setupRows(setup: Setup) {
     { label: "RS rating", value: rsText(setup.rs_rating), help: copy("metric.rs_rating") },
     {
       label: "Now vs pivot (%)",
-      value: signed(setup.now_vs_pivot_pct),
+      // The one figure on the card that goes stale during the session, and
+      // the one the screen is about. Falls back to the published close when
+      // there is no quote.
+      value: (
+        <DelayedGap symbol={setup.symbol} pivot={setup.pivot}
+                    published={setup.now_vs_pivot_pct} />
+      ),
+      // A shared image is a still of a moment, and it outlives the quote that
+      // would have been in it. It carries the close, which stays true.
+      share: signed(setup.now_vs_pivot_pct),
       help: copy("metric.now_vs_pivot"),
       tone: tone(setup.now_vs_pivot_pct),
     },
@@ -240,7 +252,16 @@ function breakoutRows(setup: Setup) {
     },
     {
       label: "Now vs pivot (%)",
-      value: signed(setup.now_vs_pivot_pct),
+      // The one figure on the card that goes stale during the session, and
+      // the one the screen is about. Falls back to the published close when
+      // there is no quote.
+      value: (
+        <DelayedGap symbol={setup.symbol} pivot={setup.pivot}
+                    published={setup.now_vs_pivot_pct} />
+      ),
+      // A shared image is a still of a moment, and it outlives the quote that
+      // would have been in it. It carries the close, which stays true.
+      share: signed(setup.now_vs_pivot_pct),
       help: copy("metric.now_vs_pivot"),
       tone: tone(setup.now_vs_pivot_pct),
     },

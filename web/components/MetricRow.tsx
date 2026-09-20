@@ -4,7 +4,9 @@ export function MetricRow({
   label, value, help, tone,
 }: {
   label: string;
-  value: string;
+  /** A node, not only a string: the "now vs pivot" row swaps in a live
+   *  figure during the session and has to mark that it is delayed. */
+  value: React.ReactNode;
   help: string;
   tone?: "gain" | "loss" | "flat";
 }) {
