@@ -307,7 +307,25 @@ def cmd_catalysts(args) -> int:
           f"{len(upcoming)} total in the window.")
 
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
-    rows = ivmod.compute(calendar, population, names, adapter)
+    # Gamma rides along on the option chains the IV reading already downloads,
+    # so this costs no extra request. Stored here because publish never reaches
+    # the network.
+    from catalysts import gamma as gammamod
+    gamma_profiles: dict = {}
+    rows = ivmod.compute(calendar, population, names, adapter, gamma_out=gamma_profiles)
+    if gamma_profiles:
+        kept = gammamod.store(conn, gamma_profiles)
+        total_oi = sum(g.open_interest for g in gamma_profiles.values())
+        print(f"  → gamma: {kept:,} names with open interest at strikes, "
+              f"{total_oi:,} contracts outstanding.", flush=True)
+    else:
+        # Loud, because the failure mode is a section that renders empty while
+        # everything reports fine. Open interest is the field most likely to
+        # arrive as NaN, and a silent zero here looks identical to a market
+        # with no options in it.
+        print("  → gamma: no name returned usable open interest. Either the "
+              "source stopped supplying it or every chain was empty — the "
+              "gamma section will be blank.", flush=True)
     _banner("High IV — ticker-owned dated events only")
     print(f"  {ivmod.COPY['subhead']}")
     print()
@@ -393,6 +411,9 @@ def _pipeline(conn, with_followthrough: bool = True):
     ev.attach(calendar, result.all_setups())
     names = {s: (market.refs[s].name if s in market.refs else s) for s in population}
     iv_rows = ivmod.compute(calendar, population, names, adapter)
+    # Read, never fetch: publish must not depend on Yahoo being up.
+    from catalysts import gamma as gammamod
+    gamma_rows = gammamod.load(conn, market.universe, market.as_of)
 
     follow: dict = {}
     # Read from the cache the catalysts stage fills; publish never fetches.
@@ -417,7 +438,7 @@ def _pipeline(conn, with_followthrough: bool = True):
         for key, row in follow["screens"].items():
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
-    return (market, bundle, result, changes, calendar, iv_rows,
+    return (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
             follow, insider_rows, news_rows, desk_rows, desk_run)
 
 
@@ -425,7 +446,7 @@ def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()
     run = store.start_run(conn, "publish")
-    (market, bundle, result, changes, calendar, iv_rows,
+    (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
      follow, insider_rows, news_rows, desk_rows, desk_run) = _pipeline(conn)
     from catalysts import releases as rel
     release_rows = rel.load(conn, market.as_of)
@@ -433,7 +454,7 @@ def cmd_publish(args) -> int:
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
-                             releases=release_rows)
+                             releases=release_rows, gamma=gamma_rows)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

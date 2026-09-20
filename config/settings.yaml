@@ -80,6 +80,11 @@ patterns:
 catalysts:
   lookahead_days: 90
   earnings_badge_days: 7
+  # Used only by gamma concentration, in Black-Scholes. Gamma is barely
+  # sensitive to it — a whole percentage point moves an at-the-money figure by
+  # well under one percent — so leaving it at zero costs accuracy no reader
+  # would notice, and it is here rather than fetched so publish stays offline.
+  risk_free_rate: 0.0
   readthrough:
     enabled: true
     largest_per_theme: 1       # only the biggest name in a theme emits readthrough

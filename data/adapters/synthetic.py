@@ -19,7 +19,7 @@ from collections.abc import Sequence
 
 from data import settings
 from data.adapters.base import DataAdapter
-from data.types import Bar, EarningsEvent, OptionChain, OptionExpiry, TickerRef
+from data.types import Bar, EarningsEvent, OptionChain, OptionContract, OptionExpiry, TickerRef
 
 PREFIX = ["Ald", "Bry", "Cor", "Dax", "Ely", "Fen", "Gal", "Hal", "Iri", "Jun",
           "Kel", "Lum", "Mer", "Nov", "Orb", "Pyr", "Quen", "Rho", "Sol", "Ter",
@@ -188,7 +188,31 @@ class SyntheticAdapter(DataAdapter):
             if bracketing and expiry == bracketing:
                 iv *= bump
             expiries.append(OptionExpiry(expiry, round(iv, 4), rng.randint(40, 900)))
-        return OptionChain(symbol=symbol, spot=spot, expiries=expiries)
+
+        # Per-contract rows, so the fixture exercises gamma concentration the
+        # same way live data does. Strikes step around spot; open interest peaks
+        # near the money and at round numbers, which is what a real book does
+        # and what makes the concentration chart worth drawing.
+        rows: list[OptionContract] = []
+        step = max(round(spot * 0.025, 2), 0.5)
+        for expiry, row in zip(dates, expiries):
+            for offset in range(-8, 9):
+                strike = round(spot + offset * step, 2)
+                if strike <= 0:
+                    continue
+                nearness = 1.0 / (1.0 + abs(offset) * 0.55)
+                if abs(strike - round(strike / 5) * 5) < 0.01:
+                    nearness *= 1.8              # round strikes carry more
+                for side in ("call", "put"):
+                    oi = int(rng.uniform(40, 4200) * nearness)
+                    if oi <= 0:
+                        continue
+                    rows.append(OptionContract(
+                        expiry=expiry, side=side, strike=strike,
+                        open_interest=oi,
+                        implied_volatility=round(row.implied_volatility
+                                                 * rng.uniform(0.94, 1.09), 4)))
+        return OptionChain(symbol=symbol, spot=spot, expiries=expiries, rows=rows)
 
     # ------------------------------------------------------------ generation
 

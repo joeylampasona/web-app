@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
+import { GammaPanel } from "./GammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
@@ -218,6 +219,11 @@ export function StockDetail({ stock, run }: {
       <section>
         <div className="eyebrow">Insiders</div>
         <InsiderPanel insiders={stock.insiders} />
+      </section>
+
+      <section>
+        <div className="eyebrow">Gamma concentration</div>
+        <GammaPanel gamma={stock.gamma} />
       </section>
       </div>
 

@@ -10,7 +10,7 @@ import datetime as dt
 import logging
 from collections.abc import Sequence
 
-from data.types import EarningsEvent, OptionChain, OptionExpiry
+from data.types import EarningsEvent, OptionChain, OptionContract, OptionExpiry
 
 log = logging.getLogger(__name__)
 
@@ -59,9 +59,20 @@ def option_chain(symbol: str) -> OptionChain | None:
             return None
         spot = float(ticker.fast_info.get("last_price") or 0.0)
         rows: list[OptionExpiry] = []
+        # Every contract, kept alongside the near-the-money IV summary. The
+        # download is the expensive part and it already happened; discarding
+        # these rows and fetching them again for gamma would double the cost of
+        # the slowest stage in the nightly.
+        contracts: list[OptionContract] = []
         for text in expiries[:8]:
             chain = ticker.option_chain(text)
-            frames = [f for f in (chain.calls, chain.puts) if f is not None and not f.empty]
+            expiry = dt.date.fromisoformat(text)
+            sides = (("call", chain.calls), ("put", chain.puts))
+            frames = [f for _, f in sides if f is not None and not f.empty]
+            for side, frame in sides:
+                if frame is None or frame.empty:
+                    continue
+                contracts.extend(_contracts(frame, expiry, side))
             if not frames:
                 continue
             ivs: list[float] = []
@@ -73,13 +84,46 @@ def option_chain(symbol: str) -> OptionChain | None:
                 ivs.extend(float(v) for v in near.get("impliedVolatility", [])
                            if v == v and v > 0)
             if ivs:
-                rows.append(OptionExpiry(dt.date.fromisoformat(text),
-                                         sum(ivs) / len(ivs), len(ivs)))
-        return OptionChain(symbol=symbol, spot=spot, expiries=rows) if rows else None
+                rows.append(OptionExpiry(expiry, sum(ivs) / len(ivs), len(ivs)))
+        if not rows and not contracts:
+            return None
+        return OptionChain(symbol=symbol, spot=spot, expiries=rows, rows=contracts)
     except Exception as exc:                      # noqa: BLE001
         log.debug("option chain failed for %s: %s", symbol, exc)
         return None
 
+
+
+def _contracts(frame, expiry: dt.date, side: str) -> list[OptionContract]:
+    """One side of one expiry, as plain rows.
+
+    Open interest is the field gamma concentration is built on and the field
+    most likely to be missing: it is published once a day by OCC and arrives
+    late, and yfinance surfaces it as NaN when it has nothing. A NaN that became
+    a zero silently would make a name look like it had no optionality at all, so
+    rows without usable open interest are dropped here and counted by the
+    caller rather than carried as zeros.
+    """
+    out: list[OptionContract] = []
+    if "strike" not in frame:
+        return out
+    has_oi = "openInterest" in frame
+    has_iv = "impliedVolatility" in frame
+    for row in frame.itertuples(index=False):
+        try:
+            strike = float(getattr(row, "strike"))
+            oi = float(getattr(row, "openInterest")) if has_oi else 0.0
+            iv = float(getattr(row, "impliedVolatility")) if has_iv else 0.0
+        except (TypeError, ValueError):
+            continue
+        # NaN fails every comparison with itself; this is the cheap test.
+        if strike != strike or oi != oi or iv != iv:
+            continue
+        if strike <= 0 or oi <= 0 or iv <= 0:
+            continue
+        out.append(OptionContract(expiry=expiry, side=side, strike=strike,
+                                  open_interest=int(oi), implied_volatility=iv))
+    return out
 
 # ---------------------------------------------------------------- cache
 #

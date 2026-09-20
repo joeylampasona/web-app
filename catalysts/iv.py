@@ -80,8 +80,21 @@ def _bracketing(chain: OptionChain, target: dt.date):
 
 
 def compute(calendar: Calendar, symbols, names: dict[str, str],
-            adapter: DataAdapter | None = None) -> list[IVRow]:
+            adapter: DataAdapter | None = None,
+            gamma_out: dict | None = None) -> list[IVRow]:
+    """Implied-volatility richness per name, and optionally gamma alongside it.
+
+    `gamma_out`, when given, is filled with one GammaProfile per symbol whose
+    chain carried usable open interest. It is an out-parameter rather than a
+    second return value because the chain download is the expensive part of
+    this stage and both readings come from it: asking for gamma separately
+    would fetch every chain twice.
+    """
+    from catalysts import gamma as gammamod          # noqa: PLC0415 - avoids a cycle
+    from data import settings as settingsmod         # noqa: PLC0415
+
     adapter = adapter or get_adapter()
+    rate = float(settingsmod.get("catalysts.risk_free_rate", 0.0) or 0.0)
     rows: list[IVRow] = []
     for symbol in sorted(set(symbols)):
         event: Event | None = calendar.next_owned(symbol)
@@ -93,7 +106,16 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
             chain = None
         except Exception:                         # noqa: BLE001
             chain = None
-        if chain is None or not chain.expiries:
+        if chain is None:
+            continue
+        # Before the IV-specific tests below. A chain whose expiries do not
+        # bracket the event still has open interest at strikes, and that is a
+        # separate reading from whether the event is priced richly.
+        if gamma_out is not None:
+            found = gammamod.profile(chain, calendar.as_of, rate)
+            if found is not None:
+                gamma_out[symbol] = found
+        if not chain.expiries:
             continue
         bracket, neighbours = _bracketing(chain, event.date)
         if bracket is None or not neighbours:

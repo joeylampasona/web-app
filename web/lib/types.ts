@@ -103,6 +103,32 @@ export interface Bar {
   time: string; open: number; high: number; low: number; close: number; volume: number;
 }
 
+export interface GammaStrike {
+  strike: number;
+  /** Unsigned dollar gamma per 1% move. Assumes nothing about positioning. */
+  concentration: number;
+  /** Calls positive, puts negative — the conventional signing. */
+  net: number;
+  call_oi: number;
+  put_oi: number;
+}
+
+export interface GammaProfile {
+  symbol: string;
+  spot: number;
+  as_of: string;
+  levels: GammaStrike[];
+  total_concentration: number;
+  total_net: number;
+  /** Where the conventional signing crosses zero. Null when it never does. */
+  flip: number | null;
+  contracts: number;
+  open_interest: number;
+  expiries: number;
+  /** Open interest predates the session this page is showing. */
+  stale?: boolean;
+}
+
 export interface StockFile {
   symbol: string; name: string; industry: string; themes: string[];
   list_date: string | null; as_of: string;
@@ -113,6 +139,7 @@ export interface StockFile {
   primary_setup: Setup | null;
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
+  gamma: GammaProfile | null;
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are
