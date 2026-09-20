@@ -1,5 +1,35 @@
 export type Rating = number | string;
 
+/** The fitted geometry behind a shape screen: two trendlines and what they
+ *  imply. Every number here is measured off the fit, and several are null by
+ *  design rather than by accident -- `apex_pct` is null for a flag because two
+ *  parallel lines never meet, and `target` is null for a squeeze because a
+ *  volatility state has no measured move to project. */
+export interface ShapeGeometry {
+  kind: string; start: string; end: string;
+  level: number; direction: string;
+  convergence: number; depth_pct: number; weeks: number;
+  upper_slope_pct: number; lower_slope_pct: number;
+  touches: { upper: number; lower: number };
+  pole_pct: number | null; pole_sessions: number | null;
+  squeeze_fired: boolean;
+  /** How far through its own convergence, 0-100. Null when the lines are
+   *  parallel or spreading, which is the normal answer for a flag. */
+  apex_pct: number | null;
+  /** Past the point where there is room left to move inside the shape. */
+  stale: boolean;
+  height_pct: number | null;
+  target: number | null; stop: number | null;
+  /** Reward over risk from the published level. Null when any leg is missing:
+   *  a shape with no stop has undefined risk, not zero risk. */
+  r_multiple: number | null;
+  /** Squeezes only. Which way the compression has been leaning -- a reading,
+   *  not a claim about the break. */
+  momentum: number | null; momentum_slope: number | null;
+  volume_vs_prior?: number | null; atr_vs_prior?: number | null;
+  notes: string[];
+}
+
 export interface Contraction {
   start: string; end: string; high: number; low: number;
   depth_pct: number; weeks: number;
@@ -57,7 +87,7 @@ export interface Setup {
   /** "long" or "short" — which way the screen that found it reads its level. */
   direction?: string;
   /** Fitted geometry, on the shape screens only. */
-  shape?: Record<string, unknown> | null;
+  shape?: ShapeGeometry | null;
   quadrant: string | null;
   breakout_date: string | null;
   sessions_since_breakout: number | null;

@@ -15,6 +15,7 @@ import { NewsPanel } from "./NewsPanel";
 import { PeerBars } from "./PeerBars";
 import { RsRing } from "./RsRing";
 import { SetupChart } from "./SetupChart";
+import { ShapeReadout } from "./ShapeReadout";
 import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
 import { WatchStar } from "./WatchStar";
@@ -63,6 +64,8 @@ export function StockDetail({ stock, run }: {
   run?: DeskRun | null;
 }) {
   const setup = stock.primary_setup;
+  // The shape screens publish a fitted geometry; the base screens do not.
+  const shaped = stock.setups.filter((s) => s.shape);
 
   // One slice and one plan, shared by the chart and the key beneath it. Both
   // are memoised because a fresh array on every render would rebuild the chart
@@ -216,6 +219,27 @@ export function StockDetail({ stock, run }: {
         <div className="eyebrow">Insiders</div>
         <InsiderPanel insiders={stock.insiders} />
       </section>
+
+      {shaped.length > 0 && (
+        <section>
+          <div className="eyebrow">The geometry</div>
+          {/* Every shape this stock is currently inside, not just the one the
+              publisher picked as primary. A name on both the triangle and the
+              descending-triangle screen is inside two readings of the same
+              price action, and showing one of them silently would make the
+              other screen's listing look unexplained. */}
+          <div className="stack" style={{ gap: "var(--gap-lg)" }}>
+            {shaped.map((s) => (
+              <div key={s.screen} className="stack" style={{ gap: "var(--gap-xs)" }}>
+                {shaped.length > 1 && (
+                  <div className="footnote muted">{s.screen.replace(/_/g, " ")}</div>
+                )}
+                <ShapeReadout shape={s.shape} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {setup?.criteria && (
         <section>

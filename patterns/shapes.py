@@ -88,6 +88,11 @@ MIN_TOUCHES_PER_LINE = 2
 # in the move, and the pole was cut in the wrong place.
 FLAG_OVERSHOOT = 0.03
 
+# How much room to leave beyond the far side of a shape before calling it
+# broken. A stop sitting exactly on the low gets taken out by one wick on one
+# thin session, which is noise rather than the structure failing.
+STOP_ATR_BUFFER = 0.25
+
 
 @dataclass
 class Line:
@@ -126,11 +131,47 @@ class Shape:
     pole_sessions: int | None = None
     #: Set for squeezes only: the bands have just left the channel.
     squeeze_fired: bool = False
+    #: The shape's own height in price: the pole for a flag, the widest gap
+    #: between the lines for a wedge or triangle. What the measured target and
+    #: therefore the reward-to-risk arithmetic is built from.
+    height: float | None = None
+    #: Where the shape is wrong — the far side of it, with a quarter of an
+    #: average range of room so a single wick does not count as a break.
+    stop: float | None = None
+    #: Set for squeezes only: the TTM momentum reading on the last bar, and its
+    #: five-session change. Says which way the compression is leaning, not
+    #: which way it will break.
+    momentum: float | None = None
+    momentum_slope: float | None = None
     notes: list[str] = field(default_factory=list)
 
     @property
     def weeks(self) -> float:
         return self.sessions / 5.0
+
+    @property
+    def apex_pct(self) -> float | None:
+        """How far through its convergence, 0-1. None for a parallel shape."""
+        return apex_progress(self.upper, self.lower, self.start_idx, self.end_idx)
+
+    @property
+    def target(self) -> float | None:
+        return measured_target(self)
+
+    @property
+    def r_multiple(self) -> float | None:
+        """Reward over risk, taking the level as the entry.
+
+        None whenever any leg of it is missing, which is the honest answer and
+        not 0.0 — a shape with no stop has undefined risk, not zero risk.
+        """
+        target = self.target
+        if target is None or self.stop is None:
+            return None
+        risk = abs(self.level - self.stop)
+        if risk <= 0:
+            return None
+        return abs(target - self.level) / risk
 
     def to_json(self, bars: list[Bar]) -> dict:
         return {
@@ -148,6 +189,19 @@ class Shape:
             "pole_pct": round(self.pole_pct, 2) if self.pole_pct is not None else None,
             "pole_sessions": self.pole_sessions,
             "squeeze_fired": self.squeeze_fired,
+            "apex_pct": (None if self.apex_pct is None
+                         else round(100.0 * self.apex_pct, 1)),
+            "stale": (self.apex_pct is not None
+                      and self.apex_pct > STALE_APEX_PROGRESS),
+            "height_pct": (None if self.height is None or self.level <= 0
+                           else round(100.0 * self.height / self.level, 2)),
+            "target": None if self.target is None else round(self.target, 2),
+            "stop": None if self.stop is None else round(self.stop, 2),
+            "r_multiple": (None if self.r_multiple is None
+                           else round(self.r_multiple, 2)),
+            "momentum": None if self.momentum is None else round(self.momentum, 4),
+            "momentum_slope": (None if self.momentum_slope is None
+                               else round(self.momentum_slope, 4)),
             "notes": list(self.notes),
         }
 
@@ -189,6 +243,106 @@ def convergence(upper: Line, lower: Line, start: int, end: int) -> float | None:
         return None
     closing = _gap(upper, lower, end)
     return max(closing, 0.0) / opening
+
+
+# Past this much of the way to the apex a converging shape has run out of
+# room: the lines meet, the range is already as tight as it can get, and a
+# break from here is as likely to be a drift out of the wedge as a move. The
+# uploaded spec puts the useful band at 50-75% and calls anything past 85%
+# stale. Published, not enforced — a stale shape is still a true shape, and
+# hiding it would mean a name silently leaving the screen with no reason given.
+def _atr_pad(bars: list[Bar], index: int, window: int = 20) -> float:
+    """A quarter of an average range at `index`, or nothing when undefined."""
+    series = atr(bars[:index + 1], window)
+    value = series[-1] if series else None
+    return STOP_ATR_BUFFER * value if value else 0.0
+
+
+def _linreg_value(values: list[float]) -> tuple[float | None, float | None]:
+    """The fitted value at the last point, and the slope, of a least-squares
+    line through `values` against their own position.
+
+    This is what a charting package means by `linreg(series, n, 0)`: not the
+    raw last value, and not the average, but where the trend of the last n
+    points sits right now. Smoothing and direction in one pass.
+    """
+    n = len(values)
+    if n < 2:
+        return None, None
+    mean_x = (n - 1) / 2.0
+    mean_y = sum(values) / n
+    denom = sum((i - mean_x) ** 2 for i in range(n))
+    if denom <= 0:
+        return None, None
+    slope = sum((i - mean_x) * (values[i] - mean_y) for i in range(n)) / denom
+    return mean_y + slope * ((n - 1) - mean_x), slope
+
+
+def momentum_oscillator(bars: list[Bar], window: int = 20) -> list[float | None]:
+    """The TTM-style momentum reading, per bar.
+
+    Price measured against the midpoint of its own recent range and its own
+    average, then regressed. Positive is leaning up, negative down.
+
+    It is a momentum reading and nothing more. This module refuses to say which
+    way a squeeze will break — that is not something the construction knows —
+    but "which way it has been leaning while compressed" is a measurement, and
+    it was being left on the floor.
+    """
+    n = len(bars)
+    out: list[float | None] = [None] * n
+    if n < window:
+        return out
+    closes = [b.close for b in bars]
+    averages = sma(closes, window)
+    for i in range(window - 1, n):
+        chunk = bars[i - window + 1:i + 1]
+        avg = averages[i]
+        if avg is None:
+            continue
+        donchian_mid = (max(b.high for b in chunk) + min(b.low for b in chunk)) / 2.0
+        baseline = (donchian_mid + avg) / 2.0
+        fitted, _ = _linreg_value([b.close - baseline for b in chunk])
+        out[i] = fitted
+    return out
+
+
+STALE_APEX_PROGRESS = 0.85
+
+
+def apex_progress(upper: Line, lower: Line, start: int, end: int) -> float | None:
+    """How far through its own convergence a shape is, as 0.0 to 1.0+.
+
+    The two lines meet at some bar; this is the share of that distance already
+    travelled. None when they never meet (parallel or diverging), which is the
+    normal answer for a flag and not a failure.
+    """
+    closing_rate = lower.slope - upper.slope
+    if closing_rate <= 0:
+        return None
+    opening = _gap(upper, lower, start)
+    if opening <= 0:
+        return None
+    bars_to_apex = opening / closing_rate
+    if bars_to_apex <= 0:
+        return None
+    return (end - start) / bars_to_apex
+
+
+def measured_target(shape: "Shape") -> float | None:
+    """The move the shape's own height projects, from its level.
+
+    Not a forecast. It is the conventional arithmetic — a formation that
+    resolves carries about its own height — and it exists so the screen can
+    compute an R multiple, which is the thing that actually filters. A target
+    the shape cannot support (no height, no level) is None rather than a guess.
+    """
+    height = shape.height
+    if height is None or height <= 0 or shape.level <= 0:
+        return None
+    if shape.direction == "short":
+        return max(shape.level - height, 0.0)
+    return shape.level + height
 
 
 # ---------------------------------------------------------------- shapes
@@ -287,11 +441,35 @@ def find_converging(bars: list[Bar], lookback: int, threshold_pct: float = 3.0,
     # stock has actually traded near.
     level = max(min(level, high), low)
 
+    # The widest the shape ever was, which is the height it projects. Measured
+    # from the fitted lines rather than the raw extremes: a single spike out of
+    # the wedge is exactly what the lines are fitted to ignore.
+    widest = max(_gap(upper, lower, start), _gap(upper, lower, end), 0.0)
+    pad = _atr_pad(bars, end)
+    # Where the shape is wrong depends on which shape it is.
+    #
+    # A triangle's floor is a line that has been rising the whole time, so the
+    # stop is that line where it is now, not where it was forty sessions ago.
+    # Using the old low would price the risk at the full height of the shape
+    # and make every triangle a one-to-one trade by construction.
+    #
+    # A wedge is the opposite case: both its lines slope the same way, so the
+    # far line keeps running away from price and the extreme is the level that
+    # actually has to hold.
+    if kind in (SYMMETRICAL, ASCENDING, DESCENDING):
+        boundary = lower.at(end + 1) if direction == "long" else upper.at(end + 1)
+        stop = (boundary - pad) if direction == "long" else (boundary + pad)
+        # Never looser than the structure itself: a line fitted through a
+        # ragged floor can sit under the lowest bar in the shape.
+        stop = max(stop, low - pad) if direction == "long" else min(stop, high + pad)
+    else:
+        stop = (low - pad) if direction == "long" else (high + pad)
     return Shape(
         kind=kind, start_idx=start, end_idx=end, upper=upper, lower=lower,
         level=level, direction=direction, convergence=ratio,
         depth_pct=100.0 * (high - low) / high,
         sessions=end - start + 1,
+        height=widest or None, stop=stop,
     )
 
 
@@ -420,6 +598,11 @@ def find_flag(bars: list[Bar], max_flag_sessions: int = 7,
                            if flag_high > 0 else 0.0),
                 sessions=flag_len,
                 pole_pct=move, pole_sessions=pole_len,
+                # A flag projects the pole, not the flag: that is the whole
+                # arithmetic of the pattern.
+                height=abs(bars[pole_end].close - bars[pole_start].close) or None,
+                stop=((flag_low - _atr_pad(bars, n - 1)) if bullish
+                      else (flag_high + _atr_pad(bars, n - 1))),
             )
             # Prefer the biggest pole: the same drift after a 40% run is a more
             # distinctive thing than after a 16% one.
@@ -577,13 +760,34 @@ def find_squeeze(bars: list[Bar], min_sessions: int = 5,
     if upper_line is None or lower_line is None:
         return None
 
+    # Which way the compression has been leaning. Not a claim about the break;
+    # a reading of where price has sat against its own range while quiet. The
+    # note names the state in the four-way form a reader can act on.
+    osc = momentum_oscillator(bars, window)
+    reading = osc[-1]
+    slope = None
+    recent = [x for x in osc[-6:] if x is not None]
+    if reading is not None and len(recent) >= 2:
+        slope = recent[-1] - recent[0]
+
+    note = "released" if fired else "compressed"
+    if reading is not None:
+        leaning = "up" if reading > 0 else "down"
+        note = f"fired {leaning}" if fired else f"compressed, leaning {leaning}"
+
     return Shape(
         kind=SQUEEZE, start_idx=start, end_idx=n - 1,
         upper=upper_line, lower=lower_line, level=high,
         direction=DIRECTION[SQUEEZE], convergence=1.0,
         depth_pct=100.0 * (high - low) / high, sessions=sessions,
         squeeze_fired=fired,
-        notes=["released" if fired else "compressed"],
+        # No height, therefore no target and no R multiple. A squeeze is a
+        # volatility state, not a geometry: there is no measured move to
+        # project, and projecting the width of the quiet stretch would be
+        # inventing one. The stop is real — the floor of the compression.
+        stop=low - _atr_pad(bars, n - 1),
+        momentum=reading, momentum_slope=slope,
+        notes=[note],
     )
 
 
