@@ -376,6 +376,14 @@ jobs:
               lines.append("_Nothing broke out today. That is a reading, not a fault._")
           # The hand-kept FOMC list, if it is running out. This is the message
           # somebody actually reads every day, so it is where the alarm belongs.
+          # Heavily traded names that fell out of the universe for want of a
+          # share count. Meta, Alphabet and Berkshire all vanished this way and
+          # the only trace was a stage count dropping by four out of two
+          # thousand. This is the message somebody actually reads.
+          lost = meta.get("lost_leaders") or []
+          if lost:
+              lines.append(f"\n⚠️ Dropped for want of a share count, despite "
+                           f"being among the most traded names: {', '.join(lost)}")
           fomc = meta.get("fomc") or {}
           if fomc.get("stale"):
               lines.append(f"\n⚠️ {fomc.get('message', 'The FOMC list needs attention.')}")

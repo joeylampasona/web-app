@@ -157,6 +157,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             gamma: dict[str, dict] | None = None,
             insider_recent: list[dict] | None = None,
             forecasts: dict[str, dict] | None = None,
+            lost_leaders: list[str] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -528,6 +529,13 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "Prices on this build are a deterministic fixture, not real market data. "
             "Tickers and company names are invented." if provider == "synthetic" else ""),
         "universe_count": len(market.universe),
+        # Heavily traded names that fell out of the universe because no share
+        # count came back for them — our failure to read one, not a fact about
+        # the company. Carried here so the nightly's own summary can shout
+        # about it: Meta, Alphabet and Berkshire all went missing this way and
+        # the only trace was a stage count dropping by four out of two
+        # thousand, which nobody can see.
+        "lost_leaders": list(lost_leaders or []),
         "survivorship_safe": bool(settings.get("backtest.survivorship_safe", False)),
         # Which of the desk's scanners worked. An empty signal set means
         # nothing at all if the scanner that produces it failed.

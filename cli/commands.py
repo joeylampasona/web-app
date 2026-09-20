@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import datetime as dt
 
+import json
+
 from data import settings, store
 
 
@@ -55,6 +57,12 @@ def cmd_universe(args) -> int:
         store.finish_run(conn, run, "failed", str(exc))
         raise
     store.finish_run(conn, run, "ok", f"{funnel.final} survivors")
+    # Kept where the published tree can read it. An alarm that exists only as a
+    # line in a job log is an alarm nobody sees: the logs are long, they scroll,
+    # and the one time this fired it was Meta going missing for weeks with
+    # nothing anywhere saying so.
+    store.set_kv(conn, "universe.lost_leaders",
+                 json.dumps(funnel.lost_leaders, separators=(",", ":")))
     _banner("Universe")
     print(funnel.render())
     print()
@@ -564,6 +572,10 @@ def cmd_publish(args) -> int:
     from publish import schema, writer
     conn = _conn()
     run = store.start_run(conn, "publish")
+    try:
+        lost_leaders = json.loads(store.get_kv(conn, "universe.lost_leaders", "[]"))
+    except (TypeError, ValueError):
+        lost_leaders = []
     (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
      forecast_rows, backtests, follow, insider_rows, insider_recent,
      news_rows, desk_rows, desk_run) = _pipeline(conn)
@@ -575,7 +587,8 @@ def cmd_publish(args) -> int:
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
                              releases=release_rows, gamma=gamma_rows,
                              insider_recent=insider_recent,
-                             forecasts=forecast_rows)
+                             forecasts=forecast_rows,
+                             lost_leaders=lost_leaders)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")
@@ -587,7 +600,6 @@ def cmd_publish(args) -> int:
     for key in sorted(tree):
         print(f"  {key:<16}{tree[key]:>5} file(s)")
 
-    import json
     meta = json.loads((out / "meta.json").read_text())
     problems = schema.validate(meta)
     _banner("meta.json")
