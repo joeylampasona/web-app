@@ -138,6 +138,26 @@ def probe_open_interest(agent: str) -> None:
             except Exception as exc:                  # noqa: BLE001
                 print(f"   {symbol}: {type(exc).__name__}: {exc}")
 
+    print("\n-- Yahoo fast_info spot (gamma bails when this is 0) --")
+    try:
+        import yfinance as yf
+    except Exception:                                 # noqa: BLE001
+        pass
+    else:
+        for symbol in symbols:
+            try:
+                info = yf.Ticker(symbol).fast_info
+                raw = info.get("last_price")
+                print(f"   {symbol}: type={type(info).__name__} "
+                      f"last_price={raw!r} -> float {float(raw or 0.0)}")
+                for key in ("lastPrice", "regularMarketPrice", "previousClose"):
+                    try:
+                        print(f"      {key}: {info.get(key)!r}")
+                    except Exception as exc:          # noqa: BLE001
+                        print(f"      {key}: {type(exc).__name__}")
+            except Exception as exc:                  # noqa: BLE001
+                print(f"   {symbol}: {type(exc).__name__}: {exc}")
+
     print("\n-- Cboe delayed quotes (candidate replacement, no key needed) --")
     for symbol in symbols:
         url = f"https://cdn.cboe.com/api/global/delayed_quotes/options/{symbol}.json"
