@@ -11,7 +11,15 @@ export default function SearchPage() {
   const breakouts = latest ? getBreakouts(latest) : null;
   const suggestions = (breakouts?.setups ?? [])
     .slice(0, 10)
-    .map((setup) => ({ symbol: setup.symbol, name: setup.name }));
+    .map((setup) => ({
+      symbol: setup.symbol,
+      name: setup.name,
+      // Whether it is still above the level it cleared. A list of "recent
+      // breakouts" with no state treats one that held and one that gave it all
+      // back as the same event, and they are the two outcomes the page exists
+      // to distinguish.
+      holding: setup.now_vs_pivot_pct === null ? null : setup.now_vs_pivot_pct >= 0,
+    }));
 
   return (
     <div className="page">

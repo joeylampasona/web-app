@@ -439,3 +439,10 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
   background: currentColor;
   flex-shrink: 0;
 }
+
+/* A keyboard hint has nothing to say on a device with no keyboard. Hidden by
+   pointer capability rather than by width: a small laptop window is still a
+   keyboard, and a large tablet still is not. */
+@media (hover: none), (pointer: coarse) {
+  .hide-on-touch { display: none; }
+}

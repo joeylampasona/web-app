@@ -92,12 +92,15 @@ export function useStockDrawer() {
 }
 
 export function TickerLink({
-  symbol, children, className, style,
+  symbol, children, className, style, title,
 }: {
   symbol: string;
   children: React.ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  /** Hover text. Callers that colour the chip use it to say what the colour
+   *  means, since a border alone is not self-describing. */
+  title?: string;
 }) {
   const drawer = useStockDrawer();
   return (
@@ -109,6 +112,7 @@ export function TickerLink({
       // zero-specificity .ticker-link rule -- inline they silently overrode
       // every className a caller gave this button.
       style={{ cursor: "pointer", textAlign: "left", ...style }}
+      title={title}
       onClick={() => drawer?.open(symbol)}
     >
       {children}

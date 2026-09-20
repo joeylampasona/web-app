@@ -213,7 +213,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     _retain_breakouts(out / "breakouts")
     written.append(_write(out / "breakouts" / "index.json", {
         "dates": sorted(p.stem for p in (out / "breakouts").glob("*.json")
-                        if p.stem != "index")[::-1]}))
+                        if _is_session_file(p))[::-1]}))
 
     # ---- market-wide --------------------------------------------------
     breadth_payload = breadth.compute(market)
@@ -546,7 +546,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "screens": [{"key": k, "name": param_module.SCREENS[k].name,
                      "total": len(v), "stages": result.counts(k)}
                     for k, v in result.screens.items()],
-        "themes": [{"slug": s, "name": n} for s, n in sorted(theme_names.items())],
+        "themes": _theme_index(market, theme_names),
         "disclaimer": DISCLAIMER,
     }
     problems = schema.validate(meta)
@@ -557,9 +557,30 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     return written
 
 
+def _is_session_file(path: pathlib.Path) -> bool:
+    """A dated breakout file, not a neighbour that happens to share the folder.
+
+    Both the index and the retention sweep used to take every *.json in
+    breakouts/ except index.json. followthrough.json lives there too, so it was
+    listed as a DATE: getBreakoutDates()[0] returned "followthrough", the
+    search page read breakouts/followthrough.json looking for setups, found a
+    file with none, and showed "Nothing broke out in the last session" on every
+    build since follow-through started writing there. It also counted toward
+    the retention limit, quietly costing one real session.
+    """
+    stem = path.stem
+    if len(stem) != 10 or stem[4] != "-" or stem[7] != "-":
+        return False
+    try:
+        dt.date.fromisoformat(stem)
+    except ValueError:
+        return False
+    return True
+
+
 def _retain_breakouts(folder: pathlib.Path) -> None:
     keep = int(settings.get("publish.breakouts_retained", 30))
-    files = sorted(p for p in folder.glob("*.json") if p.stem != "index")
+    files = sorted(p for p in folder.glob("*.json") if _is_session_file(p))
     for path in files[:-keep] if len(files) > keep else []:
         path.unlink()
 
@@ -590,6 +611,52 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
 # would be wrong within a quarter.
 NEWS_LARGE_CAP_RANK = 25
 
+
+def _theme_index(market: Market, theme_names: dict[str, str]) -> list[dict]:
+    """Every theme, with how many names are in it and how many are holding up.
+
+    Participation is the share of the theme's members trading above their own
+    50-day line. It is a blunt measure and a deliberately plain one: "eleven of
+    sixteen are above their 50-day" is checkable from the same bars the rest of
+    the site uses, where anything cleverer would need a weighting nobody could
+    verify from the page.
+    """
+    from patterns.indicators import sma            # noqa: PLC0415 - as elsewhere here
+
+    closes_by_symbol = market.series
+    members: dict[str, list[str]] = {}
+    for symbol in market.universe:
+        for slug in market.themes.get(symbol, []):
+            members.setdefault(slug, []).append(symbol)
+
+    out: list[dict] = []
+    for slug, name in sorted(theme_names.items()):
+        names = members.get(slug, [])
+        above = 0
+        judged = 0
+        for symbol in names:
+            bars = closes_by_symbol.get(symbol) or []
+            if len(bars) < 50:
+                continue
+            line = sma([b.close for b in bars], 50)[-1]
+            if not line:
+                continue
+            judged += 1
+            if bars[-1].close > line:
+                above += 1
+        out.append({
+            "slug": slug,
+            "name": name,
+            "members": len(names),
+            # Judged rather than members: a name without fifty sessions has no
+            # 50-day line, and counting it as "below" would be a claim about a
+            # line that does not exist.
+            "judged": judged,
+            "above_50ma": above,
+            "participation_pct": (round(100.0 * above / judged, 1)
+                                  if judged else None),
+        })
+    return out
 
 def _news_articles(articles: list[dict], market: Market,
                    result: scan.ScanResult) -> list[dict]:
