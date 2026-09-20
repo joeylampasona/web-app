@@ -95,10 +95,12 @@ export function SubscribePanel() {
       <div>
         <div className="eyebrow">Subscribe</div>
         <p className="footnote muted" style={{ margin: 0 }}>
-          Every screen stays open and complete, free. A subscription adds the
-          readings around them: gamma concentration past the five deepest
-          option books, the eleven sector seasonal grids, analyst estimates,
-          and the X-ray of every base a stock has built.
+          Everything here shows you some of itself for nothing: ten names per
+          stage on every screen, the five deepest option books, the benchmark's
+          seasonal grid, what analysts rate a company, the most recent base it
+          built. A subscription is the rest of each — the full lists, every
+          strike, the sector grids, the price targets and estimates, and every
+          base on one chart.
         </p>
       </div>
 

@@ -56,6 +56,24 @@ FREE_GAMMA_ROWS = 5
 # comparison is what the page is for.
 FREE_SEASONAL_SYMBOL = "SPY"
 
+# How many names a screen shows for free, per stage. Fresh breakouts are whole
+# whatever this says: that stage is the daily feed, it is published separately
+# in breakouts/ anyway, and it is what the site is discovered through.
+FREE_SCREEN_ROWS = 10
+FREE_SCREEN_WHOLE_STAGES = ("fresh_breakout",)
+
+# How many previous bases the X-ray shows for free. One, labelled as one of
+# however many there are — a reader told "the most recent of six" is not being
+# misled about the comparison, only shown less of it.
+FREE_XRAY_BASES = 1
+
+# What a company's analyst panel shows for free: the buy/hold/sell split and
+# the current price, which is public everywhere else on the site anyway. Not a
+# price target. This panel's own argument is that a consensus without its
+# spread is a worse number than no consensus, so the free half deliberately
+# contains no target at all rather than the middle one.
+FORECAST_FREE_KEYS = ("symbol", "ratings")
+
 # Analyst estimates have no free sample, and deliberately so. There is no
 # ranking here to show the top of — a forecast is a per-company fact, and any
 # "sample" would just be an arbitrary list of companies whose page happens to
@@ -146,18 +164,94 @@ def free_seasonals(symbols: list[dict]) -> list[dict]:
 
 def forecast_documents(forecasts: dict[str, dict] | None,
                        as_of: dt.date) -> list[Document]:
-    """One document per company with estimates. All of them."""
+    """One document per company with estimates."""
     return [Document(f"stocks/forecast/{symbol.lower()}.json", payload, as_of)
             for symbol, payload in sorted((forecasts or {}).items())
             if payload]
 
 
+def free_forecast(payload: dict | None) -> dict | None:
+    """The part of an analyst panel everyone sees: the ratings split."""
+    if not payload:
+        return None
+    head = {key: payload[key] for key in FORECAST_FREE_KEYS if key in payload}
+    if not head.get("ratings"):
+        return None
+    current = (payload.get("targets") or {}).get("current")
+    head["targets"] = {"current": current, "low": None, "mean": None,
+                       "median": None, "high": None}
+    head["upside_pct"] = None
+    head["eps"] = []
+    head["revenue"] = []
+    head["gated"] = True
+    return head
+
+
+def free_xray(history: list) -> list:
+    """The most recent completed base. The rest is the comparison."""
+    return list(history or [])[-FREE_XRAY_BASES:]
+
+
+def split_screen(payload: dict) -> tuple[dict, dict]:
+    """(what everyone sees, the whole thing) for one screen.
+
+    Truncates each stage rather than removing it, so the shape of the page is
+    the same either way and every stage still says how many names are in it.
+    `stage_counts` is untouched on purpose: a paywall that will not say what it
+    is withholding is asking to be paid on trust.
+    """
+    setups = payload.get("setups") or {}
+    trimmed = {}
+    for stage, rows in setups.items():
+        if stage in FREE_SCREEN_WHOLE_STAGES:
+            trimmed[stage] = rows
+        else:
+            trimmed[stage] = rows[:FREE_SCREEN_ROWS]
+    public = dict(payload)
+    public["setups"] = trimmed
+    public["gated"] = True
+    public["free_rows"] = FREE_SCREEN_ROWS
+    public["free_stages"] = list(FREE_SCREEN_WHOLE_STAGES)
+    return public, payload
+
+
+def screen_documents(screens: dict[str, dict],
+                     as_of: dt.date) -> tuple[dict[str, dict], list[Document]]:
+    """Public screen files, and the full lists behind them."""
+    public: dict[str, dict] = {}
+    documents: list[Document] = []
+    for key, payload in screens.items():
+        head, whole = split_screen(payload)
+        public[key] = head
+        documents.append(Document(f"screens/{key}.json", whole, as_of))
+    return public, documents
+
+
+def free_symbols_on_screens(screens: dict[str, dict]) -> set[str]:
+    """Every symbol a free reader can see on a screen page.
+
+    Used to keep the aggregate files — the search index, the industry and theme
+    pages — from handing back the names the screen lists just withheld. It does
+    not close every path: a stock's own page still carries its own setup, so
+    somebody willing to fetch all five hundred of them can rebuild the lists.
+    That is a deliberate trade, written down in the README, because stripping
+    setups from stock pages would empty the free site to protect a list that a
+    determined scraper gets anyway.
+    """
+    free: set[str] = set()
+    for payload in screens.values():
+        head, _ = split_screen(payload)
+        for rows in (head.get("setups") or {}).values():
+            free.update(row["symbol"] for row in rows)
+    return free
+
+
 def xray_documents(bases: dict[str, list], as_of: dt.date) -> list[Document]:
     """Every base a stock has built, per company.
 
-    Gated whole. There is no sample to take: the X-ray is a comparison between
-    one company's bases, so a version of it with some of them missing is not a
-    smaller reading, it is a wrong one.
+    The document holds all of them, including the one shown for free, so a
+    subscriber renders the chart from one source rather than splicing a public
+    base onto a private list.
     """
     return [Document(f"stocks/xray/{symbol.lower()}.json", history, as_of)
             for symbol, history in sorted(bases.items()) if history]

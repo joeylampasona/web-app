@@ -178,18 +178,26 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     gamma_locked = {symbol for symbol, payload in (gamma or {}).items()
                     if symbol not in gamma_free and payload and payload.get("levels")}
 
-    # Analyst estimates have no free sample at all, so the split is trivial:
-    # every company that has them keeps a flag saying so and nothing else.
+    # Analyst estimates: the buy/hold/sell split is free, the targets and the
+    # estimates are not. No price target appears in the free half, not even the
+    # consensus — this panel's own argument is that a middle number without its
+    # spread is worse than no number, and a free tier showing exactly that
+    # would be publishing the thing the page spends a paragraph warning about.
     gated_documents.extend(gatedmod.forecast_documents(forecasts, as_of))
     forecast_locked = {symbol for symbol, payload in (forecasts or {}).items()
                        if payload}
+    forecast_public = {symbol: gatedmod.free_forecast(payload)
+                       for symbol, payload in (forecasts or {}).items()}
+    forecast_public = {symbol: payload for symbol, payload
+                       in forecast_public.items() if payload}
 
     # ---- screens ------------------------------------------------------
+    screen_files: dict[str, dict] = {}
     for key, setups in result.screens.items():
         spec = param_module.SCREENS[key]
         grouped = {stage: [s.to_json() for s in setups if s.stage == stage]
                    for stage in stages.ORDER}
-        written.append(_write(out / "screens" / f"{key}.json", {
+        screen_files[key] = {
             "screen": key,
             "name": spec.name,
             "description": spec.description,
@@ -209,7 +217,18 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "stage_labels": stages.labels_for(detectors.direction_of(key)),
             "stage_help": stages.help_for(detectors.direction_of(key), as_of.year),
             "setups": grouped,
-        }))
+        }
+
+    # A sample of each stage, then the rest behind the wall — except fresh
+    # breakouts, which stay whole. That stage is the daily feed, it is
+    # published in breakouts/ separately anyway, and it is how the site is
+    # found. Every stage keeps its true count either way, because a paywall
+    # that will not say what it is withholding is asking to be paid on trust.
+    public_screens, screen_gated = gatedmod.screen_documents(screen_files, as_of)
+    gated_documents.extend(screen_gated)
+    screen_free_symbols = gatedmod.free_symbols_on_screens(screen_files)
+    for key, payload in public_screens.items():
+        written.append(_write(out / "screens" / f"{key}.json", payload))
     written.append(_write(out / "screens" / "diff.json", diff_payload))
 
     # ---- breakouts by session ----------------------------------------
@@ -279,10 +298,12 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
 
     for row in industries:
         written.append(_write(out / "industries" / f"{row['slug']}.json",
-                              _group_payload(row, setups_by_symbol, market, bundle)))
+                              _group_payload(row, setups_by_symbol, market, bundle,
+                                             screen_free_symbols)))
     for row in themes:
         written.append(_write(out / "themes" / f"{row['slug']}.json",
-                              _group_payload(row, setups_by_symbol, market, bundle)))
+                              _group_payload(row, setups_by_symbol, market, bundle,
+                                             screen_free_symbols)))
 
     # ---- stocks -------------------------------------------------------
     bar_limit = int(settings.get("publish.stocks_bars", 180))
@@ -300,7 +321,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit, insiders, news, desk,
-                                             gamma_public, None,
+                                             gamma_public, forecast_public,
                                              gamma_locked=gamma_locked,
                                              forecast_locked=forecast_locked)))
 
@@ -314,7 +335,11 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "industry": classify.pretty_industry(market.industries.get(symbol, "")),
             "rs_rating": bundle.now.get(symbol),
             "themes": market.themes.get(symbol, []),
-            "on_screen": sorted({s.screen for s in setups_by_symbol.get(symbol, [])}),
+            # Same reason as the industry pages: this index covers the whole
+            # universe, so screen membership for every name is the screen lists
+            # with the detail stripped. Search by name and ticker is untouched.
+            "on_screen": (sorted({s.screen for s in setups_by_symbol.get(symbol, [])})
+                          if symbol in screen_free_symbols else []),
             # A normalised price shape for list rows that have no room for a
             # chart -- the watchlist and search results. Null when the window
             # is too short or dead flat, so the row can say which.
@@ -653,10 +678,18 @@ def _retain_breakouts(folder: pathlib.Path) -> None:
 
 
 def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
-                   bundle: rs.Bundle) -> dict:
+                   bundle: rs.Bundle,
+                   screen_free_symbols: set[str] | None = None) -> dict:
+    # An industry page lists its members with which screens they are on and at
+    # what stage, which for a few dozen files is the screen lists again in
+    # another order. So a name the screen pages withheld is listed here without
+    # that pair — it keeps its rating and its sector, which is what the page is
+    # for, and gives nothing back that was just held.
+    free = screen_free_symbols
     members = []
     for symbol in row["symbols"]:
         rating = bundle.now.get(symbol)
+        visible = free is None or symbol in free
         members.append({
             "symbol": symbol,
             "name": market.refs[symbol].name if symbol in market.refs else symbol,
@@ -665,8 +698,10 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
             "market_cap": market.caps.get(symbol),
             "industry": market.industries.get(symbol),
             "themes": market.themes.get(symbol, []),
-            "screens": sorted({s.screen for s in setups_by_symbol.get(symbol, [])}),
-            "stage": next((s.stage for s in setups_by_symbol.get(symbol, [])), None),
+            "screens": (sorted({s.screen for s in setups_by_symbol.get(symbol, [])})
+                        if visible else []),
+            "stage": (next((s.stage for s in setups_by_symbol.get(symbol, [])), None)
+                      if visible else None),
         })
     payload = dict(row)
     payload["members_detail"] = members
@@ -896,12 +931,14 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "sma200": _sma_tail(market, symbol, 200, bar_limit),
         "setups": [s.to_json() for s in setups],
         "primary_setup": primary.to_json() if primary else None,
-        # Behind the paywall, so empty here and fetched by anyone entitled.
-        # It used to sit in this file in full while the page above it said
-        # "account needed" — a gate on the interface with the data underneath
-        # it, which is not a gate.
-        "base_history": [],
-        "xray_gated": bool(primary and primary.base_history),
+        # The most recent completed base, and a count of how many there are.
+        # The rest is fetched by anyone entitled to it. This field used to hold
+        # every base in full while the page above it said "account needed" —
+        # a gate on the interface with the data lying underneath it.
+        "base_history": gatedmod.free_xray(primary.base_history if primary else []),
+        "base_history_total": len(primary.base_history) if primary else 0,
+        "xray_gated": bool(primary
+                           and len(primary.base_history) > gatedmod.FREE_XRAY_BASES),
         "catalyst_roadmap": [e.to_json(market.as_of) for e in events],
         "insiders": (insiders or {}).get(symbol),
         # Where open interest concentrates gamma. Absent for any name with
@@ -918,10 +955,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "gamma_gated": symbol in (gamma_locked or set()),
         # Analyst price targets and estimates. Somebody else's opinion, not a
         # reading of ours, which is why it is labelled as such on the page.
-        # Behind the paywall in full, so this is null in the public tree and
-        # the flag below says whether there is anything to ask for. A company
-        # nobody covers and a company whose coverage is paid for are different
-        # things to tell a reader.
+        # The ratings split only. Targets and estimates are fetched by anyone
+        # entitled; the flag says whether there is anything to ask for, because
+        # a company nobody covers and a company whose coverage is paid for are
+        # different things to tell a reader.
         "forecast": (forecasts or {}).get(symbol),
         "forecast_gated": symbol in (forecast_locked or set()),
         # Only for names on no screen: what is and is not in place. A stock

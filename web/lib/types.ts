@@ -141,6 +141,14 @@ export interface ScreenFile {
   stage_labels: Record<string, string>;
   stage_help: Record<string, string>;
   setups: Record<string, Setup[]>;
+  /** True once screens moved behind the paywall. Undefined in a tree built
+   *  before that, which holds every row — treated as "not gated" for the same
+   *  reason as the gamma board. */
+  gated?: boolean;
+  /** How many rows a trimmed stage shows. */
+  free_rows?: number;
+  /** Stages that are never trimmed. */
+  free_stages?: string[];
 }
 
 export interface Meta {
@@ -333,10 +341,13 @@ export interface StockFile {
    *  from `forecast` being null, which means nobody covers it — a fact about
    *  the company, not about what you have paid for. */
   forecast_gated?: boolean;
-  /** This stock has completed bases and they are behind the paywall. Empty
-   *  `base_history` plus this flag false means there is genuinely nothing to
+  /** This stock has more completed bases than the free sample shows. Flag
+   *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
   xray_gated?: boolean;
+  /** How many completed bases there are in total, so the page can say how
+   *  much of the comparison it is showing. */
+  base_history_total?: number;
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are

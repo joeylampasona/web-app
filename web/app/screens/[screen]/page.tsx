@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { FreshnessPill } from "@/components/FreshnessPill";
-import { ScreenBrowser } from "@/components/ScreenBrowser";
+import { GatedScreenBrowser } from "@/components/GatedScreenBrowser";
 import { WhatChanged } from "@/components/WhatChanged";
 import { RS_NOTE } from "@/lib/copy";
 import { EAGER_CHARTS, SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, hasData } from "@/lib/data";
@@ -35,7 +35,7 @@ export default async function ScreenPage({
         direction={file.direction}
         href={file.has_followthrough === false ? undefined : "/market/followthrough"}
       />
-      <ScreenBrowser file={file} bars={bars} />
+      <GatedScreenBrowser file={file} bars={bars} />
       <p className="caption dim" style={{ marginTop: "var(--pad-xl)" }}>{RS_NOTE}</p>
     </div>
   );

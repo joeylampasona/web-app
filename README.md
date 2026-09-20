@@ -219,27 +219,37 @@ to fail every one.
 
 **What is actually behind the wall.**
 
+One rule everywhere: show some of it, then say how much more there is.
+
 | | Free | Gated |
 |---|---|---|
+| Screens | ten names per stage, fresh breakouts whole | the rest of each list |
 | Gamma | the five deepest option books, in full | the rest of the board, and every other name's strikes |
 | Seasonals | the benchmark's grid | the eleven sector grids |
-| Analyst estimates | that a company has coverage | the estimates |
-| X-ray | — | every base a stock has built |
+| Analyst estimates | the buy/hold/sell split | the targets, the spread and the estimates |
+| X-ray | the most recent base | every base on one chart |
 | Backtests | the result and all its caveats | the trade list and the year-by-year breakdown |
-| Screens | everything | — |
 
-Screens stay entirely free, deliberately. They could be gated by stage — free
-sees what broke out, paid sees what is forming — and it would not hold: a
-stock's own page carries its setup and its stage, so a few hundred fetches
-rebuild the withheld list exactly. Making it real means stripping setups from
-the stock pages too, which guts the free site. A gate that a script walks
-through is worse than no gate, because it invites being paid for one.
+Two of those samples are shaped by what the page itself argues. The analyst
+panel shows no price target at all, not even the consensus, because its own
+copy says a middle number without its spread is a worse statement than no
+number — a free tier showing exactly that would publish the thing the page
+warns about. And every stage keeps its true count whether the rows are there
+or not, because a paywall that will not say what it is withholding is asking
+to be paid on trust.
 
-Samples are whole objects rather than truncated ones wherever there is a
-sample at all. A clipped row shows the format; a complete one shows the work,
-and the work is what is being sold. Estimates and the X-ray have no sample —
-there is no ranking to show the top of, and a partial X-ray is not a smaller
-reading but a wrong one.
+Fresh breakouts are never trimmed. That stage is the daily feed, it is
+published separately for the home page anyway, and it is how the site is
+found.
+
+**One path is left open, knowingly.** A stock's own page still carries its own
+setup and stage, so fetching all five hundred of them rebuilds the screen
+lists. The aggregate files are closed — the search index and the industry and
+theme pages withhold screen membership for names the lists withheld, and
+`check_public_data.py` cross-checks them against what the screens actually
+published. Closing the last path means stripping setups from the stock pages,
+which empties the free site to protect a list a determined scraper gets
+anyway. That trade is deliberate and worth revisiting if it ever stops being.
 
 Applying it in both places is the load-bearing part. Gating the board while
 leaving each stock page public would read as a paywall and not be one: the

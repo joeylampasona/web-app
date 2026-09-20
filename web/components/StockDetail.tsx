@@ -284,6 +284,7 @@ export function StockDetail({ stock, run }: {
         <div className="eyebrow">X-ray</div>
         <GatedXRay symbol={stock.symbol} bars={stock.bars}
                    bases={stock.base_history}
+                   total={stock.base_history_total ?? stock.base_history.length}
                    locked={Boolean(stock.xray_gated)} />
       </section>
     </div>

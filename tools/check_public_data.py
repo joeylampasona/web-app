@@ -22,12 +22,24 @@ away to anyone willing to fetch a few hundred files.
 
 Seasonals. The benchmark's grid is free, the sector grids are not.
 
-Analyst estimates. No free sample at all, so no stock file may carry one.
+Analyst estimates. The buy/hold/sell split is free and no price target is,
+not even the consensus — so a public forecast may carry ratings and the current
+price and nothing else.
 
-The X-ray. Gated whole — a stock's bases are a comparison between themselves,
-so a partial one is not a smaller reading but a wrong one. This is the gate
-that was decorative for months: the page said "account needed" while every
-base sat in the same public file underneath it.
+Screens. Each stage shows a sample; fresh breakouts are whole. And the
+aggregate files must not hand back what the lists withheld: the search index
+and the industry and theme pages cover the entire universe, so screen
+membership on a name outside the free sample is that name's row given back in
+a different file.
+
+One path is left open knowingly. A stock's own page still carries its own
+setup, so fetching all five hundred of them rebuilds the lists. Closing it
+means emptying the free stock pages, which is a worse trade than the one it
+protects against.
+
+The X-ray. The most recent base is free, labelled as one of however many
+there are. This is the gate that was decorative for months: the page said
+"account needed" while every base sat in the same public file underneath it.
 
 Backtests. The result is free and the trade list and yearly breakdown are not,
 so no preset may still carry those keys.
@@ -48,7 +60,8 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from publish.gated import (BACKTEST_GATED_KEYS, FREE_GAMMA_ROWS,  # noqa: E402
-                           FREE_SEASONAL_SYMBOL)
+                           FREE_SCREEN_ROWS, FREE_SCREEN_WHOLE_STAGES,
+                           FREE_SEASONAL_SYMBOL, FREE_XRAY_BASES)
 
 
 def _load(path: pathlib.Path):
@@ -105,6 +118,54 @@ def check(out: pathlib.Path) -> list[str]:
                 f"{', '.join(str(s) for s in extra)}. Only "
                 f"{FREE_SEASONAL_SYMBOL} is free.")
 
+    screen_paths = [p for p in sorted((out / "screens").glob("*.json"))
+                    if p.name != "diff.json"]
+    on_screen_free: set[str] = set()
+    oversized: list[str] = []
+    for path in screen_paths:
+        payload = _load(path)
+        if "__unreadable__" in payload:
+            failures.append(f"{path.name} could not be read: {payload['__unreadable__']}")
+            continue
+        for stage, rows in (payload.get("setups") or {}).items():
+            on_screen_free.update(row["symbol"] for row in rows)
+            if stage in FREE_SCREEN_WHOLE_STAGES:
+                continue
+            if len(rows) > FREE_SCREEN_ROWS:
+                oversized.append(f"{path.stem}/{stage} ({len(rows)})")
+    print(f"  screens/            {len(screen_paths)} screen(s)   "
+          f"{len(on_screen_free)} name(s) visible free")
+    if oversized:
+        failures.append(
+            f"{len(oversized)} screen stage(s) publish more than the free "
+            f"sample of {FREE_SCREEN_ROWS}: {', '.join(oversized)}.")
+
+    # The aggregates, cross-checked against what the screens actually showed.
+    # This is the pair that matters: a screen page can be trimmed perfectly and
+    # the index next to it still hand back every name it trimmed.
+    index = _load(out / "search.json") if (out / "search.json").exists() else {}
+    search_leaked = [row.get("symbol") for row in (index.get("rows") or [])
+                     if row.get("on_screen") and row.get("symbol") not in on_screen_free]
+    if search_leaked:
+        failures.append(
+            f"{len(search_leaked)} row(s) in search.json carry screen "
+            f"membership for names the screen pages withheld "
+            f"({', '.join(str(s) for s in sorted(search_leaked)[:8])}…).")
+
+    group_leaked: list[str] = []
+    for folder in ("industries", "themes"):
+        for path in sorted((out / folder).glob("*.json")):
+            payload = _load(path)
+            for member in (payload.get("members_detail") or []):
+                if (member.get("screens") or member.get("stage")) \
+                        and member.get("symbol") not in on_screen_free:
+                    group_leaked.append(f"{folder}/{path.stem}:{member.get('symbol')}")
+    if group_leaked:
+        failures.append(
+            f"{len(group_leaked)} member row(s) on industry or theme pages "
+            f"carry a screen or stage for names the screen pages withheld "
+            f"({', '.join(group_leaked[:6])}…).")
+
     stocks = sorted((out / "stocks").glob("*.json"))
     leaked: list[str] = []
     forecast_leaked: list[str] = []
@@ -123,14 +184,18 @@ def check(out: pathlib.Path) -> list[str]:
             leaked.append(symbol)
         if payload.get("forecast_gated"):
             forecast_marked += 1
-        if payload.get("forecast"):
+        forecast = payload.get("forecast") or {}
+        targets = forecast.get("targets") or {}
+        if (any(targets.get(k) is not None for k in ("low", "mean", "median", "high"))
+                or forecast.get("eps") or forecast.get("revenue")
+                or forecast.get("upside_pct") is not None):
             forecast_leaked.append(symbol)
-        if payload.get("base_history"):
+        if len(payload.get("base_history") or []) > FREE_XRAY_BASES:
             xray_leaked.append(symbol)
 
     print(f"  stocks/             {len(stocks)} file(s)   "
           f"{len(free)} public gamma / {marked} gated   "
-          f"{len(forecast_leaked)} public forecast / {forecast_marked} gated")
+          f"{forecast_marked} forecast head(s)   {len(xray_leaked)} oversized x-ray")
 
     def leak(names: list[str], what: str, why: str) -> None:
         if not names:
@@ -143,11 +208,12 @@ def check(out: pathlib.Path) -> list[str]:
     leak(leaked, "gamma for names outside the free sample",
          "The board is gated and its rows are not, which gives the board away "
          "to anyone who fetches the files.")
-    leak(forecast_leaked, "analyst estimates",
-         "Estimates have no free sample; the whole panel is gated.")
-    leak(xray_leaked, "base history",
-         "The X-ray is gated whole. This is the field that made the old "
-         "account gate decorative for months.")
+    leak(forecast_leaked, "analyst price targets or estimates",
+         "The free half is the ratings split and the current price. No target "
+         "appears in it, not even the consensus.")
+    leak(xray_leaked, f"more than {FREE_XRAY_BASES} base(s) of history",
+         "This is the field that made the old account gate decorative for "
+         "months.")
 
     presets = sorted((out / "backtest" / "presets").glob("*.json"))
     preset_leaked: list[str] = []
