@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
-import { SeasonalGrid } from "@/components/SeasonalGrid";
+import { GatedSeasonalGrid } from "@/components/GatedSeasonalGrid";
 import { getSeasonals, getMeta, hasData } from "@/lib/data";
 import { SITE_NAME } from "@/lib/copy";
 
@@ -28,7 +28,9 @@ export default function SeasonalsPage() {
           Not enough history to build a grid on this run.
         </div>
       ) : (
-        <SeasonalGrid symbols={file.symbols} />
+        <GatedSeasonalGrid symbols={file.symbols}
+                           total={file.count ?? file.symbols.length}
+                           gated={Boolean(file.gated)} />
       )}
 
       <p className="caption dim" style={{ marginTop: "var(--pad-lg)" }}>{file.copy.footer}</p>

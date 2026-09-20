@@ -50,6 +50,18 @@ from typing import Any, Iterable
 # which is most of the value — is not given away.
 FREE_GAMMA_ROWS = 5
 
+# Seasonals: the benchmark's grid is free, the sector grids are not. The
+# benchmark is the one everybody has already seen somewhere else, so it
+# demonstrates the format without being the reading — the sector-by-sector
+# comparison is what the page is for.
+FREE_SEASONAL_SYMBOL = "SPY"
+
+# Analyst estimates have no free sample, and deliberately so. There is no
+# ranking here to show the top of — a forecast is a per-company fact, and any
+# "sample" would just be an arbitrary list of companies whose page happens to
+# be more useful than the next one's. The site samples generously elsewhere;
+# this one is whole or not at all.
+
 TABLE = "gated_content"
 TIMEOUT = 60
 # PostgREST takes an array and upserts it in one statement. Chunked anyway, so
@@ -112,6 +124,32 @@ def gamma_documents(board_rows: list[dict], gamma: dict[str, dict] | None,
         documents.append(Document(f"stocks/gamma/{symbol.lower()}.json",
                                   payload, as_of))
     return documents
+
+
+def seasonal_documents(symbols: list[dict], as_of: dt.date) -> list[Document]:
+    """The whole grid, benchmark included, as one document."""
+    if not symbols:
+        return []
+    return [Document("market/seasonals.json",
+                     {"as_of": as_of.isoformat(), "symbols": symbols}, as_of)]
+
+
+def free_seasonals(symbols: list[dict]) -> list[dict]:
+    """The grids that stay public: the benchmark, or the first if it is absent."""
+    if not symbols:
+        return []
+    for row in symbols:
+        if row.get("symbol") == FREE_SEASONAL_SYMBOL:
+            return [row]
+    return symbols[:1]
+
+
+def forecast_documents(forecasts: dict[str, dict] | None,
+                       as_of: dt.date) -> list[Document]:
+    """One document per company with estimates. All of them."""
+    return [Document(f"stocks/forecast/{symbol.lower()}.json", payload, as_of)
+            for symbol, payload in sorted((forecasts or {}).items())
+            if payload]
 
 
 # --------------------------------------------------------------- staging

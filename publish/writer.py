@@ -178,6 +178,12 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     gamma_locked = {symbol for symbol, payload in (gamma or {}).items()
                     if symbol not in gamma_free and payload and payload.get("levels")}
 
+    # Analyst estimates have no free sample at all, so the split is trivial:
+    # every company that has them keeps a flag saying so and nothing else.
+    gated_documents.extend(gatedmod.forecast_documents(forecasts, as_of))
+    forecast_locked = {symbol for symbol, payload in (forecasts or {}).items()
+                       if payload}
+
     # ---- screens ------------------------------------------------------
     for key, setups in result.screens.items():
         spec = param_module.SCREENS[key]
@@ -290,8 +296,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit, insiders, news, desk,
-                                             gamma_public, forecasts,
-                                             gamma_locked=gamma_locked)))
+                                             gamma_public, None,
+                                             gamma_locked=gamma_locked,
+                                             forecast_locked=forecast_locked)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -367,10 +374,17 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             bars)
         if grid is not None:
             season_rows.append(grid.to_json())
+    # The benchmark's grid stays public; the eleven sector grids are the
+    # reading and go behind the wall. Whole grids either way — a year-count
+    # matters more here than anywhere else on the site, and half a grid would
+    # be worse than none.
+    gated_documents.extend(gatedmod.seasonal_documents(season_rows, as_of))
     written.append(_write(out / "market" / "seasonals.json", {
         "as_of": as_of.isoformat(),
         "copy": SEASONAL_COPY,
-        "symbols": season_rows,
+        "symbols": gatedmod.free_seasonals(season_rows),
+        "count": len(season_rows),
+        "gated": True,
     }))
 
     # ---- insider decisions, by day ------------------------------------
@@ -822,7 +836,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    desk: dict[str, list[dict]] | None = None,
                    gamma: dict[str, dict] | None = None,
                    forecasts: dict[str, dict] | None = None,
-                   gamma_locked: set[str] | None = None) -> dict:
+                   gamma_locked: set[str] | None = None,
+                   forecast_locked: set[str] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -887,7 +902,12 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "gamma_gated": symbol in (gamma_locked or set()),
         # Analyst price targets and estimates. Somebody else's opinion, not a
         # reading of ours, which is why it is labelled as such on the page.
+        # Behind the paywall in full, so this is null in the public tree and
+        # the flag below says whether there is anything to ask for. A company
+        # nobody covers and a company whose coverage is paid for are different
+        # things to tell a reader.
         "forecast": (forecasts or {}).get(symbol),
+        "forecast_gated": symbol in (forecast_locked or set()),
         # Only for names on no screen: what is and is not in place. A stock
         # already on one has its own card saying the same thing better.
         "structure_check": (None if setups

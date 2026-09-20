@@ -241,6 +241,12 @@ export function getSeasonals() {
     as_of: string;
     copy: { header: string; subhead: string; footer: string };
     symbols: SeasonalSymbol[];
+    /** Every grid that was built, not the number published here. */
+    count?: number;
+    /** Absent in a tree built before seasonals moved behind the paywall,
+     *  which holds all twelve grids — see getGammaBoard for why undefined
+     *  has to mean "not gated" rather than "locked". */
+    gated?: boolean;
   }>("market/seasonals.json");
 }
 

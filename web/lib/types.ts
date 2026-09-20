@@ -329,6 +329,10 @@ export interface StockFile {
    *  would advertise a subscription over companies that have nothing to sell. */
   gamma_gated?: boolean;
   forecast: Forecast | null;
+  /** This company has analyst coverage and it is behind the paywall. Distinct
+   *  from `forecast` being null, which means nobody covers it — a fact about
+   *  the company, not about what you have paid for. */
+  forecast_gated?: boolean;
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are

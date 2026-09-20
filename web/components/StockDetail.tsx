@@ -7,7 +7,7 @@ import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
-import { ForecastPanel } from "./ForecastPanel";
+import { GatedForecastPanel } from "./GatedForecastPanel";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
@@ -268,7 +268,8 @@ export function StockDetail({ stock, run }: {
 
       <section>
         <div className="eyebrow">What analysts expect</div>
-        <ForecastPanel forecast={stock.forecast} />
+        <GatedForecastPanel symbol={stock.symbol} forecast={stock.forecast}
+                            locked={Boolean(stock.forecast_gated)} />
       </section>
 
       <section>
