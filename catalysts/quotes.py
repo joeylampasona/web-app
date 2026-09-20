@@ -15,6 +15,7 @@ a settled close are different things and the page says which it is showing.
 from __future__ import annotations
 
 import datetime as dt
+import time
 
 from catalysts import cboe
 
@@ -22,7 +23,16 @@ from catalysts import cboe
 #: finishing well inside its own cadence: at roughly half a second a name it
 #: is a few minutes, and a run still going when the next one starts is a run
 #: that never publishes.
-MAX_SYMBOLS = 600
+MAX_SYMBOLS = 400
+
+
+#: How long one sweep may spend before it stops and publishes what it has.
+#: The job it runs in has its own timeout, and being killed by that means
+#: publishing nothing — the first paced run was cut off holding four hundred
+#: perfectly good quotes. Stopping early with a partial file is strictly
+#: better, and because the names are in priority order the ones dropped are
+#: the ones furthest from mattering.
+TIME_BUDGET_SECONDS = 8 * 60
 
 
 def collect(symbols, notice=None) -> dict:
@@ -48,13 +58,24 @@ def collect(symbols, notice=None) -> dict:
             break
     rows: dict[str, dict] = {}
     asked = 0
+    started = time.monotonic()
+    ran_out = False
     for symbol in wanted:
+        if time.monotonic() - started > TIME_BUDGET_SECONDS:
+            ran_out = True
+            break
         asked += 1
-        if notice and asked % 200 == 0:
-            notice(f"quotes: {asked:,}/{len(wanted):,} asked, {len(rows):,} answered")
+        if notice and asked % 100 == 0:
+            notice(f"quotes: {asked:,}/{len(wanted):,} asked, {len(rows):,} answered, "
+                   f"{time.monotonic() - started:.0f}s elapsed")
         found = cboe.quote(symbol)
         if found is not None:
             rows[symbol] = found
+
+    if ran_out and notice:
+        notice(f"quotes: stopped at {asked:,} of {len(wanted):,} after "
+               f"{TIME_BUDGET_SECONDS}s and published what was in hand. The "
+               f"names left out are the ones furthest from their pivot.")
 
     if notice:
         # Always, not only on failure. A hit rate that quietly slides from
@@ -78,7 +99,11 @@ def collect(symbols, notice=None) -> dict:
     return {
         "fetched_at": now.isoformat(timespec="seconds"),
         "count": len(rows),
-        "asked": len(wanted),
+        "asked": asked,
+        "wanted": len(wanted),
+        # True when the clock stopped the sweep rather than the list running
+        # out, so a short file can be told from a quiet market.
+        "truncated": ran_out,
         "source": "cboe-delayed",
         # Said once, here, so every surface that reads this file has to carry
         # it rather than quietly presenting delayed prices as live ones.

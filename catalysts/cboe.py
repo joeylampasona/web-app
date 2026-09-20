@@ -48,7 +48,10 @@ PAUSE = 0.3
 # Retried once only: if the source is pushing back, the answer is to slow down
 # and accept the miss, not to argue with it harder.
 THROTTLED = (429, 403, 503)
-THROTTLE_PAUSE = 5.0
+# Five seconds was too generous at this volume: a sweep of six hundred names
+# with one in eight pushed back spent longer waiting than fetching and was
+# killed by its own job timeout holding four hundred good quotes.
+THROTTLE_PAUSE = 1.5
 
 # One connection, reused. Establishing a TLS session per name would cost more
 # than the requests themselves.
