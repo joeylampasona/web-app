@@ -101,6 +101,74 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
     ),
     label: "A rounded bottom, then a small pause",
   },
+  "/screens/bull_flag": {
+    label: "A sharp rise, then a short drift down",
+    // The pole does the talking: steep, then a small tilted pause.
+    art: (
+      <>
+        <path d="M3 20 L10 5" />
+        <path d="M10 6.5 L17 9 L17 14.5 L10 12 Z" />
+        <path d="M17 11.5 L21.5 9.5" strokeDasharray="2 1.6" />
+      </>
+    ),
+  },
+  "/screens/bear_flag": {
+    label: "A sharp fall, then a short drift up",
+    // The mirror, so the pair reads as a pair at a glance.
+    art: (
+      <>
+        <path d="M3 4 L10 19" />
+        <path d="M10 17.5 L17 15 L17 9.5 L10 12 Z" />
+        <path d="M17 12.5 L21.5 14.5" strokeDasharray="2 1.6" />
+      </>
+    ),
+  },
+  "/screens/falling_wedge": {
+    label: "Both lines falling, the upper one faster",
+    art: (
+      <>
+        <path d="M2.5 4 L21 15" />
+        <path d="M2.5 13 L21 17" />
+      </>
+    ),
+  },
+  "/screens/rising_wedge": {
+    label: "Both lines rising, the lower one faster",
+    art: (
+      <>
+        <path d="M2.5 20 L21 9" />
+        <path d="M2.5 11 L21 7" />
+      </>
+    ),
+  },
+  "/screens/triangle": {
+    label: "Falling highs against rising or level lows",
+    art: (
+      <>
+        <path d="M2.5 5 L21 12" />
+        <path d="M2.5 19 L21 12" />
+      </>
+    ),
+  },
+  "/screens/descending_triangle": {
+    label: "Falling highs against a level floor",
+    art: (
+      <>
+        <path d="M2.5 5 L21 17" />
+        <path d="M2.5 17.5 L21 17.5" />
+      </>
+    ),
+  },
+  "/screens/squeeze": {
+    label: "The range at its quietest in months",
+    // Wide, then pinched: the compression is the whole idea.
+    art: (
+      <>
+        <path d="M2.5 3.5 L10 9 L21 11" />
+        <path d="M2.5 20.5 L10 15 L21 13" />
+      </>
+    ),
+  },
   "/screens/combine": {
     label: "Several screens at once",
     art: (

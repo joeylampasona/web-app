@@ -423,7 +423,7 @@ def _pipeline(conn, with_followthrough: bool = True):
     from data.adapters import get_adapter
     from data.market import load
     from patterns import followthrough, scan
-    from patterns.params import SCREEN_KEYS
+    from patterns.params import BASE_SCREEN_KEYS
     from rankings import rs
 
     market = load(conn, include_all=True)
@@ -492,15 +492,15 @@ def _pipeline(conn, with_followthrough: bool = True):
         # Four backtests over years of prices, and nothing to show for the best
         # part of a minute. Silence that long is indistinguishable from a hang,
         # so say what is happening and tick as each one lands.
-        print(f"  → Replaying {len(SCREEN_KEYS)} default backtests over "
+        print(f"  → Replaying {len(BASE_SCREEN_KEYS)} default backtests over "
               f"{len(market.calendar):,} sessions. A minute or so.", flush=True)
         timeline = engine.rs_timeline(market)      # computed once, reused per screen
-        for index, screen in enumerate(SCREEN_KEYS, 1):
+        for index, screen in enumerate(BASE_SCREEN_KEYS, 1):
             config = BacktestSettings.parse({"screen": screen})
             run_out = engine.run(market, config, earnings, timeline)
             summary = metrics.summarise(run_out)
             backtests[config.hash()] = summary
-            print(f"    {index}/{len(SCREEN_KEYS)}  {screen} — "
+            print(f"    {index}/{len(BASE_SCREEN_KEYS)}  {screen} — "
                   f"{len(summary.get('trades', []))} trades", flush=True)
         print("  → Checking what happened to recent breakouts.", flush=True)
         follow = followthrough.compute(market, timeline)

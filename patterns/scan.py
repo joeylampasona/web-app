@@ -31,8 +31,21 @@ class ScanResult:
         return out
 
     def fresh_breakout_symbols(self) -> set[str]:
+        """Names that cleared a level UPWARD in the last few sessions.
+
+        Short screens are excluded. Their fresh bucket holds names that broke
+        DOWN through a level, and this set feeds the home page's "cleared a
+        pivot" count, the market-wide breakout tally and the breakouts-by-day
+        file. Letting a bear flag in would have each of those report a falling
+        stock as a breakout.
+        """
         return {s.symbol for setups in self.screens.values() for s in setups
-                if s.stage == stages.FRESH}
+                if s.stage == stages.FRESH and s.direction != stages.SHORT}
+
+    def fresh_breakdown_symbols(self) -> set[str]:
+        """The other half: names that lost a level in the last few sessions."""
+        return {s.symbol for setups in self.screens.values() for s in setups
+                if s.stage == stages.FRESH and s.direction == stages.SHORT}
 
     def all_setups(self) -> list[Setup]:
         return [s for setups in self.screens.values() for s in setups]

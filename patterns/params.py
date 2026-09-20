@@ -165,6 +165,102 @@ _SWING = ParamSpec(
          "so the contraction list stays readable.")
 
 
+# ---------------------------------------------------------------- shapes
+#
+# The shape screens share a small set of dials. They deliberately do NOT reuse
+# base_lookback_weeks and the rest: a wedge is not a base, and presenting "how
+# far back to look for the ceiling" on a screen with no ceiling would be a
+# control that does nothing.
+
+_SHAPE_LOOKBACK = ParamSpec(
+    key="shape_lookback_weeks", label="How far back to fit the trendlines",
+    kind="integer", default=12, minimum=4, maximum=52, step=1, unit="weeks",
+    funnel_title="Where we fit the lines",
+    funnel_text="The two trendlines are fitted over the last {value} weeks.",
+    help="The window the swing highs and swing lows are taken from. Longer finds "
+         "bigger, older structures; shorter finds tighter, newer ones.")
+
+_MIN_SHAPE = ParamSpec(
+    key="min_shape_weeks", label="Shortest formation we'll accept", kind="integer",
+    default=3, minimum=1, maximum=26, step=1, unit="weeks",
+    funnel_title="Long enough to be a formation",
+    funnel_text="The formation has lasted at least {value} weeks.",
+    help="Two lines can be fitted through almost any handful of bars. This is the "
+         "span below which doing so is arithmetic rather than structure.")
+
+_CONVERGENCE = ParamSpec(
+    key="max_convergence", label="How much the lines must close", kind="number",
+    default=0.70, minimum=0.10, maximum=0.95, step=0.05, unit="",
+    funnel_title="The lines are closing",
+    funnel_text="The gap between the lines ends at {value} of what it started at.",
+    help="The distance between the two trendlines at the end of the window "
+         "divided by the distance at the start. 1.0 is parallel — a channel, not "
+         "a wedge. Lower numbers demand a tighter squeeze.")
+
+_MIN_POLE = ParamSpec(
+    key="min_pole_pct", label="Smallest move that counts as a pole", kind="percent",
+    default=15, minimum=5, maximum=60, step=1, unit="%",
+    funnel_title="There is a pole",
+    funnel_text="A move of at least {value}% runs into the pause.",
+    help="A flag is a pause inside a move. Without a move in front of it, it is "
+         "just a quiet fortnight, and this is the line between the two.")
+
+_MAX_RETRACE = ParamSpec(
+    key="max_retrace", label="How much of the pole it may give back",
+    kind="number", default=0.50, minimum=0.10, maximum=0.90, step=0.05, unit="",
+    funnel_title="The pause is shallow",
+    funnel_text="No more than {value} of the pole has been given back.",
+    help="A drift that surrenders most of the move it is pausing inside is not a "
+         "pause; it is the move ending.")
+
+_MAX_FLAG = ParamSpec(
+    key="max_flag_sessions", label="Longest pause we'll still call a flag",
+    kind="integer", default=15, minimum=4, maximum=40, step=1, unit="sessions",
+    funnel_title="Short enough to be a flag",
+    funnel_text="The pause is no longer than {value} sessions.",
+    help="Flags are brief by definition. A long enough pause is a base, and this "
+         "site has six screens for those.")
+
+_MIN_FLAG = ParamSpec(
+    key="min_flag_sessions", label="Shortest pause we'll accept", kind="integer",
+    default=3, minimum=2, maximum=15, step=1, unit="sessions",
+    funnel_title="", funnel_text="",
+    help="Fewer bars than this is a gap in the move rather than a pause in it.")
+
+_SQUEEZE_LOOKBACK = ParamSpec(
+    key="squeeze_lookback_weeks", label="History the quiet is measured against",
+    kind="integer", default=26, minimum=8, maximum=104, step=1, unit="weeks",
+    funnel_title="Against its own history",
+    funnel_text="Today's range is ranked against the last {value} weeks of it.",
+    help="A squeeze is relative. A stock that is always quiet is not squeezing, and "
+         "this is the history each name is compared with — its own.")
+
+_SQUEEZE_PCTILE = ParamSpec(
+    key="squeeze_percentile", label="How quiet it has to be", kind="percent",
+    default=15, minimum=1, maximum=50, step=1, unit="th percentile",
+    funnel_title="Quiet by its own standard",
+    funnel_text="The range sits in the quietest {value}% of that history.",
+    help="Where the current range sits in that history. Lower is a tighter, rarer "
+         "compression.")
+
+
+def _shape_common() -> list[ParamSpec]:
+    return [_SHAPE_LOOKBACK, _MIN_SHAPE, _CONVERGENCE, _SWING, _MIN_RS, _FRESH]
+
+
+def _flag_common() -> list[ParamSpec]:
+    return [_MIN_POLE, _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
+
+
+_NO_EDGE_NOTE = (
+    "This shape has never been tested on this site. The out-of-sample study "
+    "behind the base screens found no measurable edge in their structural parts "
+    "— only in relative strength — and no equivalent study has been run against "
+    "trendline shapes at all. Read this screen as a description of what the "
+    "chart is doing, which is checkable, and not as a reason to expect anything."
+)
+
+
 SCREENS: dict[str, ScreenSpec] = {
     "vcp": ScreenSpec(
         key="vcp",
@@ -530,9 +626,148 @@ SCREENS: dict[str, ScreenSpec] = {
             Concept("Breakout", "A close above that lid.", "breakout"),
         ],
     ),
+    # ------------------------------------------------------------ shapes
+    "bull_flag": ScreenSpec(
+        key="bull_flag", name="Bull flag",
+        shape="A sharp advance, then a short shallow drift against it.",
+        description=(
+            "A flag is a pause inside a move, and the move is the point: a quiet "
+            "fortnight with nothing in front of it is not a flag. This screen "
+            "measures the pole first — a run of at least 15% — and only then asks "
+            "whether the drift after it is short and shallow enough to be a pause "
+            "rather than the move ending. The level shown is the top of the drift. "
+            + _NO_EDGE_NOTE),
+        params=_flag_common(),
+        concepts=[
+            Concept("The pole", "The advance the pause interrupts.", "pole"),
+            Concept("The flag", "A short drift down or sideways after it.", "flag"),
+            Concept("The level", "The top of that drift.", "pivot"),
+        ],
+    ),
+    "bear_flag": ScreenSpec(
+        key="bear_flag", name="Bear flag",
+        shape="A sharp decline, then a short shallow drift back up against it.",
+        description=(
+            "The mirror of the bull flag, and the first screen on this site that "
+            "reads downward. Its stages are named for that: a fresh BREAKDOWN, not "
+            "a fresh breakout, and \"falling\" where the others say \"climbing\". "
+            "The level shown is the bottom of the drift, and progress is measured "
+            "as price falling away from it. Nothing here is a suggestion to short "
+            "anything; there is no order-placing code on this site and never will "
+            "be. " + _NO_EDGE_NOTE),
+        params=_flag_common(),
+        concepts=[
+            Concept("The pole", "The decline the pause interrupts.", "pole"),
+            Concept("The flag", "A short drift up or sideways after it.", "flag"),
+            Concept("The level", "The bottom of that drift.", "pivot"),
+        ],
+    ),
+    "falling_wedge": ScreenSpec(
+        key="falling_wedge", name="Falling wedge",
+        shape="Both trendlines falling, the upper one falling faster.",
+        description=(
+            "Highs and lows both coming down, but the highs coming down faster, so "
+            "the two lines close on each other. What separates it from an ordinary "
+            "decline is the convergence: sellers are still in control but are "
+            "giving less ground each swing. The level shown is the upper line. "
+            + _NO_EDGE_NOTE),
+        params=_shape_common(),
+        concepts=[
+            Concept("The upper line", "Through the swing highs.", "upper"),
+            Concept("The lower line", "Through the swing lows.", "lower"),
+            Concept("Convergence", "How much the gap between them has closed.",
+                    "convergence"),
+        ],
+    ),
+    "rising_wedge": ScreenSpec(
+        key="rising_wedge", name="Rising wedge",
+        shape="Both trendlines rising, the lower one rising faster.",
+        description=(
+            "Price still making higher highs, but each one by less, while the lows "
+            "climb faster underneath — the range squeezing shut from below. Read "
+            "downward by convention, so this screen's stages are named for a "
+            "breakdown. That convention is not a forecast and has not been tested "
+            "here. The level shown is the lower line. " + _NO_EDGE_NOTE),
+        params=_shape_common(),
+        concepts=[
+            Concept("The upper line", "Through the swing highs.", "upper"),
+            Concept("The lower line", "Through the swing lows, rising faster.",
+                    "lower"),
+            Concept("The level", "The lower line, which is what gives way first.",
+                    "pivot"),
+        ],
+    ),
+    "triangle": ScreenSpec(
+        key="triangle", name="Triangle",
+        shape="Falling highs against rising or level lows.",
+        description=(
+            "Two triangles in one screen because they read the same way up: the "
+            "symmetrical, where highs fall and lows rise toward each other, and "
+            "the ascending, where the highs are level and the lows climb into "
+            "them. Both describe a range closing with the buyers pressing. The "
+            "level shown is the upper line. " + _NO_EDGE_NOTE),
+        params=_shape_common(),
+        concepts=[
+            Concept("Symmetrical", "Highs falling, lows rising.", "symmetrical"),
+            Concept("Ascending", "Highs level, lows rising into them.", "ascending"),
+            Concept("The level", "The upper line.", "pivot"),
+        ],
+    ),
+    "descending_triangle": ScreenSpec(
+        key="descending_triangle", name="Descending triangle",
+        shape="Falling highs against a level floor.",
+        description=(
+            "Each rally stopping lower while the same floor is tested again and "
+            "again. Read downward, so the stages here are named for a breakdown "
+            "and the level shown is the floor. It is a separate screen from the "
+            "other two triangles for exactly that reason: mixing directions in one "
+            "screen would make its stage counts the sum of two different things. "
+            + _NO_EDGE_NOTE),
+        params=_shape_common(),
+        concepts=[
+            Concept("The floor", "A level the lows keep returning to.", "lower"),
+            Concept("Lower highs", "Each rally stopping short of the last.", "upper"),
+        ],
+    ),
+    "squeeze": ScreenSpec(
+        key="squeeze", name="Squeeze",
+        shape="The range at its quietest in months, by the stock's own standard.",
+        description=(
+            "Not a shape and not a direction. This measures how wide the stock's "
+            "range is against its own recent history and lists the names sitting "
+            "in the quietest part of it. The common claim that a squeeze must "
+            "resolve one way or the other is not something this can see and not "
+            "something it says — it reports that a stock has stopped moving, which "
+            "is a fact about the range. The level shown is the ceiling of the "
+            "quiet stretch, because that is what a move out of it would clear. "
+            + _NO_EDGE_NOTE),
+        params=[_SQUEEZE_LOOKBACK, _SQUEEZE_PCTILE, _MIN_RS, _FRESH],
+        concepts=[
+            Concept("Bandwidth", "The width of the range, against its own history.",
+                    "bandwidth"),
+            Concept("The quiet stretch", "How long it has been this still.", "flag"),
+        ],
+    ),
 }
 
 SCREEN_KEYS = list(SCREENS.keys())
+
+#: The screens the replay engine understands.
+#:
+#: backtest.engine.candidates re-derives setups historically by calling
+#: bases.find, so it can only replay screens whose structure IS a base. The
+#: shape screens are fitted trendlines and volatility ranges; the engine has no
+#: way to reconstruct one, and asking it to reach for base_lookback_weeks on a
+#: screen that deliberately has no base dials raised AttributeError.
+#:
+#: Named rather than inferred from a missing attribute, so that adding a dial
+#: to a shape screen one day cannot silently enrol it in a replay that cannot
+#: represent it.
+BASE_SCREEN_KEYS = ["vcp", "blue_sky", "multi_year", "ipo", "flat_base",
+                    "cup_and_handle"]
+
+#: Shape screens: trendline and volatility structures, no base, not replayable.
+SHAPE_SCREEN_KEYS = [k for k in SCREEN_KEYS if k not in BASE_SCREEN_KEYS]
 
 
 def funnel_steps(screen: str, overrides: dict[str, Any] | None = None) -> list[dict]:

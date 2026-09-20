@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass
 
 from backtest import engine
 from data.market import Market
-from patterns.params import SCREENS, Params
+from patterns.params import BASE_SCREEN_KEYS, SCREENS, Params
 
 # Six months. Long enough that a base has had time to resolve, short enough that
 # it describes the market someone is looking at rather than the one before it.
@@ -61,7 +61,11 @@ def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) ->
     """Per screen: every breakout inside the window, and how it has gone."""
     as_of = market.as_of
     out: dict[str, dict] = {}
-    for key, spec in SCREENS.items():
+    # Base screens only. This reuses engine.candidates to re-derive breakouts
+    # historically, and the engine can only rebuild a base — see
+    # BASE_SCREEN_KEYS. A shape screen's history is not reconstructable here.
+    for key in BASE_SCREEN_KEYS:
+        spec = SCREENS[key]
         params = Params(key)
         rows: list[Outcome] = []
         for symbol, found in engine.candidates(market, params, timeline).items():

@@ -20,13 +20,19 @@ interface ScreenDiff {
  * the site look busier than the market was.
  */
 export function WhatChanged({
-  diff, screenName, href,
+  diff, screenName, href, direction = "long",
 }: {
   diff: ScreenDiff | null | undefined;
   screenName: string;
   href?: string;
+  /** "short" screens resolve downward, so they say so. */
+  direction?: string;
 }) {
   if (!diff) return null;
+  // A breakdown screen describing its own movement as "broke out" was the site
+  // saying the opposite of what happened.
+  const verb = direction === "short" ? "broke down" : "broke out";
+  const label = direction === "short" ? "Broke down" : "Broke out";
 
   const moved = diff.left.filter((row) => row.to);
   const gone = diff.left.filter((row) => !row.to);
@@ -49,13 +55,13 @@ export function WhatChanged({
 
       {quiet ? (
         <p className="footnote muted" style={{ margin: 0 }}>
-          Nothing moved on {screenName} today — nothing broke out, nothing new
+          Nothing moved on {screenName} today — nothing {verb}, nothing new
           started forming, nothing dropped off. That is a reading about the market,
           not a fault.
         </p>
       ) : (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <Row label="Broke out" symbols={diff.broke_out_today} />
+          <Row label={label} symbols={diff.broke_out_today} />
           <Row label="Newly forming" symbols={diff.newly_forming} />
           <Row label="Moved on" symbols={moved.map((r) => r.symbol)}
                note={moved.length ? moved.map((r) => `${r.symbol} → ${r.to!.replace("_", " ")}`).join(", ") : undefined} />

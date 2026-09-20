@@ -12,7 +12,7 @@ from catalysts import iv as ivmod
 from catalysts import news as newsmod
 from data import classify, settings
 from data.market import Market
-from patterns import params as param_module
+from patterns import detectors, params as param_module
 from patterns import scan, stages
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
@@ -109,19 +109,28 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "as_of": as_of.isoformat(),
             "total": len(setups),
             "stage_counts": {stage: len(rows) for stage, rows in grouped.items()},
-            "stage_labels": stages.LABELS,
-            "stage_help": {
-                stages.FORMING: "resting before a breakout",
-                stages.FRESH: "cleared it in the last 5 sessions",
-                stages.CLIMBING: "broke out earlier, still rising",
-                stages.PLAYED_OUT: f"{as_of.year} breakouts, stopped or trailed out",
-            },
+            # Per screen, not global: a screen that reads downward says
+            # "Fresh breakdowns" and "Falling" where the others say "Fresh
+            # breakouts" and "Climbing". Same stage keys underneath, so every
+            # count and filter on the site keeps working.
+            "direction": detectors.direction_of(key),
+            # Whether the follow-through page has anything to say about this
+            # screen. It replays history through the base engine, which cannot
+            # reconstruct a fitted trendline, so the shape screens are absent
+            # from it and must not link to it.
+            "has_followthrough": key in param_module.BASE_SCREEN_KEYS,
+            "stage_labels": stages.labels_for(detectors.direction_of(key)),
+            "stage_help": stages.help_for(detectors.direction_of(key), as_of.year),
             "setups": grouped,
         }))
     written.append(_write(out / "screens" / "diff.json", diff_payload))
 
     # ---- breakouts by session ----------------------------------------
-    fresh = [s for s in result.all_setups() if s.stage == stages.FRESH]
+    # Long screens only: this file is read as "what broke out today" by the
+    # home page and the market pages, and a bear flag's fresh bucket is the
+    # opposite event.
+    fresh = [s for s in result.all_setups()
+             if s.stage == stages.FRESH and s.direction != stages.SHORT]
     seen: dict[str, dict] = {}
     for setup in sorted(fresh, key=lambda s: -(s.breakout_metrics.get(
             "breakout_day_gain_pct") or 0)):
@@ -290,7 +299,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         written.append(_write(out / "backtest" / "presets" / "index.json",
                               {"default_by_screen": {
                                   s: BacktestSettings.parse({"screen": s}).hash()
-                                  for s in param_module.SCREEN_KEYS},
+                                  for s in param_module.BASE_SCREEN_KEYS},
                                "as_of": market.as_of.isoformat() if market.as_of else None,
                                "presets": {key: payload.get("settings", {})
                                            for key, payload in backtests.items()}}))

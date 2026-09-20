@@ -29,7 +29,12 @@ export default async function ScreenPage({
       <DataBanner meta={meta} />
       <div className="eyebrow">Screens · {file.name}</div>
       <FreshnessPill count={meta?.market_wide_breakouts ?? 0} asOf={file.as_of} />
-      <WhatChanged diff={diff} screenName={file.name} href="/market/followthrough" />
+      <WhatChanged
+        diff={diff}
+        screenName={file.name}
+        direction={file.direction}
+        href={file.has_followthrough === false ? undefined : "/market/followthrough"}
+      />
       <ScreenBrowser file={file} bars={bars} />
       <p className="caption dim" style={{ marginTop: "var(--pad-xl)" }}>{RS_NOTE}</p>
     </div>

@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from data.types import Bar
-from patterns import bases, flags, stages, trend
+from patterns import bases, flags, shapes as shapemod, stages, trend
 from patterns.indicators import atr_pct, mean, sma
 from patterns.params import Params
 
@@ -56,6 +56,13 @@ class Setup:
     #: Where the stock sits against its 9/21/50/200-day averages. None when it
     #: has under 200 sessions of history — an absence, not a failing grade.
     trend: dict | None = None
+    #: "long" or "short". Which way this screen reads its own level. Every
+    #: base screen is long; the wedge, triangle and flag screens are whichever
+    #: their shape is. Anything that counts breakouts site-wide has to filter
+    #: on it, or a bear flag resolving downward is counted as a breakout up.
+    direction: str = "long"
+    #: The fitted geometry, for the shape screens. None for the base screens.
+    shape: dict | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -165,9 +172,14 @@ def _build(series: Series, params: Params, structure: bases.Structure,
 
     year_bars = bars[-252:]
     high_52w = max(b.high for b in year_bars)
-    structures = bases.history(bars, int(params.base_lookback_weeks) * 5,
-                               float(params.swing_threshold_pct),
-                               min_base_sessions=int(params.min_base_weeks) * 5)
+    # The stock's own base history, which is context on any card and is not a
+    # property of the screen that found it. Read with defaults rather than as
+    # attributes: the shape screens have no base dials, deliberately — a wedge
+    # has no ceiling, and offering "how far back to look for the ceiling" on
+    # one would be a control that changes nothing.
+    structures = bases.history(bars, int(params.get("base_lookback_weeks", 26)) * 5,
+                               float(params.get("swing_threshold_pct", 3.0)),
+                               min_base_sessions=int(params.get("min_base_weeks", 3)) * 5)
 
     setup = Setup(
         symbol=series.symbol,
@@ -464,6 +476,145 @@ def detect_ipo(series: Series, params: Params) -> Setup | None:
                    extra_always=[_recently_listed])
 
 
+# ---------------------------------------------------------------- shapes
+#
+# Wedges, triangles, flags and squeezes do not come from bases.find, so they
+# need their own way in. Everything after the structure is shared: the Shape is
+# adapted into a bases.Structure and handed to the same _build, so a shape setup
+# carries the same fields, renders in the same card and diffs the same way.
+
+
+def _structure_from_shape(shape, bars: list[Bar]) -> bases.Structure:
+    window = bars[shape.start_idx:shape.end_idx + 1]
+    return bases.Structure(
+        start_idx=shape.start_idx,
+        end_idx=shape.end_idx,
+        pivot=shape.level,
+        depth_pct=shape.depth_pct,
+        weeks=shape.weeks,
+        low=min(b.low for b in window) if window else shape.level,
+        contractions=[],
+        breakout_idx=None,
+    )
+
+
+def _first_cross(bars: list[Bar], after_idx: int, level: float,
+                 direction: str) -> int | None:
+    """The first close beyond the level after the shape ended.
+
+    Beyond means above for a shape read upward and below for one read downward,
+    which is the single place the direction of a shape becomes an index rather
+    than a label.
+    """
+    for i in range(after_idx + 1, len(bars)):
+        if direction == stages.SHORT:
+            if bars[i].close < level:
+                return i
+        elif bars[i].close > level:
+            return i
+    return None
+
+
+def _detect_shape(series: Series, params: Params, kinds: set[str],
+                  direction: str, finder) -> Setup | None:
+    """One shape screen.
+
+    The fit is tried at several end points, not just today. A wedge that broke
+    three sessions ago is no longer a wedge if you fit through those three
+    sessions — the breakout drags the upper line up and the convergence test
+    fails — so a screen that only ever fitted to the last bar would show
+    nothing but "forming" and would never report the resolution it exists to
+    catch. So: fit to today first, and if that finds a shape with price still
+    inside it, that is a forming setup. Otherwise step the end back one session
+    at a time and take the first shape whose level has since been crossed.
+    """
+    bars = series.bars
+    if len(bars) < 60:
+        return None
+    closes = [b.close for b in bars]
+    ma50 = sma(closes, 50)
+    fresh = int(params.fresh_breakout_sessions)
+
+    chosen = None
+    breakout_idx = None
+    for lag in range(0, fresh + 1):
+        sub = bars if lag == 0 else bars[:len(bars) - lag]
+        if len(sub) < 60:
+            break
+        shape = finder(sub, params)
+        if shape is None or shape.kind not in kinds:
+            continue
+        cross = _first_cross(bars, shape.end_idx, shape.level, direction)
+        if lag == 0 and cross is None:
+            chosen, breakout_idx = shape, None
+            break
+        if cross is not None:
+            chosen, breakout_idx = shape, cross
+            break
+
+    if chosen is None:
+        return None
+
+    structure = _structure_from_shape(chosen, bars)
+    structure.breakout_idx = breakout_idx
+    stage = stages.classify(bars, ma50, breakout_idx, fresh,
+                            bars[-1].date.year, direction)
+    if stage is None:
+        return None
+    if stage.stage != stages.PLAYED_OUT and not _gate_rs(series, params):
+        return None
+
+    setup = _build(series, params, structure, stage)
+    setup.direction = direction
+    setup.shape = chosen.to_json(bars)
+    setup.shape["volume_vs_prior"] = _round_or_none(
+        shapemod.volume_trend(bars, chosen.start_idx))
+    setup.shape["atr_vs_prior"] = _round_or_none(
+        shapemod.atr_compression(bars, chosen.start_idx))
+    return setup
+
+
+def _round_or_none(value: float | None) -> float | None:
+    return round(value, 2) if value is not None else None
+
+
+def _shape_screen(kinds: set[str], direction: str, finder):
+    def detect(series: Series, params: Params) -> Setup | None:
+        return _detect_shape(series, params, kinds, direction, finder)
+    return detect
+
+
+def _converging(sub, params):
+    return shapemod.find_converging(
+        sub,
+        lookback=int(params.get("shape_lookback_weeks", 12)) * 5,
+        threshold_pct=float(params.get("swing_threshold_pct", 3.0)),
+        min_sessions=int(params.get("min_shape_weeks", 3)) * 5,
+        max_convergence=float(params.get("max_convergence", 0.70)),
+    )
+
+
+def _flag(bullish: bool):
+    def finder(sub, params):
+        return shapemod.find_flag(
+            sub,
+            max_flag_sessions=int(params.get("max_flag_sessions", 15)),
+            min_flag_sessions=int(params.get("min_flag_sessions", 3)),
+            min_pole_pct=float(params.get("min_pole_pct", 15.0)),
+            max_retrace=float(params.get("max_retrace", 0.50)) ,
+            bullish=bullish,
+        )
+    return finder
+
+
+def _squeeze(sub, params):
+    return shapemod.find_squeeze(
+        sub,
+        lookback=int(params.get("squeeze_lookback_weeks", 26)) * 5,
+        percentile=float(params.get("squeeze_percentile", 15.0)),
+    )
+
+
 DETECTORS = {
     "vcp": detect_vcp,
     "blue_sky": detect_blue_sky,
@@ -471,4 +622,41 @@ DETECTORS = {
     "ipo": detect_ipo,
     "flat_base": detect_flat_base,
     "cup_and_handle": detect_cup_and_handle,
+    # Shape screens. Each is direction-coherent on purpose: a screen mixing a
+    # rising wedge with a falling one would have half its "fresh" column
+    # meaning a breakout and half meaning a breakdown, and the stage counts
+    # would be the sum of two different things.
+    "bull_flag": _shape_screen({shapemod.BULL_FLAG}, stages.LONG, _flag(True)),
+    "bear_flag": _shape_screen({shapemod.BEAR_FLAG}, stages.SHORT, _flag(False)),
+    "falling_wedge": _shape_screen({shapemod.FALLING_WEDGE}, stages.LONG, _converging),
+    "rising_wedge": _shape_screen({shapemod.RISING_WEDGE}, stages.SHORT, _converging),
+    "triangle": _shape_screen({shapemod.SYMMETRICAL, shapemod.ASCENDING},
+                              stages.LONG, _converging),
+    "descending_triangle": _shape_screen({shapemod.DESCENDING}, stages.SHORT,
+                                         _converging),
+    "squeeze": _shape_screen({shapemod.SQUEEZE}, stages.LONG, _squeeze),
 }
+
+#: Which way each screen reads its level. Anything that counts breakouts across
+#: the whole site must consult this: a bear flag in its "fresh" bucket has
+#: broken DOWN, and adding it to a breakout tally would report a falling stock
+#: as one that cleared a pivot.
+SCREEN_DIRECTION = {
+    "vcp": stages.LONG,
+    "blue_sky": stages.LONG,
+    "multi_year": stages.LONG,
+    "ipo": stages.LONG,
+    "flat_base": stages.LONG,
+    "cup_and_handle": stages.LONG,
+    "bull_flag": stages.LONG,
+    "bear_flag": stages.SHORT,
+    "falling_wedge": stages.LONG,
+    "rising_wedge": stages.SHORT,
+    "triangle": stages.LONG,
+    "descending_triangle": stages.SHORT,
+    "squeeze": stages.LONG,
+}
+
+
+def direction_of(screen: str) -> str:
+    return SCREEN_DIRECTION.get(screen, stages.LONG)

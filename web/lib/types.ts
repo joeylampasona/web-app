@@ -78,6 +78,10 @@ export interface Setup {
 }
 
 export interface ScreenFile {
+  /** "long" or "short": which way this screen reads its level. */
+  direction?: string;
+  /** Whether the follow-through page covers this screen. */
+  has_followthrough?: boolean;
   screen: string; name: string; description: string; as_of: string;
   total: number;
   stage_counts: Record<string, number>;
