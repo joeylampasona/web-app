@@ -192,6 +192,53 @@ def probe_open_interest(agent: str) -> None:
                   f"oi={sample.get('open_interest')} iv={sample.get('iv')}")
 
 
+def probe_quote_sources(agent: str) -> None:
+    """Candidates for a light intraday quote, one request for many names.
+
+    The nightly is end-of-day and should stay that way — a base does not change
+    during a session. What does change is where price sits against a pivot, and
+    that needs a cheap delayed quote for a few hundred names, not a second
+    market-data pipeline.
+    """
+    print()
+    print(RULE)
+    print("4. QUOTE SOURCES — for a delayed intraday price")
+    print(RULE)
+    symbols = ["AAPL", "NVDA", "MSFT"]
+
+    print("\n-- Stooq light CSV, one symbol --")
+    url = "https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcvn&h&e=csv"
+    try:
+        raw = _get(url, agent, as_json=False).decode("utf-8", "replace")
+        print("   " + "\n   ".join(raw.strip().splitlines()[:3]))
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {exc}")
+
+    print("\n-- Stooq light CSV, batched (the thing that matters) --")
+    joined = "+".join(f"{s.lower()}.us" for s in symbols)
+    url = f"https://stooq.com/q/l/?s={joined}&f=sd2t2ohlcv&h&e=csv"
+    try:
+        raw = _get(url, agent, as_json=False).decode("utf-8", "replace")
+        lines = raw.strip().splitlines()
+        print(f"   {len(lines)} lines for {len(symbols)} symbols")
+        for line in lines[:5]:
+            print("   " + line)
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {exc}")
+
+    print("\n-- Cboe, is there a quote endpoint lighter than the chain? --")
+    for path in ("quotes", "equities"):
+        url = f"https://cdn.cboe.com/api/global/delayed_quotes/{path}/AAPL.json"
+        try:
+            payload = _get(url, agent)
+            data = payload.get("data") or {}
+            print(f"   /{path}/ -> keys {sorted(data)[:12]}")
+        except urllib.error.HTTPError as exc:
+            print(f"   /{path}/ -> HTTP {exc.code}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   /{path}/ -> {type(exc).__name__}")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -203,6 +250,7 @@ def main() -> int:
     probe_shares(agent)
     probe_open_interest(agent)
     probe_flag_gates()
+    probe_quote_sources(agent)
     print()
     print(RULE)
     print("Probe complete. Nothing was written.")
