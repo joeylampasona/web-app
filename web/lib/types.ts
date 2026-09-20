@@ -49,6 +49,14 @@ export interface Setup {
   base_depth_pct: number | null;
   flags: string[];
   trend?: TrendAlignment | null;
+  /** Last session's volume against the prior fifty. */
+  rvol?: number | null;
+  /** Heavy volume, decisive close and a real gain, all in the last session. */
+  ignition?: Ignition | null;
+  /** "long" or "short" — which way the screen that found it reads its level. */
+  direction?: string;
+  /** Fitted geometry, on the shape screens only. */
+  shape?: Record<string, unknown> | null;
   quadrant: string | null;
   breakout_date: string | null;
   sessions_since_breakout: number | null;
@@ -128,6 +136,27 @@ export interface BacktestSummary {
     exit_price: number; shares: number; return_pct: number;
     gross_return_pct: number; r_multiple: number; exit_reason: string; pnl: number;
   }[];
+}
+
+export interface Ignition {
+  fired: boolean;
+  rvol: number;
+  close_in_range: number;
+  gain_pct: number;
+  date: string;
+}
+
+export interface VolumeRow {
+  symbol: string;
+  name: string;
+  industry: string;
+  rvol: number;
+  volume: number;
+  close: number;
+  change_pct: number | null;
+  close_in_range: number;
+  market_cap: number | null;
+  rs_rating: number | string | null;
 }
 
 export interface GammaBoardRow {

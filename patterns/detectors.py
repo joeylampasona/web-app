@@ -63,6 +63,11 @@ class Setup:
     direction: str = "long"
     #: The fitted geometry, for the shape screens. None for the base screens.
     shape: dict | None = None
+    #: Last session's volume against the prior fifty. 1.0 is an ordinary day.
+    rvol: float | None = None
+    #: Heavy volume, a decisive close and a real gain, all in the last bar.
+    #: None when there is too little history to say.
+    ignition: dict | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -123,6 +128,64 @@ def _breakout_metrics(bars: list[Bar], idx: int, ma50: list[float | None]) -> di
         "close_in_range": round(flags.close_in_range(bar), 2),
         "price_vs_50ma_pct": round(100.0 * (bars[-1].close / line - 1.0), 2) if line else None,
         "date": bar.date.isoformat(),
+    }
+
+
+# ---------------------------------------------------------------- ignition
+#
+# "Real time" is not available here and never will be: the site is rebuilt once
+# a night from end-of-day bars. What IS available is the session that just
+# closed, and a volume surge in it is not a fifteen-minute event — it is a fact
+# about the day that stays true. So this measures the last completed bar and
+# says so, rather than implying a live tape.
+
+#: Volume against the prior fifty sessions. 1.0 is an ordinary day.
+IGNITION_VOLUME = 2.0
+#: Where the close sat in the day's range. Near 1.0 means it closed on its high.
+IGNITION_CLOSE_IN_RANGE = 0.70
+#: And it has to have gone somewhere. Heavy volume on an unchanged close is
+#: churn, which is a different thing and reads as the opposite of ignition.
+IGNITION_GAIN_PCT = 2.0
+
+
+def relative_volume(bars: list[Bar], window: int = 50) -> float | None:
+    """The last session's volume against the average of the ones before it."""
+    if len(bars) < 10:
+        return None
+    prior = [b.volume for b in bars[max(0, len(bars) - 1 - window):len(bars) - 1]
+             if b.volume]
+    if not prior:
+        return None
+    normal = mean(prior)
+    if normal <= 0:
+        return None
+    return bars[-1].volume / normal
+
+
+def ignition(bars: list[Bar]) -> dict | None:
+    """A heavy, decisive up-session in the bar that just closed.
+
+    All three tests, not any of them. Heavy volume alone is as often
+    distribution as accumulation; a close on the high with no volume behind it
+    is a quiet drift. The combination is the thing worth marking.
+    """
+    if len(bars) < 12:
+        return None
+    rvol = relative_volume(bars)
+    if rvol is None:
+        return None
+    last, prev = bars[-1], bars[-2]
+    gain = 100.0 * (last.close / prev.close - 1.0) if prev.close else 0.0
+    in_range = flags.close_in_range(last)
+    fired = (rvol >= IGNITION_VOLUME
+             and in_range >= IGNITION_CLOSE_IN_RANGE
+             and gain >= IGNITION_GAIN_PCT)
+    return {
+        "fired": fired,
+        "rvol": round(rvol, 2),
+        "close_in_range": round(in_range, 2),
+        "gain_pct": round(gain, 2),
+        "date": last.date.isoformat(),
     }
 
 
@@ -212,6 +275,9 @@ def _build(series: Series, params: Params, structure: bases.Structure,
               if len(bars) > 1 and bars[-2].close else None},
     )
     setup.trend = alignment.to_json() if alignment else None
+    spark = ignition(bars)
+    setup.ignition = spark
+    setup.rvol = spark["rvol"] if spark else None
     if structure.breakout_idx is not None:
         setup.breakout_metrics = _breakout_metrics(bars, structure.breakout_idx, ma50)
     return setup

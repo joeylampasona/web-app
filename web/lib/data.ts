@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type {
-  BacktestSummary, BreadthCard, GammaBoardRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
+  BacktestSummary, BreadthCard, GammaBoardRow, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
   ScreenFile, StockFile,
 } from "./types";
 
@@ -234,6 +234,16 @@ export function getDefaultBacktest(screen: string): BacktestSummary | null {
   const index = getBacktestPresetIndex();
   const hash = index?.default_by_screen?.[screen];
   return hash ? getBacktestPreset(hash) : null;
+}
+
+export function getVolumeHeat() {
+  return read<{
+    as_of: string;
+    count: number;
+    bands: { key: string; min: number; label: string }[];
+    copy: { header: string; subhead: string; footer: string };
+    rows: VolumeRow[];
+  }>("market/volume.json");
 }
 
 export function getGammaBoard() {

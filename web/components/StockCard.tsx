@@ -38,6 +38,8 @@ export function StockCard({
   // are near the viewport, so the page never holds hundreds of live charts.
   const show = bars ? true : lazy.visible;
   const rows = variant === "breakout" ? breakoutRows(setup) : setupRows(setup);
+  // Heavy volume, a decisive close and a real gain, all in the last session.
+  const fired = Boolean(setup.ignition?.fired);
 
   // The chart hands its canvas up so Share can put the real thing in the image
   // rather than redrawing an approximation of it.
@@ -48,7 +50,37 @@ export function StockCard({
     }, []);
 
   return (
-    <article className="card stack" style={{ gap: "var(--gap-md)" }}>
+    <article
+      className="card stack"
+      style={{
+        gap: "var(--gap-md)",
+        // A steady edge, not an animation. The data behind it is the session
+        // that just closed and will not change until tomorrow, so a pulsing
+        // "live" effect would be claiming something the site cannot do. It is
+        // also the accessible choice: a flashing element is a problem for some
+        // readers and this one would be on screen for as long as the page is.
+        ...(fired ? {
+          borderColor: "var(--brand-ink)",
+          boxShadow: "0 0 0 1px var(--brand-muted), 0 0 18px -6px var(--brand)",
+        } : null),
+      }}
+    >
+      {fired && setup.ignition && (
+        <div
+          className="row caption"
+          style={{ gap: "var(--gap-xs)", alignItems: "center",
+                   color: "var(--brand-ink)" }}
+        >
+          <span aria-hidden style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: "var(--brand)", flexShrink: 0,
+          }} />
+          <span>
+            Ignition · {setup.ignition.rvol.toFixed(1)}&#215; volume,
+            {" "}closed {Math.round(setup.ignition.close_in_range * 100)}% up its range
+          </span>
+        </div>
+      )}
       <header className="between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <div className="row">

@@ -53,6 +53,7 @@ const TABS: {
       { href: "/market/map", title: "The map", blurb: "Every industry sized by market value." },
       { href: "/market/high-iv", title: "High IV", blurb: "Rich options pricing around a dated event." },
       { href: "/market/gamma", title: "Gamma concentration", blurb: "Where the option book anchors the most gamma." },
+      { href: "/market/volume", title: "Relative volume", blurb: "Who traded unusually heavily today." },
     ],
   },
   { key: "search", label: "Search", glyph: "⌕", match: "/search", href: "/search" },

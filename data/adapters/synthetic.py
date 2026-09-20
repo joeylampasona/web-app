@@ -391,6 +391,14 @@ class SyntheticAdapter(DataAdapter):
             vol = base_vol * rng.uniform(0.7, 1.4) * (1.0 + 14.0 * rel)
             if n - i < 120:
                 vol *= 0.86
+            # Occasional news days. Without these the fixture topped out near
+            # 1.9x its own average, so nothing could ever reach the 2x an
+            # ignition needs and the whole relative-volume path was
+            # unexercisable on it — a fixture that cannot reach a threshold
+            # cannot be used to check the code that reads it. Real tape has
+            # 3-10x sessions; this puts a few in, deterministically.
+            if rng.random() < 0.02:
+                vol *= rng.uniform(2.5, 6.0)
             bars.append(Bar(symbol, date, round(open_, 2), round(high, 2), round(low, 2),
                             round(close, 2), float(int(vol))))
             prev = close

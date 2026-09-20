@@ -12,7 +12,7 @@ from catalysts import iv as ivmod
 from catalysts import news as newsmod
 from data import classify, settings
 from data.market import Market
-from patterns import detectors, params as param_module
+from patterns import detectors, flags as flagsmod, params as param_module
 from patterns import scan, stages
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
@@ -25,6 +25,29 @@ VERSION = 1
 # How many names the gamma page carries. Deep option books are concentrated in
 # a few hundred names, and the tail is mostly one stale expiry.
 GAMMA_LEADERBOARD = 60
+
+# How many names the relative-volume page carries.
+VOLUME_LEADERBOARD = 120
+
+# The colour bands. Stated here rather than in the web layer so the thresholds
+# the page draws and the thresholds anything else reads can never disagree.
+VOLUME_BANDS = [
+    {"key": "extreme", "min": 5.0, "label": "5x and above"},
+    {"key": "heavy", "min": 3.0, "label": "3 to 5x"},
+    {"key": "elevated", "min": 2.0, "label": "2 to 3x"},
+    {"key": "above", "min": 1.5, "label": "1.5 to 2x"},
+    {"key": "normal", "min": 0.0, "label": "under 1.5x"},
+]
+
+VOLUME_COPY = {
+    "header": "Each name's volume in the session that just closed, against its own "
+              "average over the fifty before it. 3x means three times its normal "
+              "day.",
+    "subhead": "Measured on the last completed session, not intraday.",
+    "footer": "Heavy volume says a lot of shares changed hands. It does not say who "
+              "was buying, and a heavy down day looks identical to a heavy up day "
+              "in this column — the change beside it is what separates them.",
+}
 
 GAMMA_COPY = {
     "header": "Where open interest concentrates option gamma, for the names with "
@@ -280,6 +303,43 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "band_labels": ivmod.BAND_LABELS,
         "dots": settings.get("iv.dots", 5),
         "rows": [r.to_json() for r in iv_rows],
+    }))
+
+    # ---- relative volume, across the whole universe -------------------
+    #
+    # Not limited to names on a screen. "Which stocks are unusually active
+    # today" is a question about the market, and answering it from the ~800
+    # names that happen to be in a base would answer a different one.
+    volume_rows = []
+    for symbol in market.universe:
+        bars = market.series.get(symbol) or []
+        if len(bars) < 30:
+            continue
+        rvol = detectors.relative_volume(bars)
+        if rvol is None:
+            continue
+        last, prev = bars[-1], bars[-2]
+        volume_rows.append({
+            "symbol": symbol,
+            "name": (market.refs[symbol].name if symbol in market.refs else symbol),
+            "industry": classify.pretty_industry(
+                market.industries.get(symbol, "Unclassified")),
+            "rvol": round(rvol, 2),
+            "volume": last.volume,
+            "close": round(last.close, 2),
+            "change_pct": (round(100.0 * (last.close / prev.close - 1.0), 2)
+                           if prev.close else None),
+            "close_in_range": round(flagsmod.close_in_range(last), 2),
+            "market_cap": market.caps.get(symbol),
+            "rs_rating": bundle.now.get(symbol),
+        })
+    volume_rows.sort(key=lambda row: -row["rvol"])
+    written.append(_write(out / "market" / "volume.json", {
+        "as_of": as_of.isoformat(),
+        "count": len(volume_rows),
+        "bands": VOLUME_BANDS,
+        "copy": VOLUME_COPY,
+        "rows": volume_rows[:VOLUME_LEADERBOARD],
     }))
 
     # ---- gamma, where the option book is deepest ----------------------
