@@ -1,0 +1,109 @@
+"use client";
+
+import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { useSubscription } from "@/lib/useSubscription";
+import { longDate } from "@/lib/format";
+
+const MONTHLY = "$4.99";
+const ANNUAL = "$50";
+const TRIAL_DAYS = 7;
+
+/**
+ * The two plans, and what happens when you pick one.
+ *
+ * Deliberately plain about what is being bought. This site's own out-of-sample
+ * work found no measurable edge in the structural parts of these patterns,
+ * only in relative strength, and it says so on every screen — so a subscribe
+ * panel that implied otherwise would be contradicting the product in the one
+ * place where money changes hands.
+ */
+export function SubscribePanel() {
+  const { signedIn, ready: authReady, requireSignUp } = useAuth();
+  const { ready, active, status, trialEnd, currentPeriodEnd, cancelAtPeriodEnd,
+          startCheckout } = useSubscription();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  if (!authReady || !ready) return null;
+
+  if (active) {
+    return (
+      <div className="card stack" style={{ gap: "var(--gap-sm)" }}>
+        <div className="eyebrow">Your subscription</div>
+        <p className="footnote" style={{ margin: 0 }}>
+          {status === "trialing"
+            ? `You are on the free trial${trialEnd ? `, until ${longDate(trialEnd.slice(0, 10))}` : ""}.`
+            : status === "past_due"
+              ? "Your last payment did not go through. Access continues while "
+                + "Stripe retries it."
+              : "Active."}
+        </p>
+        {currentPeriodEnd && (
+          <p className="caption dim" style={{ margin: 0 }}>
+            {cancelAtPeriodEnd
+              ? `Ends ${longDate(currentPeriodEnd.slice(0, 10))} and will not renew.`
+              : `Renews ${longDate(currentPeriodEnd.slice(0, 10))}.`}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const choose = async (plan: "monthly" | "annual") => {
+    if (!signedIn) {
+      requireSignUp("Subscribe to The Tape");
+      return;
+    }
+    setProblem(null);
+    setBusy(plan);
+    const url = await startCheckout(plan);
+    if (!url) {
+      setBusy(null);
+      // Never a dead button. If checkout cannot start, say so rather than
+      // leaving someone clicking at nothing.
+      setProblem("Could not start checkout. Try again in a moment.");
+      return;
+    }
+    window.location.href = url;
+  };
+
+  return (
+    <div className="card stack" style={{ gap: "var(--gap-md)" }}>
+      <div>
+        <div className="eyebrow">Subscribe</div>
+        <p className="footnote muted" style={{ margin: 0 }}>
+          Every screen stays visible either way. A subscription opens the full
+          lists and the work behind them — gamma concentration, seasonals,
+          analyst estimates, the X-ray and the backtests.
+        </p>
+      </div>
+
+      <div className="grid-2">
+        <button type="button" className="control stack"
+                style={{ height: "auto", padding: "var(--pad-md)", gap: 2 }}
+                disabled={busy !== null} onClick={() => choose("monthly")}>
+          <span className="num" style={{ fontSize: "var(--size-h3)" }}>{MONTHLY}</span>
+          <span className="caption dim">a month</span>
+        </button>
+        <button type="button" className="control primary stack"
+                style={{ height: "auto", padding: "var(--pad-md)", gap: 2 }}
+                disabled={busy !== null} onClick={() => choose("annual")}>
+          <span className="num" style={{ fontSize: "var(--size-h3)" }}>{ANNUAL}</span>
+          <span className="caption">a year · two months free</span>
+        </button>
+      </div>
+
+      <p className="caption dim" style={{ margin: 0 }}>
+        {TRIAL_DAYS} days free first. Cancel any time, in Stripe, and keep
+        access until the period you have paid for ends. Your watchlist and
+        saved screens stay yours whether you subscribe or not.
+      </p>
+
+      {busy && <p className="caption dim" style={{ margin: 0 }}>Opening Stripe…</p>}
+      {problem && (
+        <p className="caption" style={{ margin: 0, color: "var(--loss)" }}>{problem}</p>
+      )}
+    </div>
+  );
+}

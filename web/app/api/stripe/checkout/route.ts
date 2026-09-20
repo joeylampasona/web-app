@@ -67,8 +67,11 @@ export async function POST(request: Request) {
     mode: "subscription",
     "line_items[0][price]": price,
     "line_items[0][quantity]": "1",
-    success_url: `${SITE}/account?checkout=done`,
-    cancel_url: `${SITE}/account?checkout=cancelled`,
+    // /settings, because that page already holds "your account" and exists.
+    // The first draft of this sent people to /account, which does not exist —
+    // so the reward for paying would have been a 404.
+    success_url: `${SITE}/settings?checkout=done`,
+    cancel_url: `${SITE}/settings?checkout=cancelled`,
     "subscription_data[trial_period_days]": String(TRIAL_DAYS),
     // Prefilled so the Stripe customer and the Supabase user share an address,
     // which is what makes a support enquiry answerable.

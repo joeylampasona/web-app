@@ -1,5 +1,6 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { SubscribePanel } from "@/components/SubscribePanel";
 import { getMeta, hasData } from "@/lib/data";
 import { longDate } from "@/lib/format";
 import { SITE_NAME } from "@/lib/copy";
@@ -20,6 +21,7 @@ export default function SettingsPage() {
         <div className="eyebrow">Settings</div>
         <h1 style={{ marginBottom: 0 }}>Settings</h1>
       </div>
+      <SubscribePanel />
       <SettingsPanel
         asOf={meta ? longDate(meta.as_of) : null}
         provider={meta?.provider ?? "unknown"}
