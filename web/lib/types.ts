@@ -130,6 +130,23 @@ export interface BacktestSummary {
   }[];
 }
 
+export interface GammaBoardRow {
+  symbol: string;
+  name: string;
+  market_cap: number | null;
+  spot: number;
+  open_interest: number;
+  expiries: number;
+  total_concentration: number;
+  total_net: number;
+  flip: number | null;
+  stale: boolean;
+  peak_strike: number;
+  peak_concentration: number;
+  peak_vs_spot_pct: number | null;
+  levels: GammaStrike[];
+}
+
 export interface GammaStrike {
   strike: number;
   /** Unsigned dollar gamma per 1% move. Assumes nothing about positioning. */

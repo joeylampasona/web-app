@@ -22,6 +22,21 @@ from rankings import rotation, rs, treemap
 
 VERSION = 1
 
+# How many names the gamma page carries. Deep option books are concentrated in
+# a few hundred names, and the tail is mostly one stale expiry.
+GAMMA_LEADERBOARD = 60
+
+GAMMA_COPY = {
+    "header": "Where open interest concentrates option gamma, for the names with "
+              "the deepest option books. Bigger numbers mean more optionality "
+              "anchored at a strike — not a forecast of anything.",
+    "subhead": "Ranked by contracts outstanding, not by the size of the gamma figure.",
+    "footer": "Open interest is published once a day and reaches us with a lag, so "
+              "these describe the previous session's book. The signed column "
+              "assumes market makers are long calls and short puts, which is the "
+              "usual convention and is not in the data.",
+}
+
 DISCLAIMER = (
     "A screening and market-analytics tool. Not investment advice. We are not a "
     "registered investment adviser. A stock on a screen matches a shape; that is "
@@ -265,6 +280,46 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "band_labels": ivmod.BAND_LABELS,
         "dots": settings.get("iv.dots", 5),
         "rows": [r.to_json() for r in iv_rows],
+    }))
+
+    # ---- gamma, where the option book is deepest ----------------------
+    #
+    # Ranked by open interest rather than by the size of the gamma number.
+    # Dollar gamma scales with price and with contract count, so ranking on it
+    # would mostly sort the list by share price and put every expensive stock
+    # at the top regardless of how many contracts were actually open. Open
+    # interest is the thing being asked for — where the option book is deep.
+    gamma_rows = []
+    for symbol, payload in (gamma or {}).items():
+        if not payload or not payload.get("levels"):
+            continue
+        levels = payload["levels"]
+        peak = max(levels, key=lambda level: level["concentration"])
+        gamma_rows.append({
+            "symbol": symbol,
+            "name": (market.refs[symbol].name if symbol in market.refs else symbol),
+            "market_cap": market.caps.get(symbol),
+            "spot": payload["spot"],
+            "open_interest": payload["open_interest"],
+            "expiries": payload["expiries"],
+            "total_concentration": payload["total_concentration"],
+            "total_net": payload["total_net"],
+            "flip": payload["flip"],
+            "stale": payload.get("stale", False),
+            # The single strike carrying the most gamma, and where it sits
+            # relative to spot. That pair is the whole reading at a glance.
+            "peak_strike": peak["strike"],
+            "peak_concentration": peak["concentration"],
+            "peak_vs_spot_pct": (round(100.0 * (peak["strike"] / payload["spot"] - 1.0), 2)
+                                 if payload["spot"] else None),
+            "levels": levels,
+        })
+    gamma_rows.sort(key=lambda row: -(row["open_interest"] or 0))
+    written.append(_write(out / "market" / "gamma.json", {
+        "as_of": as_of.isoformat(),
+        "count": len(gamma_rows),
+        "rows": gamma_rows[:GAMMA_LEADERBOARD],
+        "copy": GAMMA_COPY,
     }))
 
     # ---- learn --------------------------------------------------------

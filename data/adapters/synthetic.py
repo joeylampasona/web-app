@@ -167,7 +167,16 @@ class SyntheticAdapter(DataAdapter):
         rng = random.Random(_seed_for(symbol, self.seed + 13))
         if rng.random() < 0.25:
             return None                      # no listed options
-        bars = self._series.get(symbol) or []
+        # Build the series rather than reading whatever happens to be cached.
+        # _series is filled lazily, so a chain requested before anything had
+        # asked for this symbol's bars fell through to the 50.0 default — and
+        # every fixture name ended up with a spot of exactly 50, identical
+        # strikes and a gamma page where every row read "50.00, +0.0%". It also
+        # quietly picked the near-the-money contracts for the IV reading around
+        # the wrong price. A fixture that agrees with itself is the whole point
+        # of having one.
+        ref = self.get_reference(symbol)
+        bars = self.series(ref) if ref else []
         spot = bars[-1].close if bars else 50.0
         base_iv = rng.uniform(0.28, 0.85)
         # The expiry that brackets the ticker's own earnings date carries a bump,
