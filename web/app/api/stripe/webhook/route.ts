@@ -131,3 +131,21 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ received: true, handled: true });
 }
+
+/**
+ * Stripe only ever POSTs here. A browser GET therefore returns 405 with an
+ * empty body, which renders as a blank white page and is indistinguishable
+ * from a failed deployment to anyone checking the URL by hand — which is
+ * exactly what someone does when setting this up.
+ *
+ * So it answers. It reveals nothing: whether this endpoint exists is already
+ * public the moment it is registered with Stripe, and the signature check is
+ * what protects it, not obscurity.
+ */
+export function GET() {
+  return NextResponse.json({
+    endpoint: "stripe webhook",
+    accepts: "POST, signed by Stripe",
+    configured: Boolean(PROJECT_URL && SERVICE_KEY && WEBHOOK_SECRET),
+  });
+}
