@@ -532,7 +532,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # public, in full. A subscriber renders the page from the gated document
     # alone rather than stitching a public head onto a private tail, which
     # would let the two halves come from different runs.
-    gated_documents.extend(gatedmod.gamma_documents(board, gamma, gamma_free, as_of))
+    gated_documents.extend(gatedmod.gamma_documents(board, gamma, gamma_free, as_of,
+                                                    total=len(gamma_rows)))
 
     written.append(_write(out / "market" / "gamma.json", {
         "as_of": as_of.isoformat(),

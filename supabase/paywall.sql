@@ -171,9 +171,15 @@ create policy "subscribers read gated content" on public.gated_content
 -- to anon or authenticated afterwards. If you ever want to call one from a
 -- server route, pass the service-role key — do not grant it here.
 
+-- The output column names are deliberately not the table's column names.
+-- A function's OUT parameters are variables inside its own body, and Postgres
+-- refuses `on conflict (user_id)` when a variable of that name is in scope:
+-- "column reference user_id is ambiguous". An earlier draft returned
+-- (email, user_id, comped, comped_note) and would have failed on first use,
+-- in the SQL editor, with an error naming a line that looks correct.
 create or replace function public.grant_lifetime(person_email text,
-                                                 note text default null)
-returns table (email text, user_id uuid, comped boolean, comped_note text)
+                                                 reason text default null)
+returns table (account text, account_id uuid, lifetime boolean, why text)
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -192,7 +198,7 @@ begin
   end if;
 
   insert into public.subscriptions (user_id, comped, comped_note, updated_at)
-  values (uid, true, note, now())
+  values (uid, true, reason, now())
   on conflict (user_id) do update
     set comped      = true,
         comped_note = coalesce(excluded.comped_note, subscriptions.comped_note),
@@ -212,7 +218,7 @@ comment on function public.grant_lifetime(text, text) is
 
 
 create or replace function public.revoke_lifetime(person_email text)
-returns table (email text, user_id uuid, comped boolean, status text)
+returns table (account text, account_id uuid, lifetime boolean, stripe_status text)
 language plpgsql
 security definer
 set search_path = public, pg_temp

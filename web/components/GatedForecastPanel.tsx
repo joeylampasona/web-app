@@ -39,7 +39,12 @@ export function GatedForecastPanel({
 
   return (
     <div className="stack" style={{ gap: "var(--gap-md)" }}>
-      <ForecastPanel forecast={forecast} />
+      {/* Only when there is a free half to show. A company can be covered and
+          still have no ratings split — the source publishes the two
+          separately — and rendering the panel with nothing in it prints "no
+          analyst coverage for this company" directly above an offer to sell
+          you its price targets. */}
+      {forecast && <ForecastPanel forecast={forecast} />}
       {fetched.state === "loading" ? (
         <p className="caption dim" style={{ margin: 0 }}>
           Checking your subscription…

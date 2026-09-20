@@ -33,7 +33,15 @@ export function GatedGammaBoard({
   if (!gated) return <GammaBoard rows={rows} total={total} />;
 
   if (full.state === "ready" && full.data?.rows?.length) {
-    return <GammaBoard rows={full.data.rows} total={full.data.count ?? total} />;
+    // The larger of the two counts, not the gated file's. Both are meant to be
+    // every name that returned usable open interest, but a document written by
+    // an older nightly carries the length of the board instead — and taking it
+    // on trust would tell a subscriber that 60 names qualified where a free
+    // reader is correctly told 129. The public file cannot overstate it.
+    return (
+      <GammaBoard rows={full.data.rows}
+                  total={Math.max(full.data.count ?? 0, total)} />
+    );
   }
 
   return (

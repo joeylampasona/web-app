@@ -122,16 +122,24 @@ def free_symbols(gamma: dict[str, dict] | None) -> set[str]:
 
 
 def gamma_documents(board_rows: list[dict], gamma: dict[str, dict] | None,
-                    free: set[str], as_of: dt.date) -> list[Document]:
+                    free: set[str], as_of: dt.date,
+                    total: int | None = None) -> list[Document]:
     """Everything about gamma that a non-subscriber does not get.
 
     The whole board, including the free rows — a subscriber asks for one
     document and renders the page from it, rather than stitching a public head
     onto a private tail and hoping the two were built from the same run.
+
+    `count` is every name that returned usable open interest, the same thing it
+    means in the public file. It was the length of the board here, so the page
+    read "129 names carried usable open interest" for a free reader and "60"
+    for a subscriber — the same sentence, quietly meaning something else
+    depending on who was looking.
     """
     documents = [Document("market/gamma.json",
                           {"as_of": as_of.isoformat(),
-                           "count": len(board_rows),
+                           "count": len(board_rows) if total is None else total,
+                           "board_rows": len(board_rows),
                            "rows": board_rows},
                           as_of)]
     for symbol, payload in sorted((gamma or {}).items()):
