@@ -40,6 +40,7 @@ import datetime as dt
 import json
 import os
 import pathlib
+import shutil
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -307,8 +308,16 @@ def backtest_documents(backtests: dict[str, dict] | None,
 
 def stage(documents: Iterable[Document], directory: pathlib.Path | None = None
           ) -> list[pathlib.Path]:
-    """Write documents to disk so a run can be inspected before it is uploaded."""
+    """Write documents to disk so a run can be inspected before it is uploaded.
+
+    Emptied first. A name that drops out of the gamma universe leaves its file
+    behind otherwise, and the next upload sends it again — a document nothing
+    produced any more, carrying whatever date it had when it was last real. CI
+    checks out fresh every run and would never have shown this; a local one
+    would, eventually and confusingly.
+    """
     target = directory or gated_dir()
+    shutil.rmtree(target, ignore_errors=True)
     written = []
     for document in documents:
         path = target / document.path
