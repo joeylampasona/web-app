@@ -17,6 +17,7 @@ from patterns import scan, stages
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
 from rankings import spark
+from backtest.settings import OPTIONS, BacktestSettings
 from rankings import rotation, rs, treemap
 
 VERSION = 1
@@ -81,6 +82,7 @@ def _bars_for(market: Market, symbol: str, limit: int) -> list[list]:
 
 def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             calendar: ev.Calendar, iv_rows: list, diff_payload: dict,
+            backtests: dict[str, dict] | None = None,
             follow: dict | None = None,
             insiders: dict[str, dict] | None = None,
             news: dict[str, list[dict]] | None = None,
@@ -270,6 +272,28 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "trade_steps": TRADE_STEPS,
             "trade_steps_preface": TRADE_STEPS_PREFACE,
         }))
+
+    # ---- backtest presets ---------------------------------------------
+    written.append(_write(out / "backtest" / "options.json", {
+        "options": OPTIONS,
+        "defaults": BacktestSettings.defaults().to_json(),
+        "years": sorted({d.year for d in market.calendar}),
+    }))
+    for key, payload in (backtests or {}).items():
+        written.append(_write(out / "backtest" / "presets" / f"{key}.json", payload))
+    if backtests:
+        # The settings of every preset, not just its hash. A custom run on a host
+        # without Python has to know whether the combination it was asked for has
+        # already been computed, and it cannot recompute this hash to find out —
+        # that would be a second implementation of the key, in another language,
+        # free to drift. Matching on the settings themselves cannot drift.
+        written.append(_write(out / "backtest" / "presets" / "index.json",
+                              {"default_by_screen": {
+                                  s: BacktestSettings.parse({"screen": s}).hash()
+                                  for s in param_module.SCREEN_KEYS},
+                               "as_of": market.as_of.isoformat() if market.as_of else None,
+                               "presets": {key: payload.get("settings", {})
+                                           for key, payload in backtests.items()}}))
 
     # ---- what happened to the breakouts we showed ---------------------
     if follow:

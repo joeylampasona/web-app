@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type {
-  BreadthCard, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
+  BacktestSummary, BreadthCard, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
   ScreenFile, StockFile,
 } from "./types";
 
@@ -201,6 +201,39 @@ export function getBreakouts(date: string) {
     date: string; count: number; metric_set: string[];
     setups: import("./types").Setup[];
   }>(`breakouts/${date}.json`);
+}
+
+export function getBacktestOptions() {
+  return read<{
+    options: Record<string, {
+      label: string; control: string;
+      options?: { value: string | number | boolean; label: string }[];
+      min?: number; max?: number; step?: number;
+    }>;
+    defaults: Record<string, unknown>;
+    years: number[];
+  }>("backtest/options.json");
+}
+
+export function getBacktestPresetIndex() {
+  return read<{
+    default_by_screen: Record<string, string>;
+    /** The session these were computed against. */
+    as_of?: string | null;
+    /** Hash to the exact settings it was run with, so a request can be matched
+     *  against what is already computed without recomputing the hash here. */
+    presets?: Record<string, Record<string, unknown>>;
+  }>("backtest/presets/index.json");
+}
+
+export function getBacktestPreset(hash: string): BacktestSummary | null {
+  return read<BacktestSummary>(`backtest/presets/${hash}.json`);
+}
+
+export function getDefaultBacktest(screen: string): BacktestSummary | null {
+  const index = getBacktestPresetIndex();
+  const hash = index?.default_by_screen?.[screen];
+  return hash ? getBacktestPreset(hash) : null;
 }
 
 export function getFollowThrough() {

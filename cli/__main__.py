@@ -23,8 +23,25 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("scan", help="run the four detectors over the universe")
     sub.add_parser("catalysts", help="dated events and implied volatility")
 
+    p_bt = sub.add_parser("backtest", help="replay a screen's rules over history")
+    p_bt.add_argument("--screen", default=None)
+    p_bt.add_argument("--enter", default=None, choices=["breakout_close", "at_pivot"])
+    p_bt.add_argument("--positions", type=int, default=None)
+    p_bt.add_argument("--stop", type=float, default=None, help="cut a loser at N percent")
+    p_bt.add_argument("--exit-rule", default=None,
+                      choices=["trail_50d", "trail_30w", "take_25"])
+    p_bt.add_argument("--risk", type=float, default=None, help="risk per trade, percent")
+    p_bt.add_argument("--capital", type=float, default=None)
+    p_bt.add_argument("--period", default=None, help="all, or a year like 2025")
+    p_bt.add_argument("--json", dest="as_json", action="store_true",
+                      help="print the summary as JSON and save it as a preset")
+    p_bt.add_argument("--skip-weak-markets", dest="skip_weak", action="store_true", default=None)
+    p_bt.add_argument("--no-skip-weak-markets", dest="skip_weak", action="store_false")
+    p_bt.add_argument("--skip-earnings", dest="skip_earnings", action="store_true", default=None)
+    p_bt.add_argument("--no-skip-earnings", dest="skip_earnings", action="store_false")
+
     sub.add_parser("publish", help="write the out/ JSON tree")
-    sub.add_parser("all", help="universe, rank, scan, catalysts, publish")
+    sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
