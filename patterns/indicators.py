@@ -95,3 +95,23 @@ def median(values: Sequence[float]) -> float:
     s = sorted(values)
     mid = len(s) // 2
     return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2.0
+
+
+def ema(values: Sequence[float], window: int) -> list[float | None]:
+    """Exponential moving average, seeded with the first `window` mean.
+
+    None until there is enough history, like sma, so a caller can never read a
+    value that was averaged over fewer bars than it asked for.
+    """
+    n = len(values)
+    out: list[float | None] = [None] * n
+    if window <= 0 or n < window:
+        return out
+    seed = sum(values[:window]) / window
+    out[window - 1] = seed
+    k = 2.0 / (window + 1.0)
+    previous = seed
+    for i in range(window, n):
+        previous = values[i] * k + previous * (1.0 - k)
+        out[i] = previous
+    return out

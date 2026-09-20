@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Drawer } from "vaul";
 import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
-import { ScreenGlyph } from "./ScreenGlyph";
+import { DirectionArrow, ScreenGlyph } from "./ScreenGlyph";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface Destination {
@@ -282,7 +282,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
                       <ScreenGlyph href={destination.href} />
                     </span>
                     <span className="grow">
-                      <span style={{ display: "block" }}>{destination.title}</span>
+                      <span className="row" style={{ gap: "var(--gap-xs)",
+                                                     alignItems: "center" }}>
+                        <span>{destination.title}</span>
+                        <DirectionArrow href={destination.href} />
+                      </span>
                       <span className="caption dim">{destination.blurb}</span>
                     </span>
                   </Link>
@@ -355,6 +359,7 @@ function SideNav({ tabs, pathname, active }: {
                   <ScreenGlyph href={destination.href} />
                 </span>
                 {destination.title}
+                <DirectionArrow href={destination.href} />
               </Link>
             ))}
           </div>

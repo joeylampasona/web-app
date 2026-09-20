@@ -612,6 +612,72 @@ def _group_payload(row: dict, setups_by_symbol: dict, market: Market,
 NEWS_LARGE_CAP_RANK = 25
 
 
+def _structure_check(market: Market, bundle: rs.Bundle, symbol: str) -> list[dict] | None:
+    """Why a stock is on no screen, measured rather than described.
+
+    The page used to say "no base, so no pivot to draw", which is true for some
+    of these names and wrong for the rest — plenty have a perfectly good base
+    that is two weeks short, or sit 30% under a pivot that is really there.
+    Those are different situations and a reader watching the name wants to know
+    which one they are in.
+
+    Measured against the VCP defaults, named on the page as the reference,
+    because the alternative is running five screens' worth of thresholds and
+    printing a matrix nobody reads.
+    """
+    from patterns import bases                     # noqa: PLC0415
+
+    bars = market.series.get(symbol) or []
+    if len(bars) < 30:
+        return None
+    params = param_module.Params("vcp")
+    structure = bases.find(
+        bars, int(params.base_lookback_weeks) * 5,
+        float(params.swing_threshold_pct),
+        min_base_sessions=int(params.min_base_weeks) * 5)
+
+    rows: list[dict] = []
+
+    def add(label: str, met: bool | None, detail: str) -> None:
+        rows.append({"label": label, "met": met, "detail": detail})
+
+    if structure is None:
+        add("A base has formed", False,
+            f"No pause of {params.min_base_weeks} weeks or more inside the last "
+            f"{params.base_lookback_weeks} weeks.")
+        # The rest cannot be judged without one, and reporting them as failures
+        # would be inventing four more verdicts out of one absence.
+        add("Long enough to count", None, "Needs a base first.")
+        add("Shallow enough", None, "Needs a base first.")
+        add("Close to its pivot", None, "Needs a base first.")
+    else:
+        weeks = structure.weeks
+        depth = structure.depth_pct
+        close = bars[-1].close
+        gap = 100.0 * (close / structure.pivot - 1.0) if structure.pivot else None
+        add("A base has formed", True,
+            f"{weeks:.1f} weeks, from {structure.low:,.2f} to "
+            f"{structure.pivot:,.2f}.")
+        add("Long enough to count", weeks >= float(params.min_base_weeks),
+            f"{weeks:.1f} weeks against {params.min_base_weeks} needed.")
+        add("Shallow enough", depth <= float(params.max_base_depth_pct),
+            f"{depth:.1f}% deep against {params.max_base_depth_pct}% allowed.")
+        if gap is None:
+            add("Close to its pivot", None, "No pivot to measure against.")
+        else:
+            add("Close to its pivot", gap >= -float(params.max_from_pivot_pct),
+                f"{gap:+.1f}% from the pivot; listed down to "
+                f"-{params.max_from_pivot_pct}%.")
+
+    rating = bundle.now.get(symbol)
+    if isinstance(rating, int):
+        add("Relative strength", rating >= int(params.min_rs),
+            f"RS {rating} against {params.min_rs} needed.")
+    else:
+        add("Relative strength", None, "Not ranked yet — too little history.")
+    return rows
+
+
 def _theme_index(market: Market, theme_names: dict[str, str]) -> list[dict]:
     """Every theme, with how many names are in it and how many are holding up.
 
@@ -771,6 +837,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # Analyst price targets and estimates. Somebody else's opinion, not a
         # reading of ours, which is why it is labelled as such on the page.
         "forecast": (forecasts or {}).get(symbol),
+        # Only for names on no screen: what is and is not in place. A stock
+        # already on one has its own card saying the same thing better.
+        "structure_check": (None if setups
+                            else _structure_check(market, bundle, symbol)),
         "news": (news or {}).get(symbol) or [],
         "desk_signals": (desk or {}).get(symbol) or [],
         "peers": {"industry": peer_rows(same_industry), "theme": peer_rows(same_theme)},

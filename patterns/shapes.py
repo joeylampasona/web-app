@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 
 from data.types import Bar
 from patterns import bases
-from patterns.indicators import atr_pct, mean, sma
+from patterns.indicators import atr, atr_pct, ema, mean, sma
 
 log = logging.getLogger(__name__)
 
@@ -124,8 +124,8 @@ class Shape:
     #: Set for flags only — how far the pole ran, and over how long.
     pole_pct: float | None = None
     pole_sessions: int | None = None
-    #: Set for squeezes only — where current bandwidth sits in its own history.
-    squeeze_percentile: float | None = None
+    #: Set for squeezes only: the bands have just left the channel.
+    squeeze_fired: bool = False
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -147,8 +147,7 @@ class Shape:
             "touches": {"upper": self.upper.touches, "lower": self.lower.touches},
             "pole_pct": round(self.pole_pct, 2) if self.pole_pct is not None else None,
             "pole_sessions": self.pole_sessions,
-            "squeeze_percentile": (round(self.squeeze_percentile, 1)
-                                   if self.squeeze_percentile is not None else None),
+            "squeeze_fired": self.squeeze_fired,
             "notes": list(self.notes),
         }
 
@@ -237,9 +236,17 @@ def classify(upper: Line, lower: Line, reference_price: float) -> str | None:
 
 
 def find_converging(bars: list[Bar], lookback: int, threshold_pct: float = 3.0,
-                    min_sessions: int = 15,
-                    max_convergence: float = CONVERGENCE_RATIO) -> Shape | None:
-    """The wedge or triangle price is currently inside, if there is one."""
+                    min_sessions: int = 10,
+                    max_convergence: float = CONVERGENCE_RATIO,
+                    max_volume_ratio: float | None = None) -> Shape | None:
+    """The wedge or triangle price is currently inside, if there is one.
+
+    `max_volume_ratio`, when set, requires volume inside the shape to be below
+    that multiple of the fifty sessions before it. A wedge forming on rising
+    volume is a different event from one forming on falling volume — the
+    convergence is supposed to be the market losing interest in both
+    directions — so the screens that care can ask for it.
+    """
     n = len(bars)
     if n < min_sessions + 5:
         return None
@@ -268,6 +275,11 @@ def find_converging(bars: list[Bar], lookback: int, threshold_pct: float = 3.0,
     if high <= 0:
         return None
 
+    if max_volume_ratio is not None:
+        ratio = volume_trend(bars, start)
+        if ratio is None or ratio > max_volume_ratio:
+            return None
+
     direction = DIRECTION[kind]
     level = upper.at(end) if direction == "long" else lower.at(end)
     # A fitted line can wander outside the bars it was fitted through when the
@@ -283,10 +295,13 @@ def find_converging(bars: list[Bar], lookback: int, threshold_pct: float = 3.0,
     )
 
 
-def find_flag(bars: list[Bar], max_flag_sessions: int = 15,
-              min_flag_sessions: int = 3, min_pole_pct: float = 15.0,
-              max_pole_sessions: int = 20,
+def find_flag(bars: list[Bar], max_flag_sessions: int = 7,
+              min_flag_sessions: int = 3, min_pole_pct: float = 10.0,
+              max_pole_sessions: int = 5, min_pole_sessions: int = 3,
               max_retrace: float = 0.50,
+              max_channel_pct: float = 3.0,
+              min_pole_volume: float = 1.0,
+              ema_window: int = 20,
               bullish: bool = True) -> Shape | None:
     """A sharp run, then a shallow drift against it.
 
@@ -309,7 +324,7 @@ def find_flag(bars: list[Bar], max_flag_sessions: int = 15,
         pole_end = flag_start - 1
         if pole_end <= 0:
             break
-        for pole_len in range(5, max_pole_sessions + 1):
+        for pole_len in range(min_pole_sessions, max_pole_sessions + 1):
             pole_start = pole_end - pole_len
             if pole_start < 0:
                 break
@@ -346,6 +361,40 @@ def find_flag(bars: list[Bar], max_flag_sessions: int = 15,
                 continue
             if not bullish and flag_low < b * (1.0 - FLAG_OVERSHOOT):
                 continue
+
+            # The flag has to be TIGHT. A drift that wanders 9% between its own
+            # high and low is a pullback, not a pause, whatever its retrace of
+            # the pole works out at.
+            if flag_high > 0:
+                channel = 100.0 * (flag_high - flag_low) / flag_high
+                if channel > max_channel_pct:
+                    continue
+
+            # The pole has to carry volume. A 10% move nobody traded is a gap
+            # or a thin print, and it is the volume that makes the advance
+            # evidence of anything.
+            pole_bars = bars[pole_start:pole_end + 1]
+            prior = [x.volume for x in bars[max(0, pole_start - 50):pole_start]
+                     if x.volume]
+            if prior and min_pole_volume > 0:
+                inside = [x.volume for x in pole_bars if x.volume]
+                normal = mean(prior)
+                if not inside or normal <= 0:
+                    continue
+                if (mean(inside) / normal) < min_pole_volume:
+                    continue
+
+            # And the flag has to hold the 20-day line — for a bull flag the
+            # close stays above it, for a bear flag below. A "pause" that has
+            # already lost its own short average is the move ending.
+            if ema_window:
+                line = ema([x.close for x in bars], ema_window)
+                level_ema = line[-1]
+                if level_ema is not None:
+                    if bullish and flag_bars[-1].close < level_ema:
+                        continue
+                    if not bullish and flag_bars[-1].close > level_ema:
+                        continue
 
             # And that it drifts against the pole rather than extending it.
             last = flag_bars[-1].close
@@ -401,45 +450,122 @@ def bandwidth(bars: list[Bar], window: int = 20,
     return out
 
 
-def find_squeeze(bars: list[Bar], lookback: int = 126,
-                 percentile: float = 15.0, window: int = 20) -> Shape | None:
-    """Range compression: bandwidth near the quietest it has been in months.
+def keltner(bars: list[Bar], window: int = 20,
+            multiple: float = 1.5) -> tuple[list[float | None], list[float | None]]:
+    """Keltner channel: an EMA of the close, plus and minus N average true ranges.
 
-    Not a shape and not a direction. It says the stock has stopped moving
-    relative to its own recent history, which is a fact about the range and
-    nothing else — the common claim that a squeeze must "resolve" in a
-    particular direction is not something this can see and not something it
-    says. The level published is the ceiling of the quiet stretch, because that
-    is the price a move out of it would have to clear.
+    Returned as (upper, lower) aligned to the bars, None where either the EMA
+    or the ATR does not exist yet.
+    """
+    closes = [b.close for b in bars]
+    middle = ema(closes, window)
+    ranges = atr(bars, window)
+    upper: list[float | None] = []
+    lower: list[float | None] = []
+    for mid, rng in zip(middle, ranges):
+        if mid is None or rng is None:
+            upper.append(None)
+            lower.append(None)
+        else:
+            upper.append(mid + multiple * rng)
+            lower.append(mid - multiple * rng)
+    return upper, lower
+
+
+def bollinger(bars: list[Bar], window: int = 20,
+              deviations: float = 2.0) -> tuple[list[float | None], list[float | None]]:
+    """Bollinger bands as (upper, lower), aligned to the bars."""
+    closes = [b.close for b in bars]
+    middles = sma(closes, window)
+    upper: list[float | None] = []
+    lower: list[float | None] = []
+    for i, middle in enumerate(middles):
+        if middle is None or i + 1 < window:
+            upper.append(None)
+            lower.append(None)
+            continue
+        chunk = closes[i + 1 - window:i + 1]
+        average = sum(chunk) / window
+        sigma = (sum((c - average) ** 2 for c in chunk) / window) ** 0.5
+        upper.append(middle + deviations * sigma)
+        lower.append(middle - deviations * sigma)
+    return upper, lower
+
+
+def squeeze_states(bars: list[Bar], window: int = 20,
+                   deviations: float = 2.0,
+                   keltner_multiple: float = 1.5) -> list[bool | None]:
+    """Per bar: are the Bollinger bands entirely inside the Keltner channel?
+
+    True is "in squeeze". None where either band is undefined. This is the
+    standard construction — volatility compressed enough that a two-sigma move
+    fits inside one-and-a-half average ranges — and it replaces the earlier
+    percentile version, which asked a different question: that one said "quiet
+    against its own six months", this says "quiet on an absolute footing the
+    same way for every name".
+    """
+    b_up, b_lo = bollinger(bars, window, deviations)
+    k_up, k_lo = keltner(bars, window, keltner_multiple)
+    out: list[bool | None] = []
+    for bu, bl, ku, kl in zip(b_up, b_lo, k_up, k_lo):
+        if bu is None or bl is None or ku is None or kl is None:
+            out.append(None)
+        else:
+            out.append(bu < ku and bl > kl)
+    return out
+
+
+def find_squeeze(bars: list[Bar], min_sessions: int = 5,
+                 window: int = 20, deviations: float = 2.0,
+                 keltner_multiple: float = 1.5,
+                 fired_within: int = 3) -> Shape | None:
+    """A volatility compression, either still on or just released.
+
+    Two states are reported, because they are different things to a reader:
+
+      in squeeze   the bands are still inside the channel. Nothing has
+                   happened yet and the name is worth watching.
+      fired        they were inside within the last few sessions and are now
+                   outside. That is the event.
+
+    Direction is NOT claimed for either. A squeeze releasing says the range
+    expanded; which way it expanded is visible in the price beside it and is
+    not something the construction knows. The level published is the ceiling of
+    the compressed stretch, because that is what a move up out of it clears.
     """
     n = len(bars)
-    if n < lookback // 2:
+    if n < window * 2:
         return None
-    widths = bandwidth(bars, window)
-    current = widths[-1]
-    if current is None:
-        return None
-    history = [w for w in widths[-lookback:] if w is not None]
-    if len(history) < 30:
+    states = squeeze_states(bars, window, deviations, keltner_multiple)
+    if states[-1] is None:
         return None
 
-    rank = 100.0 * sum(1 for w in history if w <= current) / len(history)
-    if rank > percentile:
-        return None
+    fired = False
+    if states[-1]:
+        end = n - 1
+    else:
+        # Did it release recently? Walk back through the allowed window looking
+        # for the last bar that was still compressed.
+        end = None
+        for back in range(1, fired_within + 1):
+            index = n - 1 - back
+            if index < 0:
+                break
+            if states[index]:
+                end = index
+                fired = True
+                break
+        if end is None:
+            return None
 
-    # How long it has been quiet: back to the last bar wider than the threshold.
-    cutoff = sorted(history)[max(0, int(len(history) * percentile / 100.0) - 1)]
-    start = n - 1
-    while start > 0:
-        w = widths[start - 1]
-        if w is None or w > cutoff:
-            break
+    start = end
+    while start > 0 and states[start - 1]:
         start -= 1
-    sessions = n - start
-    if sessions < window // 2:
+    sessions = end - start + 1
+    if sessions < min_sessions:
         return None
 
-    window_bars = bars[start:]
+    window_bars = bars[start:end + 1]
     high = max(b.high for b in window_bars)
     low = min(b.low for b in window_bars)
     if high <= 0:
@@ -447,15 +573,17 @@ def find_squeeze(bars: list[Bar], lookback: int = 126,
 
     highs = [(start + i, x.high) for i, x in enumerate(window_bars)]
     lows = [(start + i, x.low) for i, x in enumerate(window_bars)]
-    upper, lower = fit(highs), fit(lows)
-    if upper is None or lower is None:
+    upper_line, lower_line = fit(highs), fit(lows)
+    if upper_line is None or lower_line is None:
         return None
 
     return Shape(
-        kind=SQUEEZE, start_idx=start, end_idx=n - 1, upper=upper, lower=lower,
-        level=high, direction=DIRECTION[SQUEEZE], convergence=1.0,
+        kind=SQUEEZE, start_idx=start, end_idx=n - 1,
+        upper=upper_line, lower=lower_line, level=high,
+        direction=DIRECTION[SQUEEZE], convergence=1.0,
         depth_pct=100.0 * (high - low) / high, sessions=sessions,
-        squeeze_percentile=rank,
+        squeeze_fired=fired,
+        notes=["released" if fired else "compressed"],
     )
 
 

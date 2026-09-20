@@ -353,3 +353,48 @@ export function ScreenGlyph({ href }: { href: string }) {
 export function hasGlyph(href: string): boolean {
   return href in GLYPHS;
 }
+
+/** Which way a shape screen reads its own level.
+ *
+ * Mirrors SCREEN_DIRECTION in patterns/detectors.py. Held here as well rather
+ * than read from the screen file because the menu is rendered before any
+ * screen file is loaded — and the two lists are checked against each other by
+ * the pipeline, so they cannot drift silently.
+ */
+const SHORT_SCREENS = new Set([
+  "/screens/bear_flag", "/screens/rising_wedge", "/screens/descending_triangle",
+]);
+const LONG_SCREENS = new Set([
+  "/screens/bull_flag", "/screens/falling_wedge", "/screens/triangle",
+  "/screens/squeeze",
+]);
+
+/** A small arrow saying which way the screen is read. Only on the seven shape
+ *  screens: the six base screens are all long and an arrow on every one of
+ *  them would say nothing. */
+export function DirectionArrow({ href }: { href: string }) {
+  const short = SHORT_SCREENS.has(href);
+  if (!short && !LONG_SCREENS.has(href)) return null;
+  return (
+    <svg
+      width={12} height={12} viewBox="0 0 12 12" fill="none"
+      stroke={short ? "var(--loss)" : "var(--gain)"}
+      strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
+      role="img"
+      aria-label={short ? "read downward" : "read upward"}
+      style={{ flexShrink: 0 }}
+    >
+      {short ? (
+        <>
+          <path d="M2 3.5 L10 8.5" />
+          <path d="M10 5 L10 8.5 L6.5 8.5" />
+        </>
+      ) : (
+        <>
+          <path d="M2 8.5 L10 3.5" />
+          <path d="M6.5 3.5 L10 3.5 L10 7" />
+        </>
+      )}
+    </svg>
+  );
+}

@@ -182,7 +182,7 @@ _SHAPE_LOOKBACK = ParamSpec(
 
 _MIN_SHAPE = ParamSpec(
     key="min_shape_weeks", label="Shortest formation we'll accept", kind="integer",
-    default=3, minimum=1, maximum=26, step=1, unit="weeks",
+    default=2, minimum=1, maximum=26, step=1, unit="weeks",
     funnel_title="Long enough to be a formation",
     funnel_text="The formation has lasted at least {value} weeks.",
     help="Two lines can be fitted through almost any handful of bars. This is the "
@@ -199,7 +199,7 @@ _CONVERGENCE = ParamSpec(
 
 _MIN_POLE = ParamSpec(
     key="min_pole_pct", label="Smallest move that counts as a pole", kind="percent",
-    default=15, minimum=5, maximum=60, step=1, unit="%",
+    default=10, minimum=5, maximum=60, step=1, unit="%",
     funnel_title="There is a pole",
     funnel_text="A move of at least {value}% runs into the pause.",
     help="A flag is a pause inside a move. Without a move in front of it, it is "
@@ -215,7 +215,7 @@ _MAX_RETRACE = ParamSpec(
 
 _MAX_FLAG = ParamSpec(
     key="max_flag_sessions", label="Longest pause we'll still call a flag",
-    kind="integer", default=15, minimum=4, maximum=40, step=1, unit="sessions",
+    kind="integer", default=7, minimum=4, maximum=40, step=1, unit="sessions",
     funnel_title="Short enough to be a flag",
     funnel_text="The pause is no longer than {value} sessions.",
     help="Flags are brief by definition. A long enough pause is a base, and this "
@@ -244,12 +244,74 @@ _SQUEEZE_PCTILE = ParamSpec(
          "compression.")
 
 
+_SQUEEZE_WINDOW = ParamSpec(
+    key="squeeze_window", label="Periods in the bands", kind="integer",
+    default=20, minimum=8, maximum=60, step=1, unit="sessions",
+    funnel_title="The measurement window",
+    funnel_text="Both bands are computed over {value} sessions.",
+    help="Bollinger bands and the Keltner channel are both built over this many "
+         "sessions. Twenty is the convention.")
+
+_KELTNER = ParamSpec(
+    key="keltner_multiple", label="Keltner width, in average ranges",
+    kind="number", default=1.5, minimum=0.5, maximum=3.0, step=0.1, unit=" ATR",
+    funnel_title="Inside the channel",
+    funnel_text="The bands sit entirely inside {value} average true ranges.",
+    help="How wide the Keltner channel is. A squeeze is a two-sigma move fitting "
+         "inside this many average ranges — lower is a tighter, rarer reading.")
+
+_MIN_SQUEEZE = ParamSpec(
+    key="min_squeeze_sessions", label="Shortest compression we'll accept",
+    kind="integer", default=5, minimum=2, maximum=40, step=1, unit="sessions",
+    funnel_title="Long enough to be a squeeze",
+    funnel_text="The bands have been inside the channel for {value} sessions.",
+    help="A single quiet session is not a compression. This is the run length "
+         "below which it is treated as noise.")
+
+_MAX_CHANNEL = ParamSpec(
+    key="max_channel_pct", label="Tightest channel the pause must hold",
+    kind="percent", default=3.0, minimum=1.0, maximum=15.0, step=0.5, unit="%",
+    funnel_title="The pause is tight",
+    funnel_text="High to low across the pause is no more than {value}%.",
+    help="A drift that wanders nine per cent between its own high and low is a "
+         "pullback, not a pause, whatever fraction of the pole it gave back.")
+
+_POLE_VOLUME = ParamSpec(
+    key="min_pole_volume", label="Volume through the pole", kind="number",
+    default=1.0, minimum=0.5, maximum=4.0, step=0.1, unit="x normal",
+    funnel_title="The pole carried volume",
+    funnel_text="Volume through the advance ran at {value}x its normal.",
+    help="A move nobody traded is a gap or a thin print. The volume is what "
+         "makes the advance evidence of anything.")
+
+_MAX_POLE_SESSIONS = ParamSpec(
+    key="max_pole_sessions", label="Longest run that counts as a pole",
+    kind="integer", default=5, minimum=2, maximum=30, step=1, unit="sessions",
+    funnel_title="Sharp, not gradual",
+    funnel_text="The advance took no more than {value} sessions.",
+    help="A flag interrupts a sharp move. A gentle climb over six weeks is a "
+         "trend, and the screens for those are elsewhere.")
+
+_WEDGE_VOLUME = ParamSpec(
+    key="max_volume_ratio", label="Volume must be falling", kind="number",
+    default=1.0, minimum=0.4, maximum=2.0, step=0.05, unit="x prior",
+    funnel_title="Interest is draining",
+    funnel_text="Volume inside the shape is under {value}x the fifty before it.",
+    help="The convergence is supposed to be the market losing interest in both "
+         "directions. A wedge forming on rising volume is a different event.")
+
+
 def _shape_common() -> list[ParamSpec]:
     return [_SHAPE_LOOKBACK, _MIN_SHAPE, _CONVERGENCE, _SWING, _MIN_RS, _FRESH]
 
 
 def _flag_common() -> list[ParamSpec]:
-    return [_MIN_POLE, _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
+    return [_MIN_POLE, _MAX_POLE_SESSIONS, _MAX_CHANNEL, _POLE_VOLUME,
+            _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
+
+
+def _wedge_params() -> list[ParamSpec]:
+    return _shape_common() + [_WEDGE_VOLUME]
 
 
 _NO_EDGE_NOTE = (
@@ -671,7 +733,7 @@ SCREENS: dict[str, ScreenSpec] = {
             "decline is the convergence: sellers are still in control but are "
             "giving less ground each swing. The level shown is the upper line. "
             + _NO_EDGE_NOTE),
-        params=_shape_common(),
+        params=_wedge_params(),
         concepts=[
             Concept("The upper line", "Through the swing highs.", "upper"),
             Concept("The lower line", "Through the swing lows.", "lower"),
@@ -688,7 +750,7 @@ SCREENS: dict[str, ScreenSpec] = {
             "downward by convention, so this screen's stages are named for a "
             "breakdown. That convention is not a forecast and has not been tested "
             "here. The level shown is the lower line. " + _NO_EDGE_NOTE),
-        params=_shape_common(),
+        params=_wedge_params(),
         concepts=[
             Concept("The upper line", "Through the swing highs.", "upper"),
             Concept("The lower line", "Through the swing lows, rising faster.",
@@ -741,7 +803,7 @@ SCREENS: dict[str, ScreenSpec] = {
             "is a fact about the range. The level shown is the ceiling of the "
             "quiet stretch, because that is what a move out of it would clear. "
             + _NO_EDGE_NOTE),
-        params=[_SQUEEZE_LOOKBACK, _SQUEEZE_PCTILE, _MIN_RS, _FRESH],
+        params=[_SQUEEZE_WINDOW, _KELTNER, _MIN_SQUEEZE, _MIN_RS, _FRESH],
         concepts=[
             Concept("Bandwidth", "The width of the range, against its own history.",
                     "bandwidth"),

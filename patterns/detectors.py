@@ -736,12 +736,14 @@ def _shape_screen(kinds: set[str], direction: str, finder):
 
 
 def _converging(sub, params):
+    ratio = params.get("max_volume_ratio")
     return shapemod.find_converging(
         sub,
         lookback=int(params.get("shape_lookback_weeks", 12)) * 5,
         threshold_pct=float(params.get("swing_threshold_pct", 3.0)),
-        min_sessions=int(params.get("min_shape_weeks", 3)) * 5,
+        min_sessions=int(params.get("min_shape_weeks", 2)) * 5,
         max_convergence=float(params.get("max_convergence", 0.70)),
+        max_volume_ratio=float(ratio) if ratio else None,
     )
 
 
@@ -749,10 +751,13 @@ def _flag(bullish: bool):
     def finder(sub, params):
         return shapemod.find_flag(
             sub,
-            max_flag_sessions=int(params.get("max_flag_sessions", 15)),
+            max_flag_sessions=int(params.get("max_flag_sessions", 7)),
             min_flag_sessions=int(params.get("min_flag_sessions", 3)),
-            min_pole_pct=float(params.get("min_pole_pct", 15.0)),
-            max_retrace=float(params.get("max_retrace", 0.50)) ,
+            min_pole_pct=float(params.get("min_pole_pct", 10.0)),
+            max_pole_sessions=int(params.get("max_pole_sessions", 5)),
+            max_retrace=float(params.get("max_retrace", 0.50)),
+            max_channel_pct=float(params.get("max_channel_pct", 3.0)),
+            min_pole_volume=float(params.get("min_pole_volume", 1.0)),
             bullish=bullish,
         )
     return finder
@@ -761,8 +766,9 @@ def _flag(bullish: bool):
 def _squeeze(sub, params):
     return shapemod.find_squeeze(
         sub,
-        lookback=int(params.get("squeeze_lookback_weeks", 26)) * 5,
-        percentile=float(params.get("squeeze_percentile", 15.0)),
+        min_sessions=int(params.get("min_squeeze_sessions", 5)),
+        window=int(params.get("squeeze_window", 20)),
+        keltner_multiple=float(params.get("keltner_multiple", 1.5)),
     )
 
 
