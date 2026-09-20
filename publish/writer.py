@@ -156,6 +156,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             releases: list | None = None,
             gamma: dict[str, dict] | None = None,
             insider_recent: list[dict] | None = None,
+            forecasts: dict[str, dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -275,7 +276,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         written.append(_write(out / "stocks" / f"{symbol}.json",
                               _stock_payload(market, bundle, symbol, setups_by_symbol,
                                              calendar, limit, insiders, news, desk,
-                                             gamma)))
+                                             gamma, forecasts)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -589,7 +590,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    insiders: dict[str, dict] | None = None,
                    news: dict[str, list[dict]] | None = None,
                    desk: dict[str, list[dict]] | None = None,
-                   gamma: dict[str, dict] | None = None) -> dict:
+                   gamma: dict[str, dict] | None = None,
+                   forecasts: dict[str, dict] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -644,6 +646,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # no listed options, which is most of the universe, and absent
         # rather than zeroed so the page can tell the two apart.
         "gamma": (gamma or {}).get(symbol),
+        # Analyst price targets and estimates. Somebody else's opinion, not a
+        # reading of ours, which is why it is labelled as such on the page.
+        "forecast": (forecasts or {}).get(symbol),
         "news": (news or {}).get(symbol) or [],
         "desk_signals": (desk or {}).get(symbol) or [],
         "peers": {"industry": peer_rows(same_industry), "theme": peer_rows(same_theme)},

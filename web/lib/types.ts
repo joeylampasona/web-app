@@ -144,6 +144,29 @@ export interface BacktestSummary {
  *  Distinct from InsiderTrade below, which is the per-stock panel's row and
  *  carries the mechanics (grants, option exercises, tax withholding) alongside
  *  the decisions. This calendar only ever holds P and S. */
+export interface EstimateRow {
+  period: string; label: string;
+  avg: number | null; low: number | null; high: number | null;
+  analysts: number | null; year_ago: number | null; growth: number | null;
+}
+
+export interface Forecast {
+  symbol: string;
+  targets: {
+    current: number | null; low: number | null;
+    mean: number | null; median: number | null; high: number | null;
+  };
+  upside_pct: number | null;
+  eps: EstimateRow[];
+  revenue: EstimateRow[];
+  ratings: {
+    strongBuy: number; buy: number; hold: number; sell: number; strongSell: number;
+  } | null;
+  analysts: number | null;
+  /** When we asked Yahoo, not when the analyst wrote it. */
+  fetched_at?: string;
+}
+
 export interface SeasonalCell { month: number; return_pct: number | null; sessions: number }
 export interface SeasonalYear {
   year: number; months: SeasonalCell[]; year_pct: number | null; partial: boolean;
@@ -256,6 +279,7 @@ export interface StockFile {
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
   gamma: GammaProfile | null;
+  forecast: Forecast | null;
   news: Headline[];
   desk_signals: DeskSignal[];
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are

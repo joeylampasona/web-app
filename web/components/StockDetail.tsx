@@ -6,6 +6,7 @@ import { AuthGate } from "./AuthGate";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
+import { ForecastPanel } from "./ForecastPanel";
 import { GammaPanel } from "./GammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
@@ -228,6 +229,11 @@ export function StockDetail({ stock, run }: {
           <CriteriaMeter criteria={setup.criteria} detailed />
         </section>
       )}
+
+      <section>
+        <div className="eyebrow">What analysts expect</div>
+        <ForecastPanel forecast={stock.forecast} />
+      </section>
 
       <section>
         <div className="eyebrow">Gamma concentration</div>

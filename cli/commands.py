@@ -310,6 +310,14 @@ def cmd_catalysts(args) -> int:
     # Gamma rides along on the option chains the IV reading already downloads,
     # so this costs no extra request. Stored here because publish never reaches
     # the network.
+    # Analyst coverage. Capped per night: the universe over the freshness
+    # window is the steady rate, but a cold cache would otherwise try every
+    # name at once, which is exactly how the earnings scrape got itself
+    # throttled before it was given one.
+    from catalysts import forecast as forecastmod
+    forecastmod.fetch(conn, market.universe, limit=400,
+                      notice=lambda m: print(f"  → {m}", flush=True))
+
     from catalysts import gamma as gammamod
     gamma_profiles: dict = {}
     rows = ivmod.compute(calendar, population, names, adapter, gamma_out=gamma_profiles)
@@ -472,6 +480,8 @@ def _pipeline(conn, with_followthrough: bool = True):
     # Read, never fetch: publish must not depend on Yahoo being up.
     from catalysts import gamma as gammamod
     gamma_rows = gammamod.load(conn, market.universe, market.as_of)
+    from catalysts import forecast as forecastmod
+    forecast_rows = forecastmod.load(conn, market.universe)
 
     backtests: dict[str, dict] = {}
     follow: dict = {}
@@ -509,8 +519,8 @@ def _pipeline(conn, with_followthrough: bool = True):
             print(f"    {key} — {row['settled']} settled, {row['up']} up, "
                   f"{row['failed_fast']} failed fast", flush=True)
     return (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
-            backtests, follow, insider_rows, insider_recent, news_rows,
-            desk_rows, desk_run)
+            forecast_rows, backtests, follow, insider_rows, insider_recent,
+            news_rows, desk_rows, desk_run)
 
 
 def cmd_publish(args) -> int:
@@ -518,8 +528,8 @@ def cmd_publish(args) -> int:
     conn = _conn()
     run = store.start_run(conn, "publish")
     (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
-     backtests, follow, insider_rows, insider_recent, news_rows,
-     desk_rows, desk_run) = _pipeline(conn)
+     forecast_rows, backtests, follow, insider_rows, insider_recent,
+     news_rows, desk_rows, desk_run) = _pipeline(conn)
     from catalysts import releases as rel
     release_rows = rel.load(conn, market.as_of)
 
@@ -527,7 +537,8 @@ def cmd_publish(args) -> int:
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
                              releases=release_rows, gamma=gamma_rows,
-                             insider_recent=insider_recent)
+                             insider_recent=insider_recent,
+                             forecasts=forecast_rows)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")
