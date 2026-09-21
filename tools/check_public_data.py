@@ -26,11 +26,14 @@ Analyst estimates. The buy/hold/sell split is free and no price target is,
 not even the consensus — so a public forecast may carry ratings and the current
 price and nothing else.
 
-Screens. Each stage shows a sample; fresh breakouts are whole. And the
+Screens. Ten names per stage, and none at all of the forming stage — that one
+is the list of bases before they break, which is the thing being sold. And the
 aggregate files must not hand back what the lists withheld: the search index
 and the industry and theme pages cover the entire universe, so screen
 membership on a name outside the free sample is that name's row given back in
-a different file.
+a different file. The day's breakouts feed is published whole and counts as
+free, since withholding in one file what the home page shows in another is a
+contradiction rather than a secret.
 
 One path is left open knowingly. A stock's own page still carries its own
 setup, so fetching all five hundred of them rebuilds the lists. Closing it
@@ -60,7 +63,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from publish.gated import (BACKTEST_GATED_KEYS, FREE_GAMMA_ROWS,  # noqa: E402
-                           FREE_SCREEN_ROWS, FREE_SCREEN_WHOLE_STAGES,
+                           FREE_SCREEN_LOCKED_STAGES, FREE_SCREEN_ROWS,
                            FREE_SEASONAL_SYMBOL, FREE_XRAY_BASES)
 
 
@@ -122,6 +125,7 @@ def check(out: pathlib.Path) -> list[str]:
                     if p.name != "diff.json"]
     on_screen_free: set[str] = set()
     oversized: list[str] = []
+    locked_leak: list[str] = []
     for path in screen_paths:
         payload = _load(path)
         if "__unreadable__" in payload:
@@ -129,7 +133,9 @@ def check(out: pathlib.Path) -> list[str]:
             continue
         for stage, rows in (payload.get("setups") or {}).items():
             on_screen_free.update(row["symbol"] for row in rows)
-            if stage in FREE_SCREEN_WHOLE_STAGES:
+            if stage in FREE_SCREEN_LOCKED_STAGES:
+                if rows:
+                    locked_leak.append(f"{path.stem}/{stage} ({len(rows)})")
                 continue
             if len(rows) > FREE_SCREEN_ROWS:
                 oversized.append(f"{path.stem}/{stage} ({len(rows)})")
@@ -139,6 +145,19 @@ def check(out: pathlib.Path) -> list[str]:
         failures.append(
             f"{len(oversized)} screen stage(s) publish more than the free "
             f"sample of {FREE_SCREEN_ROWS}: {', '.join(oversized)}.")
+    if locked_leak:
+        failures.append(
+            f"{len(locked_leak)} screen(s) publish rows for a stage that is "
+            f"supposed to be withheld entirely: {', '.join(locked_leak)}.")
+
+    # Names the day's feed publishes are free by definition; the aggregates are
+    # checked against the union so a fresh breakout past a tab's tenth row does
+    # not read as a leak.
+    for path in sorted((out / "breakouts").glob("*.json")):
+        if path.stem in ("index", "followthrough"):
+            continue
+        feed = _load(path)
+        on_screen_free.update(row.get("symbol") for row in (feed.get("setups") or []))
 
     # The aggregates, cross-checked against what the screens actually showed.
     # This is the pair that matters: a screen page can be trimmed perfectly and

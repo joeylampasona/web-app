@@ -8,13 +8,15 @@ import type { Bar, ScreenFile } from "@/lib/types";
 /**
  * A screen: a sample of each stage, or the whole list.
  *
- * Fresh breakouts are never trimmed. That stage is the daily feed, it is
- * published separately for the home page anyway, and it is how the site is
- * found — putting it behind a wall would gate the front door.
+ * Ten names per stage, so no tab runs past ten charts, and none at all of the
+ * forming stage. Forming is the list of bases before they break — the only
+ * stage where seeing it early is worth anything, since the other three
+ * describe something that has already happened. A sample of those shows what
+ * the site does; a sample of forming would be the thing itself.
  *
- * Every stage keeps its true count whether or not the rows are there, so the
- * page says what it is withholding. That is `stage_counts`, which the publisher
- * leaves alone deliberately.
+ * Every stage keeps its true count whether the rows are there or not, so the
+ * forming tab reads "144" and then explains itself. An empty list under a
+ * count of 144 would read as a fault.
  */
 export function GatedScreenBrowser({
   file,
@@ -35,30 +37,37 @@ export function GatedScreenBrowser({
     return <ScreenBrowser file={{ ...file, setups: full.data.setups }} bars={bars} />;
   }
 
+  const lockedStages = file.locked_stages ?? [];
   const shown = Object.values(file.setups).reduce((n, rows) => n + rows.length, 0);
+  const checking = full.state === "loading";
 
+  const offer = checking ? (
+    <p className="caption dim">Checking your subscription…</p>
+  ) : (
+    <Locked
+      what={`The rest of the ${file.name} list, at every stage,`}
+      shown={shown}
+      total={file.total}
+    >
+      {full.state === "error" && (
+        <p className="caption" style={{ margin: 0, color: "var(--loss)" }}>
+          The subscription check did not answer ({full.detail}).
+        </p>
+      )}
+    </Locked>
+  );
+
+  // The same offer in two places, and it has to be: inside the forming tab,
+  // where there is nothing else to show, and under the others, where there is
+  // a sample above it.
   return (
     <>
-      <ScreenBrowser file={file} bars={bars} />
-      {full.state === "loading" ? (
-        <p className="caption dim" style={{ marginTop: "var(--gap-md)" }}>
-          Checking your subscription…
-        </p>
-      ) : shown < file.total ? (
-        <div style={{ marginTop: "var(--gap-md)" }}>
-          <Locked
-            what={`The rest of the ${file.name} list, at every stage,`}
-            shown={shown}
-            total={file.total}
-          >
-            {full.state === "error" && (
-              <p className="caption" style={{ margin: 0, color: "var(--loss)" }}>
-                The subscription check did not answer ({full.detail}).
-              </p>
-            )}
-          </Locked>
-        </div>
-      ) : null}
+      <ScreenBrowser file={file} bars={bars}
+                     lockedStages={lockedStages}
+                     lockedPanel={offer} />
+      {shown < file.total && (
+        <div style={{ marginTop: "var(--gap-md)" }}>{offer}</div>
+      )}
     </>
   );
 }

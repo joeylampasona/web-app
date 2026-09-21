@@ -57,11 +57,19 @@ FREE_GAMMA_ROWS = 5
 # comparison is what the page is for.
 FREE_SEASONAL_SYMBOL = "SPY"
 
-# How many names a screen shows for free, per stage. Fresh breakouts are whole
-# whatever this says: that stage is the daily feed, it is published separately
-# in breakouts/ anyway, and it is what the site is discovered through.
+# How many names a screen shows for free, per stage — so no single tab ever
+# runs past ten charts. It used to leave fresh breakouts untrimmed, which meant
+# one screen published fifty-two charts on a tab; the daily feed in breakouts/
+# still carries every one of them, so nothing is lost by capping the tab.
 FREE_SCREEN_ROWS = 10
-FREE_SCREEN_WHOLE_STAGES = ("fresh_breakout",)
+
+# Stages a free reader sees none of.
+#
+# Forming is the proposition. It is the list of bases before they break, which
+# is the only stage where knowing early is worth anything — the other three
+# describe something that has already happened. Ten of those is a fair sample
+# of what the site does; ten of these would be giving away the thing itself.
+FREE_SCREEN_LOCKED_STAGES = ("forming",)
 
 # How many previous bases the X-ray shows for free. One, labelled as one of
 # however many there are — a reader told "the most recent of six" is not being
@@ -212,15 +220,15 @@ def split_screen(payload: dict) -> tuple[dict, dict]:
     setups = payload.get("setups") or {}
     trimmed = {}
     for stage, rows in setups.items():
-        if stage in FREE_SCREEN_WHOLE_STAGES:
-            trimmed[stage] = rows
+        if stage in FREE_SCREEN_LOCKED_STAGES:
+            trimmed[stage] = []
         else:
             trimmed[stage] = rows[:FREE_SCREEN_ROWS]
     public = dict(payload)
     public["setups"] = trimmed
     public["gated"] = True
     public["free_rows"] = FREE_SCREEN_ROWS
-    public["free_stages"] = list(FREE_SCREEN_WHOLE_STAGES)
+    public["locked_stages"] = list(FREE_SCREEN_LOCKED_STAGES)
     return public, payload
 
 
@@ -240,11 +248,16 @@ def free_symbols_on_screens(screens: dict[str, dict]) -> set[str]:
     """Every symbol a free reader can see on a screen page.
 
     Used to keep the aggregate files — the search index, the industry and theme
-    pages — from handing back the names the screen lists just withheld. It does
-    not close every path: a stock's own page still carries its own setup, so
-    somebody willing to fetch all five hundred of them can rebuild the lists.
-    That is a deliberate trade, written down in the README, because stripping
-    setups from stock pages would empty the free site to protect a list that a
+    pages — from handing back the names the screen lists just withheld. Callers
+    add the names in the public breakouts feed, which publishes the day's fresh
+    breakouts across every screen whether or not a particular screen's tab had
+    room for them; without that union the aggregates would withhold a name the
+    home page is showing, which is a contradiction rather than a secret.
+
+    It does not close every path: a stock's own page still carries its own
+    setup, so somebody willing to fetch all of them can rebuild the lists. That
+    is a deliberate trade, written down in the README, because stripping setups
+    from stock pages would empty the free site to protect a list that a
     determined scraper gets anyway.
     """
     free: set[str] = set()

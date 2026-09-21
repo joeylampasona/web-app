@@ -219,14 +219,14 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "setups": grouped,
         }
 
-    # A sample of each stage, then the rest behind the wall — except fresh
-    # breakouts, which stay whole. That stage is the daily feed, it is
-    # published in breakouts/ separately anyway, and it is how the site is
-    # found. Every stage keeps its true count either way, because a paywall
-    # that will not say what it is withholding is asking to be paid on trust.
+    # Ten names per stage, and none at all of the forming stage. Forming is the
+    # list of bases before they break, which is the only stage where knowing
+    # early is worth anything; the other three describe something that already
+    # happened, so a sample of them shows what the site does without being it.
+    # Every stage keeps its true count regardless, because a paywall that will
+    # not say what it is withholding is asking to be paid on trust.
     public_screens, screen_gated = gatedmod.screen_documents(screen_files, as_of)
     gated_documents.extend(screen_gated)
-    screen_free_symbols = gatedmod.free_symbols_on_screens(screen_files)
     for key, payload in public_screens.items():
         written.append(_write(out / "screens" / f"{key}.json", payload))
     written.append(_write(out / "screens" / "diff.json", diff_payload))
@@ -250,6 +250,15 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "setups": list(seen.values()),
     }))
     _retain_breakouts(out / "breakouts")
+
+    # What a free reader can see on a screen page, plus what the day's
+    # breakouts feed names. The feed is published whole and draws the same
+    # cards, so a name on it is public no matter which screen's tab ran out of
+    # room — and the aggregates below must not withhold what the home page is
+    # already showing. Computed here, after both are built, because the search
+    # index and the group pages are written further down and both read it.
+    screen_free_symbols = (gatedmod.free_symbols_on_screens(screen_files)
+                           | set(seen))
     written.append(_write(out / "breakouts" / "index.json", {
         "dates": sorted(p.stem for p in (out / "breakouts").glob("*.json")
                         if _is_session_file(p))[::-1]}))

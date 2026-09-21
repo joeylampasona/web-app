@@ -147,8 +147,10 @@ export interface ScreenFile {
   gated?: boolean;
   /** How many rows a trimmed stage shows. */
   free_rows?: number;
-  /** Stages that are never trimmed. */
-  free_stages?: string[];
+  /** Stages a free reader sees none of. Their `setups` entry is empty while
+   *  `stage_counts` still carries the real number, so the tab can say what it
+   *  is withholding instead of looking like an empty screen. */
+  locked_stages?: string[];
 }
 
 export interface Meta {

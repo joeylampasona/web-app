@@ -24,16 +24,24 @@ const SORTS: { key: SortKey; label: string }[] = [
 const STAGE_ORDER = ["forming", "fresh_breakout", "climbing", "played_out"];
 
 export function ScreenBrowser({
-  file, bars,
+  file, bars, lockedStages = [], lockedPanel = null,
 }: {
   file: ScreenFile;
   bars: Record<string, Bar[]>;
+  /** Stages a reader is not entitled to see at all. Their tab still shows the
+   *  real count — the point is to say what is being withheld — and selecting
+   *  it shows the offer rather than an empty-list message, which would read as
+   *  "there is nothing here" when there are a hundred and forty-four. */
+  lockedStages?: string[];
+  lockedPanel?: React.ReactNode;
 }) {
   const { signedIn, requireSignUp } = useAuth();
   const [stage, setStage] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>("rs_rating");
   const [descending, setDescending] = useState(true);
   const [view, setView] = useState<"grid" | "list">("grid");
+
+  const locked = stage !== null && lockedStages.includes(stage);
 
   const setups = useMemo(() => {
     const rows: Setup[] = stage
@@ -80,7 +88,12 @@ export function ScreenBrowser({
                 {count}
               </span>
               <span className="grow">
-                <span style={{ color: STAGE_COLOURS[key] }}>{file.stage_labels[key]}</span>{" "}
+                <span style={{ color: STAGE_COLOURS[key] }}>{file.stage_labels[key]}</span>
+                {lockedStages.includes(key) && (
+                  <span className="caption dim" title="Part of a subscription">
+                    {" "}·&nbsp;subscribers
+                  </span>
+                )}{" "}
                 <span className="footnote dim">{file.stage_help[key]}</span>
               </span>
             </button>
@@ -143,14 +156,14 @@ export function ScreenBrowser({
 
       <p className="muted footnote">{file.description}</p>
 
-      {setups.length === 0 && (
+      {locked ? lockedPanel : setups.length === 0 && (
         <div className="card muted footnote">
           Nothing is on this screen right now. That is a normal reading, not a fault —
           the filters are deliberately narrow.
         </div>
       )}
 
-      {view === "grid" ? (
+      {locked ? null : view === "grid" ? (
         <div className="grid-auto">
           {setups.map((setup) => (
             <StockCard key={`${setup.screen}-${setup.symbol}`} setup={setup}

@@ -223,7 +223,7 @@ One rule everywhere: show some of it, then say how much more there is.
 
 | | Free | Gated |
 |---|---|---|
-| Screens | ten names per stage, fresh breakouts whole | the rest of each list |
+| Screens | ten names per stage; **nothing** of the forming stage | every forming base, and the rest of each list |
 | Gamma | the five deepest option books, in full | the rest of the board, and every other name's strikes |
 | Seasonals | the benchmark's grid | the eleven sector grids |
 | Analyst estimates | the buy/hold/sell split | the targets, the spread and the estimates |
@@ -238,9 +238,18 @@ warns about. And every stage keeps its true count whether the rows are there
 or not, because a paywall that will not say what it is withholding is asking
 to be paid on trust.
 
-Fresh breakouts are never trimmed. That stage is the daily feed, it is
-published separately for the home page anyway, and it is how the site is
-found.
+The forming stage is withheld entirely rather than sampled. It is the list of
+bases before they break, which is the only stage where seeing it early is
+worth anything — the other three describe something that has already happened,
+so ten of those is a fair sample of what the site does while ten of these
+would be the thing itself. Its tab still shows the real count and explains
+itself; an empty list under a count of 144 would read as a fault.
+
+Every other tab is capped at ten so no screen page runs past ten charts at a
+time. The day's breakouts feed in `breakouts/` is still published whole — it
+is the front door, and it draws the same cards — so names on it count as free
+when the aggregates are checked. Withholding in one file what the home page
+shows in another is a contradiction rather than a secret.
 
 The intraday quote sweep is split the same way. It reads the free lists from
 the data branch and the rest from the gated store, quotes every name on a
