@@ -103,6 +103,27 @@ _SHARE_CONCEPTS = (
 # Every throttled request that goes down as "this company has no share count"
 # drops a real company from the universe for a reason that has nothing to do
 # with the company, which is the fault this whole module keeps producing.
+# Where to look in the whole-facts file when the per-concept endpoint comes
+# back empty, in order of how well each answers "how many shares are there".
+#
+# An allowlist rather than "the freshest share-unit series", and that is not
+# fussiness. Berkshire's freshest share-unit series is
+# PreferredStockSharesAuthorized at 1,000,000 — a sweep that took the newest
+# thing measured in shares would have given Berkshire Hathaway a market cap of
+# about half a billion dollars and published it without blinking.
+#
+# Issued is last because it counts treasury stock a company has bought back
+# and no longer has outstanding, so it overstates. It is still much closer
+# than nothing.
+_FACT_CONCEPTS = (
+    ("dei", "EntityCommonStockSharesOutstanding"),
+    ("us-gaap", "CommonStockSharesOutstanding"),
+    ("ifrs-full", "NumberOfSharesOutstanding"),
+    ("us-gaap", "WeightedAverageNumberOfSharesOutstandingBasic"),
+    ("ifrs-full", "WeightedAverageShares"),
+    ("us-gaap", "CommonStockSharesIssued"),
+)
+
 THROTTLE_STATUSES = (401, 403, 429, 503)
 THROTTLE_PAUSE = 2.0
 REQUEST_PAUSE = 0.11                               # stay under 10 req/s
@@ -116,6 +137,30 @@ NOT_TAGGED = "SEC has no such concept for this company"
 TOO_OLD = f"newest filed count is over {SHARES_MAX_AGE_DAYS} days old"
 THROTTLED = "SEC refused the request"
 ERRORED = "the request failed"
+
+
+def share_count_from_facts(facts: dict, today: dt.date) -> tuple[float, str] | None:
+    """The best usable share count in a companyfacts payload, and where it came from.
+
+    Exists because SEC's companyconcept endpoint is not reliable for every
+    filer: Abbott, Coca-Cola, S&P Global and Bloom Energy all answer HTTP 200
+    with an empty series under dei/EntityCommonStockSharesOutstanding while
+    their own facts file carries that very concept with a current value. Four
+    heavily traded companies were dropped from this universe for months
+    because of a difference between two SEC endpoints.
+
+    Only the unit literally called "shares" counts. "USD/shares" is a price
+    per share — earnings, dividends, par value — and reading one of those as a
+    share count would be a number two thousand times too small.
+    """
+    by_taxonomy = facts.get("facts", {}) or {}
+    for taxonomy, concept in _FACT_CONCEPTS:
+        rows = ((by_taxonomy.get(taxonomy, {}) or {}).get(concept, {}) or {}) \
+            .get("units", {}).get("shares", [])
+        value = _newest_share_count(rows, today)
+        if value is not None:
+            return value, f"{taxonomy}/{concept}"
+    return None
 
 
 def _newest_share_count(units: list[dict], today: dt.date) -> float | None:
@@ -222,6 +267,27 @@ def shares_outstanding(symbols: Iterable[str], progress=None,
                 verdict = ERRORED
                 log.debug("EDGAR %s/%s failed for %s: %s",
                           taxonomy, concept, sym, exc)
+        # The per-concept endpoint came back empty or stale. One request for
+        # the whole facts file rescues the filers it is unreliable for, and is
+        # paid only by the companies that already failed the cheap path.
+        if sym not in out:
+            try:
+                resp = session.get(
+                    f"{base}/api/xbrl/companyfacts/{cik}.json",
+                    headers={"User-Agent": _user_agent()}, timeout=60)
+                time.sleep(REQUEST_PAUSE)
+                if resp.status_code == 200:
+                    picked = share_count_from_facts(resp.json(), today)
+                    if picked is not None:
+                        out[sym], source = picked
+                        log.debug("EDGAR %s rescued from companyfacts via %s",
+                                  sym, source)
+                elif resp.status_code in THROTTLE_STATUSES:
+                    refused += 1
+                    verdict = THROTTLED
+            except Exception as exc:                   # noqa: BLE001
+                log.debug("EDGAR companyfacts failed for %s: %s", sym, exc)
+
         if sym not in out:
             why[sym] = verdict
 

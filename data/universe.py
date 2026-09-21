@@ -425,6 +425,28 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     funnel.add(f"market cap > ${min_cap/1e6:,.0f}M", len(capped), len(known))
 
     capped = [(r, close, adv, sh * close) for r, close, adv, sh in capped]
+
+    # And the heavily traded names we could not price. A company among the
+    # most traded on the entire market is, by construction, not too small to
+    # be here — so dropping it at a size gate is answering "is this big
+    # enough?" with "we could not look it up", which is not an answer about
+    # the company at all.
+    #
+    # Berkshire's newest share count filed with SEC is from 2011 and Nu's is
+    # nearly two years old, so no amount of reading SEC more carefully
+    # rescues those two. They carry a null market cap and everything else
+    # they have. A page with no market cap on it is a smaller loss than no
+    # page.
+    rescued = [(r, close, adv, None) for r, close, adv in priced
+               if r["symbol"] in set(funnel.lost_leaders)]
+    if rescued:
+        capped.extend(rescued)
+        funnel.add(f"kept anyway: top-{LEADER_RANK} by dollar volume",
+                   len(capped), len(capped))
+        if notice:
+            notice(f"      kept {len(rescued)} of them anyway, with no market "
+                   "cap, because how much they trade already answers the "
+                   "question the market-cap gate asks.")
     liquid = [row for row in capped if row[2] > min_adv]
     funnel.add(f"{lookback}-day avg $ volume > ${min_adv/1e6:,.0f}M", len(liquid), len(capped))
     funnel.final = len(liquid)

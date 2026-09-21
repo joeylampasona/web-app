@@ -42,7 +42,7 @@ def stock_points(market: Market, bundle: Bundle) -> list[dict]:
             "x": rs,
             "y": delta,
             "quadrant": quadrant_for(rs, delta),
-            "size": market.caps.get(symbol, 0.0),
+            "size": market.caps.get(symbol) or 0.0,
         })
     return points
 

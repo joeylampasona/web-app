@@ -77,7 +77,10 @@ def aggregate(market: Market, bundle: Bundle, kind: str,
             "avg_member_rs": round(mean(member_rs), 1),
             "leaders": sum(1 for r in member_rs if r >= leader_rs),
             "fresh_breakouts": sum(1 for m in members if m in breakouts),
-            "market_value": round(sum(market.caps.get(m, 0.0) for m in members)),
+            # Unknown caps count as zero in a total, which understates it.
+            # Better than refusing to add up at all, and the names it
+            # affects are a handful.
+            "market_value": round(sum(market.caps.get(m) or 0.0 for m in members)),
             "symbols": sorted(members, key=lambda m: -(bundle.now.get(m) or 0)
                               if isinstance(bundle.now.get(m), int) else 1),
         }

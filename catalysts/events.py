@@ -281,7 +281,7 @@ def _add_readthrough(market: Market, calendar: Calendar, symbols: Sequence[str])
     for slug, members in by_theme.items():
         if len(members) < 2:
             continue
-        ordered = sorted(members, key=lambda s: -market.caps.get(s, 0.0))
+        ordered = sorted(members, key=lambda s: -(market.caps.get(s) or 0.0))
         for source in ordered[:limit]:
             for event in list(calendar.by_ticker.get(source, [])):
                 if event.readthrough is not None or event.type != EARNINGS:

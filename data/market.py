@@ -76,7 +76,10 @@ def load(conn: sqlite3.Connection | None = None, include_all: bool = False) -> M
 
     caps, industries = {}, {}
     for row in store.universe_rows(conn):
-        caps[row["symbol"]] = row["market_cap"] or 0.0
+        # None, not 0.0. A company we could not price and a company worth
+        # nothing are different claims, and the second one gets published
+        # as "$0" on a page for a business worth a trillion dollars.
+        caps[row["symbol"]] = row["market_cap"]
         industries[row["symbol"]] = row["industry"] or "Unclassified"
 
     return Market(
