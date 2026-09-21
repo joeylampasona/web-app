@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { IndexStrip } from "./IndexStrip";
 import { TOTAL_TESTS, type MarketRead } from "@/lib/marketRead";
 import type { IndexRow } from "@/lib/types";
 import { PriceChange } from "./PriceChange";
@@ -89,29 +90,7 @@ export function HomeRead({
         </ul>
       )}
 
-      {indexes.length > 0 && (
-        <div className="hero-strip">
-          {indexes.map((row) => (
-            <div key={row.symbol} className="stack" style={{ gap: 2 }}>
-              <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-xs)" }}>
-                <span className="mono caption" style={{ color: "var(--text-secondary)" }}>
-                  {row.symbol}
-                </span>
-                <PriceChange value={row.change_pct} className="caption" />
-              </div>
-              <div className="num" style={{ fontSize: "var(--size-lead)", lineHeight: 1.2 }}>
-                {price(row.close)}
-              </div>
-              <div className="caption" style={{ color: "var(--text-muted)" }}>
-                {row.above_200 === null
-                  ? "200-day not available yet"
-                  : `${row.vs_200_pct === null ? "" : `${Math.abs(row.vs_200_pct).toFixed(1)}% `}` +
-                    `${row.above_200 ? "above" : "below"} its 200-day`}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <IndexStrip rows={indexes} />
 
       <p className="caption" style={{ margin: 0, color: "var(--text-muted)" }}>
         {read.measured === TOTAL_TESTS

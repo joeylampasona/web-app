@@ -621,6 +621,31 @@ def cmd_quotes(args) -> int:
         except (OSError, ValueError):
             continue
 
+    # The benchmark, the Nasdaq proxy and the sector ETFs, ahead of everything
+    # else and always public.
+    #
+    # They were not in this sweep at all, which made the whole feature look
+    # broken: the two biggest numbers on the home page are SPY and QQQ, they
+    # are read straight from the nightly file, and so they showed Friday's
+    # close all through Monday no matter how often this job ran. A reader
+    # checking whether the site updates during the day looks at exactly those
+    # two numbers.
+    #
+    # Market-level and already free, so they stay in the public file whoever
+    # is looking. Sorted to the front with a negative distance because the
+    # sweep is budget-limited and these are the ones everybody sees.
+    market_wide = [settings.get("universe.benchmark", "SPY")]
+    try:
+        payload = json.loads((out / "indexes.json").read_text())
+        market_wide += [row["symbol"] for row in (payload.get("rows") or [])]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    market_wide += list(settings.get("rankings.sector_etfs", []) or [])
+    for symbol in market_wide:
+        symbol = str(symbol).upper()
+        distance[symbol] = -1.0
+        free.add(symbol)
+
     # The published screens are the free sample now, so reading only those
     # would quote the free names and leave a subscriber's own rows as the only
     # ones on the page with no live price — the paid half of the product with
