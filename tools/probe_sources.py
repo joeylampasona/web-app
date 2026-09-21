@@ -133,11 +133,13 @@ def probe_shares(agent: str) -> None:
                 found = True
                 break
         else:
-            _sweep_companyfacts(session, cik, agent)
+            _sweep_companyfacts(session, cik, agent,
+                                edgar.SHARES_MAX_AGE_DAYS)
         print()
 
 
-def _sweep_companyfacts(session, cik: str, agent: str) -> None:
+def _sweep_companyfacts(session, cik: str, agent: str,
+                        max_age: int) -> None:
     """Every share-shaped series this company files, newest first.
 
     Called only for the companies the fixed list of concepts failed. The point
@@ -176,7 +178,7 @@ def _sweep_companyfacts(session, cik: str, agent: str) -> None:
         return
     print(f"   companyfacts -> {len(hits)} share-unit series; freshest:")
     for age, taxonomy, name, unit, latest in hits[:6]:
-        flag = "USABLE" if age <= edgar.SHARES_MAX_AGE_DAYS else "too old"
+        flag = "USABLE" if age <= max_age else "too old"
         print(f"        {taxonomy}/{name} [{unit}] {latest['end']} "
               f"({age}d) val {latest.get('val', 0):,.0f} — {flag}")
 
