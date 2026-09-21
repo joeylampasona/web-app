@@ -36,6 +36,22 @@ def _user_agent() -> str:
 
 _CIK_CACHE: dict[str, str] | None = None
 
+# How SEC might spell a ticker this site spells with a dot.
+#
+# Share classes are the whole problem. This site calls Berkshire's B shares
+# BRK.B and SEC's ticker file calls them BRK-B, so the lookup missed, no share
+# count came back, and the company was dropped from the universe — a
+# difference in punctuation reported as a fact about the company. Cheap to try
+# every spelling, and the map is a dictionary, so the cost is a few lookups.
+def _cik_candidates(symbol: str) -> list[str]:
+    upper = symbol.upper()
+    out = [upper]
+    for variant in (upper.replace(".", "-"), upper.replace("-", "."),
+                    upper.replace(".", ""), upper.replace("-", "")):
+        if variant not in out:
+            out.append(variant)
+    return out
+
 
 def _ticker_to_cik(session: requests.Session) -> dict[str, str]:
     global _CIK_CACHE
@@ -83,6 +99,24 @@ _SHARE_CONCEPTS = (
     ("us-gaap", "WeightedAverageNumberOfSharesOutstandingBasic"),
 )
 
+# A refusal is about us; retry it once rather than record it as an absence.
+# Every throttled request that goes down as "this company has no share count"
+# drops a real company from the universe for a reason that has nothing to do
+# with the company, which is the fault this whole module keeps producing.
+THROTTLE_STATUSES = (401, 403, 429, 503)
+THROTTLE_PAUSE = 2.0
+REQUEST_PAUSE = 0.11                               # stay under 10 req/s
+
+# Why a symbol has no share count. Counted every run and printed, because
+# "SEC does not tag this company" and "SEC would not talk to us" and "we
+# spelled the ticker differently" are three different faults that produced one
+# indistinguishable silence.
+NO_CIK = "no CIK for this ticker at SEC"
+NOT_TAGGED = "SEC has no such concept for this company"
+TOO_OLD = f"newest filed count is over {SHARES_MAX_AGE_DAYS} days old"
+THROTTLED = "SEC refused the request"
+ERRORED = "the request failed"
+
 
 def _newest_share_count(units: list[dict], today: dt.date) -> float | None:
     """The most recent usable value, or None if the newest one is too old."""
@@ -99,9 +133,15 @@ def _newest_share_count(units: list[dict], today: dt.date) -> float | None:
     return float(latest["val"])
 
 
-def shares_outstanding(symbols: Iterable[str],
-                       progress=None) -> dict[str, float]:
+def shares_outstanding(symbols: Iterable[str], progress=None,
+                       reasons: dict[str, str] | None = None) -> dict[str, float]:
     """Latest reported shares outstanding per symbol. Missing symbols are absent.
+
+    `reasons` is filled in for every symbol that comes back without a count,
+    with one of the constants above. Callers use it to say why a company was
+    dropped instead of only that it was — the difference between "SEC does not
+    publish this" and "SEC would not talk to us tonight" decides whether
+    anybody should do anything about it.
 
     With the synthetic provider this returns deterministic fixture counts
     rather than hitting SEC, so the funnel is reproducible offline.
@@ -120,44 +160,77 @@ def shares_outstanding(symbols: Iterable[str],
     cik_map = _ticker_to_cik(session)
 
     out: dict[str, float] = {}
+    why: dict[str, str] = reasons if reasons is not None else {}
     refused = 0
     total = len(symbols)
     today = dt.date.today()
+
+    def ask(cik: str, taxonomy: str, concept: str):
+        """One concept, retried once if SEC refuses rather than answers."""
+        url = f"{base}/api/xbrl/companyconcept/{cik}/{taxonomy}/{concept}.json"
+        resp = None
+        for attempt in (0, 1):
+            resp = session.get(url, headers={"User-Agent": _user_agent()},
+                               timeout=30)
+            time.sleep(REQUEST_PAUSE)
+            if resp.status_code in THROTTLE_STATUSES and attempt == 0:
+                time.sleep(THROTTLE_PAUSE)
+                continue
+            break
+        return resp
+
     for index, sym in enumerate(symbols, 1):
         # One request per company at SEC's rate limit is minutes of silence
         # otherwise, which is indistinguishable from a hang.
         if progress and (index % 100 == 0 or index == total):
             progress(index, total, len(out))
-        cik = cik_map.get(sym)
+
+        cik = next((cik_map[name] for name in _cik_candidates(sym)
+                    if name in cik_map), None)
         if not cik:
+            why[sym] = NO_CIK
             continue
+
         # Each concept in turn, stopping at the first that answers. Almost
         # every company is served by the first one and costs a single request;
-        # only the handful that do not tag it pay for the others.
+        # only the handful that do not tag it pay for the others. The reason
+        # recorded is the most specific one seen: a company that was throttled
+        # on one concept and 404s on the rest was throttled, not untagged.
+        verdict = NOT_TAGGED
         for taxonomy, concept in _SHARE_CONCEPTS:
             try:
-                resp = session.get(
-                    f"{base}/api/xbrl/companyconcept/{cik}/{taxonomy}/{concept}.json",
-                    headers={"User-Agent": _user_agent()}, timeout=30)
-                time.sleep(0.11)                   # stay under 10 req/s
+                resp = ask(cik, taxonomy, concept)
                 if resp.status_code != 200:
                     # 404 means this company does not tag this concept, which
                     # is ordinary and is exactly why there is a list of them.
                     # A refusal is about us, not about the company, and if it
                     # happens to every company it is an outage wearing a
                     # per-company disguise.
-                    if resp.status_code in (401, 403, 429):
+                    if resp.status_code in THROTTLE_STATUSES:
                         refused += 1
+                        verdict = THROTTLED
                     continue
-                value = _newest_share_count(
-                    resp.json().get("units", {}).get("shares", []), today)
+                units = resp.json().get("units", {}).get("shares", [])
+                value = _newest_share_count(units, today)
                 if value is None:
+                    if units and verdict == NOT_TAGGED:
+                        verdict = TOO_OLD
                     continue
                 out[sym] = value
                 break
             except Exception as exc:               # noqa: BLE001
+                verdict = ERRORED
                 log.debug("EDGAR %s/%s failed for %s: %s",
                           taxonomy, concept, sym, exc)
+        if sym not in out:
+            why[sym] = verdict
+
+    if why:
+        tally: dict[str, int] = {}
+        for reason in why.values():
+            tally[reason] = tally.get(reason, 0) + 1
+        for reason, count in sorted(tally.items(), key=lambda kv: -kv[1]):
+            log.info("share counts: %d symbol(s) — %s", count, reason)
 
     # Asked about real companies and told no by all of them: that is SEC
     # refusing us, not the market having no shares outstanding.

@@ -22,12 +22,16 @@ prints it.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import pathlib
 import sys
+import time
 import urllib.error
 import urllib.request
+
+import requests
 
 # Run as a script, sys.path[0] is tools/ rather than the repository root, so
 # `from data import store` fails and the flag sweep quietly reports that it
@@ -52,76 +56,64 @@ def _get(url: str, agent: str, as_json: bool = True):
 
 def probe_shares(agent: str) -> None:
     print(RULE)
-    print("1. SHARE COUNTS — why the multi-class mega caps are absent")
+    print("1. SHARE COUNTS — why heavily traded names get dropped")
     print(RULE)
-    # CIKs are public identifiers, not configuration. Hard-coded here because
-    # this is a one-off diagnostic, not a code path the site depends on.
-    # The names the nightly's own alarm reported dropped for want of a share
-    # count. Resolved through SEC's ticker map rather than hard-coded CIKs,
-    # because "the map does not have this ticker" is itself one of the
-    # candidate explanations and a hard-coded CIK would hide it.
+    # Driven through data.edgar itself rather than a parallel copy of its
+    # logic. The last version of this probe built its own URLs and put the CIK
+    # prefix on twice — every company came back 404, including Apple, and the
+    # output read as "SEC has nothing for any of these" when what it meant was
+    # "this probe cannot spell". A diagnostic that reimplements the thing it is
+    # diagnosing is a second thing that can be wrong.
+    from data import edgar
+
     wanted = ["KO", "ABT", "SPGI", "NU", "BE", "BRK.B", "META", "AAPL"]
-    subjects: dict[str, str] = {}
+
+    session = requests.Session()
     try:
-        table = _get("https://www.sec.gov/files/company_tickers.json", agent)
-        lookup = {str(row["ticker"]).upper(): f"CIK{int(row['cik_str']):010d}"
-                  for row in table.values()}
-        for symbol in wanted:
-            cik = lookup.get(symbol)
-            if cik:
-                subjects[symbol] = cik
-            else:
-                print(f"{symbol}: NOT IN SEC'S TICKER MAP — this alone would "
-                      f"drop it, whatever its filings say")
+        cik_map = edgar._ticker_to_cik(session)
     except Exception as exc:                          # noqa: BLE001
         print(f"   ticker map unavailable: {exc}")
         return
-    concept = ("https://data.sec.gov/api/xbrl/companyconcept/CIK{cik}"
-               "/dei/EntityCommonStockSharesOutstanding.json")
-    for symbol, cik in subjects.items():
-        print(f"\n{symbol}  (CIK {cik})")
-        try:
-            payload = _get(concept.format(cik=cik), agent)
-        except urllib.error.HTTPError as exc:
-            print(f"   companyconcept -> HTTP {exc.code}")
-            payload = None
-        except Exception as exc:                      # noqa: BLE001
-            print(f"   companyconcept -> {type(exc).__name__}: {exc}")
-            payload = None
+    print(f"   SEC ticker map: {len(cik_map):,} tickers\n")
 
-        if payload is not None:
-            units = payload.get("units", {}).get("shares", [])
-            print(f"   companyconcept -> {len(units)} entries in units['shares']")
-            for entry in sorted(units, key=lambda e: e.get("end", ""))[-4:]:
-                print(f"      end={entry.get('end')} val={entry.get('val'):,.0f} "
-                      f"form={entry.get('form')} accn={entry.get('accn')} "
-                      f"frame={entry.get('frame')}")
-            if not units:
-                print("      ^ EMPTY — this is the gate the company falls through.")
-
-        # What the whole-company facts file says, which is where per-class
-        # numbers live if they live anywhere.
-        try:
-            facts = _get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json", agent)
-        except Exception as exc:                      # noqa: BLE001
-            print(f"   companyfacts -> {type(exc).__name__}: {exc}")
+    for symbol in wanted:
+        tried = edgar._cik_candidates(symbol)
+        match = next(((name, cik_map[name]) for name in tried
+                      if name in cik_map), None)
+        if match is None:
+            print(f"{symbol}: no CIK under any of {tried} — this alone drops it")
             continue
-        dei = (facts.get("facts", {}).get("dei", {})
-               .get("EntityCommonStockSharesOutstanding", {})
-               .get("units", {}).get("shares", []))
-        print(f"   companyfacts dei -> {len(dei)} entries")
-        for entry in sorted(dei, key=lambda e: e.get("end", ""))[-6:]:
-            print(f"      end={entry.get('end')} val={entry.get('val'):,.0f} "
-                  f"form={entry.get('form')} accn={entry.get('accn')}")
-        gaap = facts.get("facts", {}).get("us-gaap", {})
-        for name in ("CommonStockSharesOutstanding", "CommonStockSharesIssued",
-                     "WeightedAverageNumberOfSharesOutstandingBasic"):
-            rows = gaap.get(name, {}).get("units", {}).get("shares", [])
-            if not rows:
+        spelling, cik = match
+        note = "" if spelling == symbol.upper() else f"  (SEC spells it {spelling})"
+        print(f"{symbol}  {cik}{note}")
+
+        for taxonomy, concept in edgar._SHARE_CONCEPTS:
+            url = (f"https://data.sec.gov/api/xbrl/companyconcept/{cik}"
+                   f"/{taxonomy}/{concept}.json")
+            try:
+                resp = session.get(url, headers={"User-Agent": agent}, timeout=30)
+            except Exception as exc:                  # noqa: BLE001
+                print(f"   {taxonomy}/{concept} -> {type(exc).__name__}: {exc}")
                 continue
-            latest = max(rows, key=lambda e: e.get("end", ""))
-            print(f"   us-gaap {name}: {len(rows)} entries, latest "
-                  f"end={latest.get('end')} val={latest.get('val'):,.0f}")
+            time.sleep(0.15)
+            if resp.status_code != 200:
+                print(f"   {taxonomy}/{concept} -> HTTP {resp.status_code}")
+                continue
+            units = resp.json().get("units", {}).get("shares", [])
+            newest = max((u for u in units if u.get("end")),
+                         key=lambda u: u["end"], default=None)
+            if newest is None:
+                print(f"   {taxonomy}/{concept} -> 200, but no dated entries")
+                continue
+            age = (dt.date.today() - dt.date.fromisoformat(newest["end"])).days
+            verdict = "USABLE" if age <= edgar.SHARES_MAX_AGE_DAYS else \
+                      f"TOO OLD (limit {edgar.SHARES_MAX_AGE_DAYS}d)"
+            print(f"   {taxonomy}/{concept} -> {len(units)} entries, "
+                  f"newest {newest['end']} ({age}d) "
+                  f"val {newest.get('val', 0):,.0f} — {verdict}")
+            if age <= edgar.SHARES_MAX_AGE_DAYS:
+                break
+        print()
 
 
 def probe_open_interest(agent: str) -> None:
