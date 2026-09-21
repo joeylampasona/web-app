@@ -86,6 +86,7 @@ def probe_shares(agent: str) -> None:
         spelling, cik = match
         note = "" if spelling == symbol.upper() else f"  (SEC spells it {spelling})"
         print(f"{symbol}  {cik}{note}")
+        found = False
 
         for taxonomy, concept in edgar._SHARE_CONCEPTS:
             url = (f"https://data.sec.gov/api/xbrl/companyconcept/{cik}"
@@ -99,11 +100,28 @@ def probe_shares(agent: str) -> None:
             if resp.status_code != 200:
                 print(f"   {taxonomy}/{concept} -> HTTP {resp.status_code}")
                 continue
-            units = resp.json().get("units", {}).get("shares", [])
+            payload = resp.json()
+            all_units = payload.get("units", {}) or {}
+            units = all_units.get("shares", [])
             newest = max((u for u in units if u.get("end")),
                          key=lambda u: u["end"], default=None)
             if newest is None:
-                print(f"   {taxonomy}/{concept} -> 200, but no dated entries")
+                # "200 with nothing in it" was the answer for four of the six
+                # dropped names, and the production code reads one unit key.
+                # If the series is filed under another key that is the whole
+                # story, so say which keys exist rather than only that ours
+                # was empty.
+                shapes = {name: len(rows) for name, rows in all_units.items()}
+                print(f"   {taxonomy}/{concept} -> 200, units={shapes or '{}'}")
+                for name, rows in all_units.items():
+                    dated = [r for r in rows if r.get("end")]
+                    if not dated:
+                        continue
+                    latest = max(dated, key=lambda r: r["end"])
+                    age = (dt.date.today()
+                           - dt.date.fromisoformat(latest["end"])).days
+                    print(f"        unit {name!r}: newest {latest['end']} "
+                          f"({age}d) val {latest.get('val', 0):,.0f}")
                 continue
             age = (dt.date.today() - dt.date.fromisoformat(newest["end"])).days
             verdict = "USABLE" if age <= edgar.SHARES_MAX_AGE_DAYS else \
@@ -112,8 +130,55 @@ def probe_shares(agent: str) -> None:
                   f"newest {newest['end']} ({age}d) "
                   f"val {newest.get('val', 0):,.0f} — {verdict}")
             if age <= edgar.SHARES_MAX_AGE_DAYS:
+                found = True
                 break
+        else:
+            _sweep_companyfacts(session, cik, agent)
         print()
+
+
+def _sweep_companyfacts(session, cik: str, agent: str) -> None:
+    """Every share-shaped series this company files, newest first.
+
+    Called only for the companies the fixed list of concepts failed. The point
+    is to stop guessing concept names: if a recent share count exists anywhere
+    in this filer's facts, this prints its concept, and the fallback can then
+    be written against what companies actually tag rather than what they are
+    supposed to tag.
+    """
+    url = f"https://data.sec.gov/api/xbrl/companyfacts/{cik}.json"
+    try:
+        resp = session.get(url, headers={"User-Agent": agent}, timeout=60)
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   companyfacts -> {type(exc).__name__}: {exc}")
+        return
+    time.sleep(0.15)
+    if resp.status_code != 200:
+        print(f"   companyfacts -> HTTP {resp.status_code}")
+        return
+
+    today = dt.date.today()
+    hits = []
+    for taxonomy, concepts in (resp.json().get("facts", {}) or {}).items():
+        for name, body in concepts.items():
+            for unit, rows in (body.get("units", {}) or {}).items():
+                if "share" not in unit.lower():
+                    continue
+                dated = [r for r in rows if r.get("end") and (r.get("val") or 0) > 0]
+                if not dated:
+                    continue
+                latest = max(dated, key=lambda r: r["end"])
+                age = (today - dt.date.fromisoformat(latest["end"])).days
+                hits.append((age, taxonomy, name, unit, latest))
+    hits.sort()
+    if not hits:
+        print("   companyfacts -> no share-unit series at all")
+        return
+    print(f"   companyfacts -> {len(hits)} share-unit series; freshest:")
+    for age, taxonomy, name, unit, latest in hits[:6]:
+        flag = "USABLE" if age <= edgar.SHARES_MAX_AGE_DAYS else "too old"
+        print(f"        {taxonomy}/{name} [{unit}] {latest['end']} "
+              f"({age}d) val {latest.get('val', 0):,.0f} — {flag}")
 
 
 def probe_open_interest(agent: str) -> None:

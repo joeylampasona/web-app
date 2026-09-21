@@ -406,9 +406,16 @@ jobs:
           # the only trace was a stage count dropping by four out of two
           # thousand. This is the message somebody actually reads.
           lost = meta.get("lost_leaders") or []
+          why = meta.get("lost_leader_reasons") or {}
           if lost:
-              lines.append(f"\n⚠️ Dropped for want of a share count, despite "
-                           f"being among the most traded names: {', '.join(lost)}")
+              # With the reason, because the list alone only ever said "go and
+              # look". "SEC refused us tonight" clears itself on the next run
+              # and "SEC does not publish this" needs a code change, and for
+              # months both arrived as the same line.
+              lines.append("\n⚠️ Dropped for want of a share count, despite "
+                           "being among the most traded names:")
+              for symbol in lost:
+                  lines.append(f"  {symbol} — {why.get(symbol, 'no reason recorded')}")
           fomc = meta.get("fomc") or {}
           if fomc.get("stale"):
               lines.append(f"\n⚠️ {fomc.get('message', 'The FOMC list needs attention.')}")

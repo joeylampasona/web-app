@@ -63,6 +63,8 @@ def cmd_universe(args) -> int:
     # nothing anywhere saying so.
     store.set_kv(conn, "universe.lost_leaders",
                  json.dumps(funnel.lost_leaders, separators=(",", ":")))
+    store.set_kv(conn, "universe.lost_leader_reasons",
+                 json.dumps(funnel.lost_leader_reasons, separators=(",", ":")))
     _banner("Universe")
     print(funnel.render())
     print()
@@ -687,6 +689,11 @@ def cmd_publish(args) -> int:
         lost_leaders = json.loads(store.get_kv(conn, "universe.lost_leaders", "[]"))
     except (TypeError, ValueError):
         lost_leaders = []
+    try:
+        lost_reasons = json.loads(
+            store.get_kv(conn, "universe.lost_leader_reasons", "{}"))
+    except (TypeError, ValueError):
+        lost_reasons = {}
     (market, bundle, result, changes, calendar, iv_rows, gamma_rows,
      forecast_rows, backtests, follow, insider_rows, insider_recent,
      news_rows, desk_rows, desk_run) = _pipeline(conn)
@@ -699,7 +706,8 @@ def cmd_publish(args) -> int:
                              releases=release_rows, gamma=gamma_rows,
                              insider_recent=insider_recent,
                              forecasts=forecast_rows,
-                             lost_leaders=lost_leaders)
+                             lost_leaders=lost_leaders,
+                             lost_leader_reasons=lost_reasons)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

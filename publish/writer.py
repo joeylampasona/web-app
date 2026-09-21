@@ -159,6 +159,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             insider_recent: list[dict] | None = None,
             forecasts: dict[str, dict] | None = None,
             lost_leaders: list[str] | None = None,
+            lost_leader_reasons: dict[str, str] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -623,6 +624,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # the only trace was a stage count dropping by four out of two
         # thousand, which nobody can see.
         "lost_leaders": list(lost_leaders or []),
+        # Why each one was lost. The list alone told somebody to go and look;
+        # this tells them whether looking is worth it, because "SEC refused us
+        # tonight" clears itself and "SEC does not publish this" does not.
+        "lost_leader_reasons": dict(lost_leader_reasons or {}),
         "survivorship_safe": bool(settings.get("backtest.survivorship_safe", False)),
         # Which of the desk's scanners worked. An empty signal set means
         # nothing at all if the scanner that produces it failed.

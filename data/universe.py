@@ -108,6 +108,10 @@ class Funnel:
     #: than about them. Kept separate from the stage counts because a count
     #: going down by four is invisible and "Meta is not in the universe" is not.
     lost_leaders: list[str] = field(default_factory=list)
+    # Why each of them has no share count. "SEC does not publish this" needs
+    # a code change; "SEC refused us tonight" needs nothing but a rerun, and
+    # for months both looked like the same blank space.
+    lost_leader_reasons: dict[str, str] = field(default_factory=dict)
 
     def add(self, name: str, survivors: int, previous: int) -> None:
         self.stages.append(Stage(name, survivors, max(0, previous - survivors)))
@@ -123,7 +127,9 @@ class Funnel:
             lines.append("")
             lines.append("  ⚠️  Dropped for want of a share count, despite being "
                          "among the most heavily traded names on the market:")
-            lines.append("      " + ", ".join(self.lost_leaders))
+            for symbol in self.lost_leaders:
+                reason = self.lost_leader_reasons.get(symbol, "no reason recorded")
+                lines.append(f"      {symbol} — {reason}")
         return "\n".join(lines)
 
 
@@ -377,8 +383,10 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
         if notice:
             notice(f"  EDGAR {done:,}/{total:,} — {found:,} share counts so far")
 
+    reasons: dict[str, str] = {}
     if stale:
-        fetched = shares_outstanding(stale, progress=edgar_progress)
+        fetched = shares_outstanding(stale, progress=edgar_progress,
+                                     reasons=reasons)
         store.set_shares(conn, fetched)
         shares.update(fetched)
     # "We do not know this company's share count" and "this company is too small"
@@ -403,11 +411,15 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     ranked = sorted(priced, key=lambda row: -row[2])[:LEADER_RANK]
     funnel.lost_leaders = [r["symbol"] for r, _, _ in ranked
                            if not shares.get(r["symbol"])]
+    funnel.lost_leader_reasons = {symbol: reasons.get(symbol, "no reason recorded")
+                                  for symbol in funnel.lost_leaders}
     if funnel.lost_leaders and notice:
-        notice("⚠️  " + ", ".join(funnel.lost_leaders) + " — among the "
-               f"{LEADER_RANK} most heavily traded names on the market, and "
-               "dropped because no share count came back for them. That is "
-               "our failure to read one, not a fact about the company.")
+        notice(f"⚠️  {len(funnel.lost_leaders)} of the {LEADER_RANK} most "
+               "heavily traded names on the market were dropped because no "
+               "share count came back. That is our failure to read one, not a "
+               "fact about the company:")
+        for symbol in funnel.lost_leaders:
+            notice(f"      {symbol} — {funnel.lost_leader_reasons[symbol]}")
 
     capped = [row for row in known if row[3] * row[1] > min_cap]
     funnel.add(f"market cap > ${min_cap/1e6:,.0f}M", len(capped), len(known))
