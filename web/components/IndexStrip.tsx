@@ -59,13 +59,15 @@ function IndexCell({ row }: { row: IndexRow }) {
 }
 
 export function IndexStrip({ rows }: { rows: IndexRow[] }) {
-  const { fetchedAt, ready, count } = useQuotesMeta();
+  const { liveAt, liveSymbols, ready } = useQuotesMeta();
   if (rows.length === 0) return null;
 
-  // Said plainly, or not at all. A price with no time on it invites the reader
-  // to assume it is current, and on this site it usually is not.
-  const stamp = ready && fetchedAt && count > 0
-    ? new Date(fetchedAt).toLocaleTimeString(undefined,
+  // The live reading, not the sweep's. These two symbols are fetched at
+  // request time; dating them by when the scheduled sweep ran would put hours
+  // on a number that is a minute old.
+  const covered = rows.every((row) => liveSymbols.includes(row.symbol));
+  const stamp = ready && liveAt && covered
+    ? new Date(liveAt).toLocaleTimeString(undefined,
         { hour: "numeric", minute: "2-digit" })
     : null;
 
@@ -74,10 +76,12 @@ export function IndexStrip({ rows }: { rows: IndexRow[] }) {
       <div className="hero-strip">
         {rows.map((row) => <IndexCell key={row.symbol} row={row} />)}
       </div>
+      {/* Said plainly, or not at all. A price with no time on it invites the
+          reader to assume it is current, and on this site it often is not. */}
       <p className="caption" style={{ margin: 0, color: "var(--text-muted)" }}>
         {stamp
-          ? `Prices delayed, last read at ${stamp}.`
-          : "Prices are the last settled close."}
+          ? `Delayed, read at ${stamp}.`
+          : "The last settled close."}
       </p>
     </>
   );

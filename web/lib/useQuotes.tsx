@@ -16,13 +16,21 @@ export interface Quote {
 interface QuoteSet {
   quotes: Record<string, Quote>;
   fetched_at: string | null;
+  /** When the live half was read, and which symbols it covers. Separate from
+   *  `fetched_at`, which is when the scheduled sweep ran — usually hours
+   *  earlier. One timestamp over two different readings would date every
+   *  number to the freshest one. */
+  live_at: string | null;
+  live_symbols: string[];
   /** Until the first fetch resolves, "no quote for this symbol" and "no
    *  quotes yet" are different things, and a page that shows a stale-looking
    *  dash for one second on every load reads as broken. */
   ready: boolean;
 }
 
-const EMPTY: QuoteSet = { quotes: {}, fetched_at: null, ready: false };
+const EMPTY: QuoteSet = {
+  quotes: {}, fetched_at: null, live_at: null, live_symbols: [], ready: false,
+};
 const QuotesContext = createContext<QuoteSet>(EMPTY);
 
 // The producer publishes every fifteen minutes; polling faster cannot return
@@ -67,6 +75,8 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
         setState({
           quotes: { ...(body.quotes ?? {}), ...extra },
           fetched_at: body.fetched_at ?? null,
+          live_at: body.live_at ?? null,
+          live_symbols: body.live_symbols ?? [],
           ready: true,
         });
       } catch {
@@ -97,8 +107,15 @@ export function useQuote(symbol: string | null | undefined): Quote | null {
 }
 
 export function useQuotesMeta() {
-  const { fetched_at, ready, quotes } = useContext(QuotesContext);
-  return { fetchedAt: fetched_at, ready, count: Object.keys(quotes).length };
+  const { fetched_at, live_at, live_symbols, ready, quotes } =
+    useContext(QuotesContext);
+  return {
+    fetchedAt: fetched_at,
+    liveAt: live_at,
+    liveSymbols: live_symbols,
+    ready,
+    count: Object.keys(quotes).length,
+  };
 }
 
 /**

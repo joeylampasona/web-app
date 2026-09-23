@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { fetchLiveQuote, worthAsking, type LiveQuote } from "@/lib/cboeQuote";
+import { getIndexes } from "@/lib/data";
 
 /**
  * The delayed intraday prices, proxied.
@@ -16,8 +18,8 @@ import { NextResponse } from "next/server";
  * what it showed before any of this existed.
  */
 export const dynamic = "force-dynamic";
-// The producer runs every fifteen minutes. Re-fetching more often than that
-// costs requests and cannot return anything newer.
+// The sweep runs on a schedule. Re-fetching its file faster cannot return
+// anything newer; the live half below has its own, shorter window.
 export const revalidate = 0;
 const CACHE_SECONDS = 60;
 
@@ -53,11 +55,45 @@ export async function GET() {
     note?: string;
   };
 
+  const quotes: Record<string, unknown> = { ...(body.quotes ?? {}) };
+
+  // The index symbols, read live and laid over the top.
+  //
+  // These are the two largest numbers on the site and they are the first thing
+  // anybody uses to decide whether it is running. Everything else here comes
+  // from a scheduled sweep, and GitHub delivered two of roughly thirty-six
+  // scheduled runs on the day this was written — so SPY and QQQ showed
+  // Friday's close all through Monday. Two requests take about as long as the
+  // one this route already makes, so they do not need a schedule at all.
+  //
+  // Which symbols is not hardcoded: it is whichever ones the nightly put in
+  // indexes.json, because that is exactly the set the page renders.
+  let liveAt: string | null = null;
+  const symbols = (getIndexes()?.rows ?? []).map((row) => row.symbol);
+  if (symbols.length > 0 && worthAsking()) {
+    const fetched = await Promise.all(
+      symbols.map(async (symbol) =>
+        [symbol, await fetchLiveQuote(symbol)] as const),
+    );
+    const live = fetched.filter((pair): pair is [string, LiveQuote] =>
+      pair[1] !== null);
+    for (const [symbol, quote] of live) quotes[symbol] = quote;
+    // Only when something actually arrived. A timestamp on a set that came
+    // entirely from the sweep would date the page to now and be a lie about
+    // every number in it.
+    if (live.length > 0) liveAt = new Date().toISOString();
+  }
+
   return NextResponse.json(
     {
-      quotes: body.quotes ?? {},
-      count: body.count ?? 0,
+      quotes,
+      count: Object.keys(quotes).length,
       fetched_at: body.fetched_at ?? null,
+      // When the live half was read, which is not when the sweep ran. Kept
+      // separate so the page can date each number to the moment it belongs
+      // to rather than showing one time over two different readings.
+      live_at: liveAt,
+      live_symbols: liveAt ? symbols : [],
       note: body.note ?? null,
     },
     { headers: { "Cache-Control": `public, max-age=${CACHE_SECONDS}` } },

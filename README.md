@@ -251,6 +251,17 @@ is the front door, and it draws the same cards — so names on it count as free
 when the aggregates are checked. Withholding in one file what the home page
 shows in another is a contradiction rather than a secret.
 
+The index symbols do not go through the sweep at all. `/api/quotes` reads
+them from Cboe server-side on request, cached for 45 seconds, and lays them
+over whatever the sweep published. Two requests take about as long as the one
+that route already makes, so the two largest numbers on the site do not need a
+schedule — which matters, because GitHub delivered two of roughly thirty-six
+scheduled runs on the day this was written, and those numbers had been showing
+Friday's close all through Monday. It fails soft in both directions: no Cboe
+means the sweep's figure, no sweep means the close. `web/lib/cboeQuote.ts` is a
+deliberate copy of `catalysts/cboe.py`'s `quote()`, and the two are checked
+against each other on the same payloads rather than trusted to stay in step.
+
 The intraday quote sweep is split the same way. It reads the free lists from
 the data branch and the rest from the gated store, quotes every name on a
 screen, and writes the free ones to the `quotes` branch and the rest to
