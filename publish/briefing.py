@@ -104,46 +104,30 @@ def read_market(cards: list[dict] | None, regime: dict | None) -> dict:
 
 # ------------------------------------------------------------ the post
 
-# The setting-up list: long bases within this far of their pivot, strongest
-# first by distance. Relative strength has a floor because it is the one thing
-# this site's own out-of-sample work found an edge in; the shape alone did not
-# earn one, and a list sorted by shape would be recommending the part that
-# does not work.
+# The setting-up list: long bases just under their pivot. Relative strength has
+# a floor because it is the one thing this site's own out-of-sample work found
+# an edge in; the shape alone did not earn one, and a list sorted by shape would
+# be recommending the part that does not work.
 SETUP_MAX_BELOW_PCT = 5.0
 SETUP_MIN_RS = 80
-SETUP_LIMIT = 12
-BREAKOUT_LIMIT = 8
-GROUP_LIMIT = 3
-
-MARK = {1: "+", 0: "~", -1: "−"}
-
-
-def _signed(value: float | None, digits: int = 1) -> str:
-    if value is None:
-        return "n/a"
-    return f"{'+' if value >= 0 else '−'}{abs(value):.{digits}f}%"
-
-
-def _money(value: float | None) -> str:
-    return "n/a" if value is None else f"${value:,.2f}"
+NAMES = 5
 
 
 def _setting_up(setups: Iterable[dict], exclude: set[str]) -> list[dict]:
-    """Long bases just under their pivot, one row per company.
+    """Long bases just under their pivot, one row per company, nearest first.
 
     Long only. The bearish screens read downward — their "pivot" is support and
-    the break is below it — so a rising wedge sitting 30% above its level is
-    exactly where it should be, and listing it beside a VCP one point under its
-    pivot would put two opposite readings under one heading.
+    the break is below it — so a rising wedge 30% above its level is exactly
+    where it should be, and listing it beside a VCP one point under its pivot
+    would put two opposite readings under one heading.
     """
     best: dict[str, dict] = {}
     for setup in setups:
         if setup.get("stage") != "forming" or setup.get("direction") != "long":
             continue
         # A name that just broke out of one base and is forming another is
-        # true and reads as a contradiction two sections apart — "broke out"
-        # and "4% below its pivot" about the same ticker. It is listed once,
-        # as the breakout, which is the thing that happened.
+        # true and reads as a contradiction. It is named once, as the
+        # breakout, which is the thing that happened.
         if setup["symbol"] in exclude:
             continue
         gap, rs = setup.get("now_vs_pivot_pct"), setup.get("rs_rating")
@@ -151,101 +135,93 @@ def _setting_up(setups: Iterable[dict], exclude: set[str]) -> list[dict]:
             continue
         if not (-SETUP_MAX_BELOW_PCT <= gap <= 0) or rs < SETUP_MIN_RS:
             continue
-        # A name on two screens appears once, under whichever base is nearer.
         held = best.get(setup["symbol"])
         if held is None or gap > held["now_vs_pivot_pct"]:
             best[setup["symbol"]] = setup
     # Nearest first. now_vs_pivot_pct is negative below the pivot, so the
-    # nearest is the largest value — sorted descending. The first draft of this
-    # line negated it twice, the negations cancelled, and the list came out
-    # furthest-first under a heading promising the opposite.
+    # nearest is the largest value. The first draft of this line negated it
+    # twice, the negations cancelled, and the list came out furthest-first
+    # under a heading promising the opposite.
     return sorted(best.values(),
                   key=lambda s: (-s["now_vs_pivot_pct"], -s["rs_rating"]))
 
 
-def compose(*, meta: dict, indexes: dict, breadth: dict, feed: dict,
-            setups: list[dict], sectors: dict, site: str = "thetape.cc") -> str:
-    """The post, as text. Every figure comes from an argument."""
-    names = {s["key"]: s["name"] for s in meta.get("screens", [])}
-    session = dt.date.fromisoformat(meta["as_of"])
-    read = read_market(breadth.get("cards"), indexes.get("regime"))
+def _long_forming(setups: Iterable[dict]) -> dict[str, int]:
+    """Forming bases per screen, long screens only.
 
-    lines: list[str] = []
-    add = lines.append
-
-    add(f"The Tape · {session.strftime('%A, %b')} {session.day} close")
-    add("")
-
-    add(f"{read['headline'].upper()}")
-    if read["blurb"]:
-        add(read["blurb"])
-    add("")
-    for test in read["tests"]:
-        # The regime's detail already names the symbol, so its label would say
-        # it twice. The others need their label for the number to mean anything.
-        text = (test["detail"] if test["label"].endswith("200-day line")
-                else f"{test['label']}: {test['detail']}")
-        add(f"{MARK[test['score']]} {text}")
-    add("")
-
-    rows = indexes.get("rows") or []
-    if rows:
-        add("  ·  ".join(f"${r['symbol']} {_money(r['close'])} "
-                         f"({_signed(r.get('change_pct'), 2)})" for r in rows))
-        add("")
-
-    # ---- fresh breakouts, strongest first
-    fresh = sorted(feed.get("setups") or [],
-                   key=lambda r: -(r.get("rs_rating") or 0))[:BREAKOUT_LIMIT]
-    if fresh:
-        add("FRESH BREAKOUTS — cleared a pivot in the last five sessions")
-        for row in fresh:
-            day = (row.get("breakout_metrics") or {}).get("breakout_day_gain_pct")
-            extra = f" · {_signed(day)} on the day" if day is not None else ""
-            add(f"${row['symbol']}  {names.get(row['screen'], row['screen'])} · "
-                f"RS {row.get('rs_rating')}{extra}")
-        add("")
-
-    # ---- forming, named
-    near = _setting_up(setups, {row["symbol"] for row in fresh})[:SETUP_LIMIT]
-    if near:
-        add(f"SETTING UP — within {SETUP_MAX_BELOW_PCT:.0f}% of a pivot, "
-            f"RS {SETUP_MIN_RS}+")
-        for s in near:
-            gap = abs(s["now_vs_pivot_pct"])
-            where = "at its pivot" if gap < 0.05 else f"{gap:.1f}% below"
-            add(f"${s['symbol']}  {names.get(s['screen'], s['screen'])} · "
-                f"RS {s['rs_rating']} · {where} {_money(s.get('pivot'))}")
-        add("")
-
-    # ---- where the bases are
-    #
-    # Long screens only. A rising wedge or a descending triangle forming is a
-    # bearish pattern setting up to break down, and counting it under "bases
-    # forming" would add the opposite reading to the total.
+    A rising wedge or a descending triangle forming is a bearish pattern
+    setting up to break down; counting it under "bases forming" would add the
+    opposite reading to the total.
+    """
     counts: dict[str, int] = {}
     for setup in setups:
         if setup.get("stage") == "forming" and setup.get("direction") == "long":
             counts[setup["screen"]] = counts.get(setup["screen"], 0) + 1
-    forming = sorted(((names.get(k, k), n) for k, n in counts.items()),
-                     key=lambda pair: -pair[1])
-    if forming:
-        total = sum(count for _, count in forming)
-        add(f"BASES FORMING — {total:,} across {len(forming)} screens")
-        add(" · ".join(f"{name} {count}" for name, count in forming))
-        add("")
+    return counts
 
-    # ---- leading groups
-    groups = (sectors.get("strongest") or [])[:GROUP_LIMIT]
-    if groups:
-        add("LEADING GROUPS")
-        for g in groups:
-            add(f"{g['name']} · RS {g['rs_rating']} · "
-                f"{g['leaders']} of {g['members']} are leaders")
-        add("")
 
-    add(f"Every screen, every chart: {site}")
-    add("Screens describe a chart's structure, not a forecast. In our own "
-        "testing the shapes carried no measurable edge on their own; relative "
-        "strength did. Not investment advice.")
-    return "\n".join(lines)
+def _tape_sentence(read: dict, regime: dict | None) -> str | None:
+    """The benchmark and the breakout test, joined by what they actually say.
+
+    "But" only when the two point different ways and "and" when they agree —
+    derived from the scores, never written in. A fixed "but breakouts are
+    failing" would be a true sentence on the day it was drafted and a false one
+    the first night breakouts held.
+    """
+    tests = {t["label"]: t for t in read["tests"]}
+    pokes = tests.get("Breakouts against failed pokes")
+    if not regime or regime.get("above") is None:
+        return pokes["detail"] if pokes else None
+
+    side = "above" if regime["above"] else "below"
+    vs = regime.get("vs_200_pct")
+    lead = (f"{regime['symbol']} {abs(vs):.1f}% {side} its 200-day"
+            if vs is not None else f"{regime['symbol']} {side} its 200-day")
+    if not pokes:
+        return lead + "."
+
+    state = {1: "holding", 0: "mixed", -1: "failing"}[pokes["score"]]
+    trend = 1 if regime["above"] else -1
+    joiner = ("while" if pokes["score"] == 0
+              else "and" if pokes["score"] == trend else "but")
+    return f"{lead}, {joiner} breakouts are {state}: {pokes['detail']}"
+
+
+def _tickers(symbols: Iterable[str]) -> str:
+    return " ".join(f"${s}" for s in symbols)
+
+
+def compose(*, meta: dict, indexes: dict, breadth: dict, feed: dict,
+            setups: list[dict], site: str = "thetape.cc", **_: Any) -> str:
+    """The post, as text. Every figure comes from an argument."""
+    names = {s["key"]: s["name"] for s in meta.get("screens", [])}
+    session = dt.date.fromisoformat(meta["as_of"])
+    regime = indexes.get("regime")
+    read = read_market(breadth.get("cards"), regime)
+
+    blocks: list[str] = [f"The tape, {session.month}/{session.day} close"]
+
+    sentence = _tape_sentence(read, regime)
+    if sentence:
+        blocks.append(sentence)
+
+    counts = _long_forming(setups)
+    if counts:
+        top = sorted(counts.items(), key=lambda kv: -kv[1])[:2]
+        most = " and ".join(names.get(k, k) for k, _ in top)
+        blocks.append(f"{sum(counts.values()):,} bases forming across "
+                      f"{len(counts)} screens, most in {most}.")
+
+    fresh = sorted(feed.get("setups") or [],
+                   key=lambda r: -(r.get("rs_rating") or 0))[:NAMES]
+    if fresh:
+        blocks.append("Strongest fresh breakouts: "
+                      + _tickers(r["symbol"] for r in fresh))
+
+    near = _setting_up(setups, {r["symbol"] for r in fresh})[:NAMES]
+    if near:
+        blocks.append("Closest to a pivot: "
+                      + _tickers(s["symbol"] for s in near))
+
+    blocks.append(site)
+    return "\n\n".join(blocks)
