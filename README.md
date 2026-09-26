@@ -309,6 +309,26 @@ Python engine, and Vercel's Node runtime has no Python. That route returns a
 clear message saying so. The precomputed default for each screen is served from
 the JSON and works normally.
 
+## The X briefing
+
+After each nightly, a draft post for X lands in Discord as its own message:
+the benchmark against its 200-day, whether breakouts are holding, how many
+bases are forming and where, the strongest fresh breakouts and the forming
+bases nearest their pivot. `python -m cli briefing` prints it; `--send` posts
+it to `DISCORD_WEBHOOK_URL`.
+
+It is a draft on purpose. A person reads it before it goes out under their
+name, and a wrong number in Discord costs nothing.
+
+Everything in it is read from files the nightly already published — the
+verdict is a line-for-line port of `web/lib/marketRead.ts`, so the post and the
+home page cannot disagree about the same session. The joining word in the
+first sentence ("but breakouts are failing", "and breakouts are holding") is
+worked out from the scores each night rather than written in. Forming names
+come from the full screen lists staged in `gated/`, since the public screens
+no longer carry that stage; the stock pages are the fallback and produce the
+identical post.
+
 ## Scheduling
 
 `.github/workflows/nightly.yml` runs weekdays at 6:30pm Eastern and posts to

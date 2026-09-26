@@ -430,6 +430,19 @@ jobs:
           urllib.request.urlopen(request, timeout=20)
           PY
 
+      # The X post, as a draft, to Discord. After the summary so it is the
+      # last message there and the easiest to find and copy.
+      #
+      # A draft rather than a post on purpose: a person reads it before it goes
+      # out under their name. And continue-on-error for the same reason as the
+      # summary above — a Discord refusal is not a failed scan, and letting it
+      # fail the run would also fire the "it broke" step about a night whose
+      # data published perfectly.
+      - name: Send the X draft to Discord
+        continue-on-error: true
+        if: success() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
+        run: python -m cli briefing --send
+
       - name: Tell Discord the session was missed
         continue-on-error: true
         if: steps.gate.outputs.skip == 'unexpected' && env.DISCORD_WEBHOOK_URL != ''

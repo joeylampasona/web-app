@@ -773,6 +773,91 @@ def cmd_publish(args) -> int:
     return 0 if not problems else 1
 
 
+def _briefing_setups(out) -> tuple[list[dict], str]:
+    """Every setup at every stage, and where they were read from.
+
+    The public screens no longer carry the forming stage — that is the paywall
+    — so reading them here would name no forming stocks at all and count none.
+    The staged gated documents hold the full lists and are written by publish
+    whether or not they are ever uploaded. The stock pages are the fallback:
+    each one still carries its own setups, which is the same data one company
+    at a time.
+    """
+    import pathlib
+
+    from publish import gated as gatedmod
+
+    staged = sorted((gatedmod.gated_dir() / "screens").glob("*.json"))
+    if staged:
+        rows: list[dict] = []
+        for path in staged:
+            payload = json.loads(path.read_text()).get("payload") or {}
+            for stage_rows in (payload.get("setups") or {}).values():
+                rows.extend(stage_rows)
+        return rows, f"{len(staged)} gated screen list(s)"
+
+    rows = []
+    for path in sorted(pathlib.Path(out, "stocks").glob("*.json")):
+        rows.extend(json.loads(path.read_text()).get("setups") or [])
+    return rows, "the stock pages"
+
+
+def cmd_briefing(args) -> int:
+    """Compose the X post draft, and optionally send it to Discord.
+
+    A draft, not a post. It lands in Discord and a person reads it and posts
+    it, so a wrong number costs nothing until somebody has looked at it.
+    """
+    import os
+    import urllib.request
+
+    from publish import briefing
+
+    out = settings.out_dir()
+    try:
+        meta = json.loads((out / "meta.json").read_text())
+        feed_path = out / "breakouts" / f"{meta['as_of']}.json"
+        inputs = {
+            "meta": meta,
+            "indexes": json.loads((out / "indexes.json").read_text()),
+            "breadth": json.loads((out / "breadth.json").read_text()),
+            "feed": (json.loads(feed_path.read_text()) if feed_path.exists()
+                     else {"setups": []}),
+        }
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"No published tree to brief from ({exc}). Run publish first.")
+        return 1
+
+    setups, source = _briefing_setups(out)
+    post = briefing.compose(setups=setups, **inputs)
+
+    _banner(f"Briefing — {meta['as_of']}, setups from {source}")
+    print(post)
+
+    if not getattr(args, "send", False):
+        return 0
+    hook = os.environ.get("DISCORD_WEBHOOK_URL") or ""
+    if not hook:
+        print("\nDISCORD_WEBHOOK_URL is not set; the draft was not sent.")
+        return 1
+
+    # The post alone, as its own message, so copying it copies nothing else.
+    # Discord's edge refuses the default Python-urllib agent with a 403.
+    request = urllib.request.Request(
+        hook,
+        data=json.dumps({"content": post,
+                         "username": "The Tape · X draft"}).encode(),
+        headers={"Content-Type": "application/json",
+                 "User-Agent": "base-and-breakout-nightly/1.0"})
+    try:
+        urllib.request.urlopen(request, timeout=20)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\nDiscord refused the draft: {exc}")
+        return 1
+    print("\nSent to Discord.")
+    return 0
+
+
 def cmd_gated(args) -> int:
     """Upload the staged gated documents.
 

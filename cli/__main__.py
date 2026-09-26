@@ -46,6 +46,10 @@ def main(argv: list[str] | None = None) -> int:
                                    "(default: the out/ tree's quotes.json)")
     sub.add_parser("publish", help="write the out/ JSON tree")
     sub.add_parser("gated", help="upload the staged gated/ documents to Supabase")
+    p_brief = sub.add_parser("briefing",
+                             help="compose the X post draft from the published tree")
+    p_brief.add_argument("--send", action="store_true",
+                         help="post the draft to DISCORD_WEBHOOK_URL")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")
 
     args = parser.parse_args(argv)
