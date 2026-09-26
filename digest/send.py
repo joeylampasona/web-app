@@ -19,6 +19,13 @@ What remains worth guarding:
     bypasses row-level security by design, which is why it lives in CI secrets
     and nowhere else. It is used for exactly one thing: reading the addresses
     of people who asked for this.
+  * No subscriber's address is ever printed or written to the preview. The
+    repository is public, so its Actions logs and artifacts are too, and a
+    line like "sent to x@y.com" would publish the mailing list every Sunday.
+    Recipients are numbered instead.
+  * One refused message does not stop the run. Everyone after it would miss
+    the letter over one bad address. Failures are counted, the run carries on,
+    and it exits non-zero at the end so the failure is still seen.
 """
 from __future__ import annotations
 
@@ -41,6 +48,9 @@ RESEND_ENDPOINT = "https://api.resend.com/emails"
 RESEND_GUARD_HOURS = 72
 # Resend's API is rate limited; a small gap is cheaper than a 429 storm.
 PAUSE_BETWEEN_SENDS = 0.6
+# And if one comes anyway, wait and try again rather than lose the recipient.
+RATE_LIMIT_RETRIES = 3
+RATE_LIMIT_WAIT = 2.0
 
 
 class DigestError(RuntimeError):
@@ -79,14 +89,20 @@ def fetch_subscribers(url: str, service_key: str) -> list[dict[str, Any]]:
     return resp.json()
 
 
-def mark_sent(url: str, service_key: str, user_id: str) -> None:
-    requests.patch(
+def mark_sent(url: str, service_key: str, user_id: str) -> bool:
+    """Record the send. False if Supabase did not take it.
+
+    A send that is not recorded is one a re-run would repeat, so the caller
+    reports it rather than let it pass quietly.
+    """
+    resp = requests.patch(
         f"{url}/rest/v1/email_prefs",
         headers={**_supabase_headers(service_key), "Prefer": "return=minimal"},
         params={"user_id": f"eq.{user_id}"},
         json={"last_sent_at": dt.datetime.now(dt.timezone.utc).isoformat()},
         timeout=30,
     )
+    return resp.status_code < 300
 
 
 def recently_sent(row: dict[str, Any]) -> bool:
@@ -104,28 +120,34 @@ def recently_sent(row: dict[str, Any]) -> bool:
 def deliver(api_key: str, sender: str, to: str, subject: str,
             html: str, text: str, unsubscribe_url: str) -> str:
     """Hand one message to Resend. Returns its id."""
-    resp = requests.post(
-        RESEND_ENDPOINT,
-        headers={"Authorization": f"Bearer {api_key}",
-                 "Content-Type": "application/json"},
-        json={
-            "from": sender,
-            "to": [to],
-            "subject": subject,
-            "html": html,
-            "text": text,
-            # Gmail and Outlook render their own unsubscribe button from these,
-            # which is both a courtesy and the thing that keeps complaints from
-            # turning into a domain reputation problem.
-            "headers": {
-                "List-Unsubscribe": f"<{unsubscribe_url}>",
-                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        resp = requests.post(
+            RESEND_ENDPOINT,
+            headers={"Authorization": f"Bearer {api_key}",
+                     "Content-Type": "application/json"},
+            json={
+                "from": sender,
+                "to": [to],
+                "subject": subject,
+                "html": html,
+                "text": text,
+                # Gmail and Outlook render their own unsubscribe button from
+                # these, which is both a courtesy and the thing that keeps
+                # complaints from turning into a domain reputation problem.
+                "headers": {
+                    "List-Unsubscribe": f"<{unsubscribe_url}>",
+                    "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                },
             },
-        },
-        timeout=30,
-    )
+            timeout=30,
+        )
+        if resp.status_code != 429 or attempt == RATE_LIMIT_RETRIES:
+            break
+        time.sleep(RATE_LIMIT_WAIT * (attempt + 1))
     if resp.status_code >= 300:
-        raise DigestError(f"Resend refused a message: {resp.status_code} {resp.text[:200]}")
+        # Resend's reason can quote the address back. It goes to a public log.
+        reason = resp.text[:200].replace(to, "<address>")
+        raise DigestError(f"Resend refused a message: {resp.status_code} {reason}")
     return resp.json().get("id", "")
 
 
@@ -166,42 +188,61 @@ def run(argv: list[str] | None = None) -> int:
 
     preview = pathlib.Path(args.preview_dir)
     if not args.send:
+        # One letter, not one per person: they are identical but for the stop
+        # link, and the stop link is a key that unsubscribes its owner. The
+        # preview is uploaded to a public repository's artifacts, so it gets a
+        # placeholder instead of anybody's token or address.
+        sample = f"{site}/unsubscribe?t=PREVIEW"
         preview.mkdir(parents=True, exist_ok=True)
+        (preview / "letter.html").write_text(render.html(digest, site, sample))
+        (preview / "letter.txt").write_text(
+            f"Subject: {subject}\n\n{render.text(digest, site, sample)}")
 
-    sent = skipped = 0
-    for row in subscribers:
+    total = len(subscribers)
+    sent = skipped = failed = unrecorded = 0
+    for n, row in enumerate(subscribers, 1):
         user_id, email = row["user_id"], row["email"]
+        who = f"recipient {n}/{total}"
         if not args.force and recently_sent(row):
             skipped += 1
+            continue
+
+        if not args.send:
+            sent += 1
             continue
 
         # The only thing that differs per recipient is their own stop link.
         unsubscribe = f"{site}/unsubscribe?t={row['unsubscribe_token']}"
         html = render.html(digest, site, unsubscribe)
         text = render.text(digest, site, unsubscribe)
-
-        if not args.send:
-            # The address goes in the file name so a preview can be checked
-            # against the right person, and the body is written beside it.
-            stem = email.replace("@", "_at_").replace("/", "_")
-            (preview / f"{stem}.html").write_text(html)
-            (preview / f"{stem}.txt").write_text(
-                f"To: {email}\nSubject: {subject}\n\n{text}")
-            print(f"  would send to {email}", flush=True)
-            sent += 1
+        try:
+            deliver(api_key, sender, email, subject, html, text, unsubscribe)
+        except (DigestError, requests.RequestException) as exc:
+            failed += 1
+            print(f"  {who}: NOT sent — {str(exc).replace(email, '<address>')}",
+                  flush=True)
             continue
-
-        deliver(api_key, sender, email, subject, html, text, unsubscribe)
-        mark_sent(url, service_key, user_id)
         sent += 1
-        print(f"  sent to {email}", flush=True)
+        if not mark_sent(url, service_key, user_id):
+            unrecorded += 1
+            print(f"  {who}: sent, but not recorded — a re-run would send "
+                  "it again", flush=True)
         time.sleep(PAUSE_BETWEEN_SENDS)
 
-    verb = "sent" if args.send else "composed (nothing sent)"
-    print(f"\n{sent} {verb}, {skipped} skipped as already reached this week",
-          flush=True)
-    if not args.send:
-        print(f"Read them in {preview}/", flush=True)
+    if args.send:
+        print(f"\n{sent} sent, {skipped} skipped as already reached this week, "
+              f"{failed} failed", flush=True)
+    else:
+        print(f"\n{sent} would be sent (nothing sent), {skipped} skipped as "
+              "already reached this week", flush=True)
+        print(f"Read the letter in {preview}/", flush=True)
+
+    if failed or unrecorded:
+        # Exit non-zero so the run shows red. Re-running is safe: whoever was
+        # reached and recorded is skipped by the 72-hour guard.
+        print(f"digest incomplete: {failed} not sent, {unrecorded} sent but "
+              "unrecorded", file=sys.stderr, flush=True)
+        return 1
     return 0
 
 

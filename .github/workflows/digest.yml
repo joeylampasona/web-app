@@ -11,11 +11,14 @@ name: Weekly digest
 # account. That is why this job is short: there is no per-person data to get
 # wrong, so the preview below is literally what everyone receives.
 #
-# Sending is OFF unless it is asked for. The scheduled run composes every
-# letter and uploads them as an artifact, and a human reads them. Turning the
-# schedule into a real send is one line — `send: true` below — and it should
-# not be flipped before the legal question about emailing a weekly watchlist
-# has an answer.
+# The scheduled run SENDS. A manual run does not unless `send` is ticked, so
+# a hand-started run is still a safe way to read the letters first: it
+# composes them and uploads them as an artifact. `only` narrows either kind of
+# run to one address, for a test send to yourself.
+#
+# A re-run is safe. Anyone reached in the last 72 hours is skipped, so a
+# Sunday run that dies halfway can be started again without anyone getting
+# the letter twice.
 on:
   schedule:
     # 13:00 UTC Sunday — mid-morning in the US, early afternoon in Europe.
@@ -27,7 +30,9 @@ on:
         type: boolean
         default: false
       only:
-        description: "One address, for a test send to yourself"
+        # This one address does appear in the run's log, which is public.
+        # Delete the run's logs afterwards if that matters.
+        description: "One address, for a test send to yourself (shows in the public log)"
         type: string
         default: ""
 
@@ -79,14 +84,18 @@ jobs:
       - name: Compose (and send, if asked)
         run: |
           ARGS="--out /tmp/published"
-          if [ "${{ inputs.send }}" = "true" ]; then ARGS="$ARGS --send"; fi
+          # A schedule has no inputs, so it is named outright rather than
+          # read from `send`, which is empty on a scheduled run.
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.send }}" = "true" ]; then
+            ARGS="$ARGS --send"
+          fi
           if [ -n "${{ inputs.only }}" ]; then ARGS="$ARGS --only ${{ inputs.only }}"; fi
           echo "python -m digest.send $ARGS"
           python -m digest.send $ARGS
 
       # Only a dry run produces these. A real send writes nothing to disk.
       - name: Upload the letters for review
-        if: ${{ inputs.send != true }}
+        if: ${{ github.event_name != 'schedule' && inputs.send != true }}
         uses: actions/upload-artifact@v4
         with:
           name: digest-preview
