@@ -30,3 +30,11 @@ class DataAdapter(abc.ABC):
     @abc.abstractmethod
     def get_option_chain(self, symbol: str) -> OptionChain | None:
         """Expiries with per-expiry mean IV. None when there are no listed options."""
+
+    def get_share_count(self, symbol: str) -> float | None:
+        """Whole-company shares outstanding, for the names SEC cannot answer.
+
+        Not abstract: SEC is the source of share counts and this is only the
+        fallback, so a provider without one simply has none to offer.
+        """
+        return None

@@ -311,6 +311,20 @@ def refresh_reference(conn: sqlite3.Connection, adapter: DataAdapter | None = No
 # a reader would notice missing.
 LEADER_RANK = 150
 
+# Cached share counts fetched before this are not trusted. Until 2026-09-21
+# the SEC reader took the newest count however old it was, and the 30-day
+# cache kept serving what it took: Mastercard at its October 2010 count of
+# 122.5 million shares, a seventh of the real figure, and Visa at its 2010
+# count. A cache that outlives a bug fix republishes the bug. Costs one full
+# SEC refetch, a few minutes, on the first run after this date.
+SHARES_TRUSTED_SINCE = "2026-09-27 00:00:00"
+
+# Names SEC has no current count for, asked of the data provider instead,
+# per night, most traded first. The provider's free tier allows five calls a
+# minute, so this is about six minutes at most. Found counts are cached like
+# SEC's, so the list shortens every night rather than being re-asked.
+PROVIDER_SHARES_BUDGET = 30
+
 
 def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str]) -> bool:
     if (row["type"] or "").upper() not in allowed:
@@ -372,7 +386,9 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     # one and saves the nightly job twenty minutes of SEC requests.
     wanted = [r["symbol"] for r, _, _ in priced]
     cache_days = int(settings.get("edgar.shares_cache_days", 30))
-    shares = {s: v for s, v in store.get_shares(conn, cache_days).items() if s in set(wanted)}
+    shares = {s: v for s, v in store.get_shares(conn, cache_days,
+                                                 since=SHARES_TRUSTED_SINCE).items()
+              if s in set(wanted)}
     stale = [s for s in wanted if s not in shares]
     if notice:
         notice(f"Shares outstanding: {len(shares):,} cached, {len(stale):,} to fetch"
@@ -389,6 +405,33 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
                                      reasons=reasons)
         store.set_shares(conn, fetched)
         shares.update(fetched)
+
+    # What SEC cannot answer. Multi-class filers -- Visa, Berkshire -- tag
+    # their cover-page count per share class, and SEC's per-concept API
+    # leaves class-dimensioned facts out, so its newest undimensioned count
+    # for both is from 2010 or 2011. Reading SEC more carefully does not
+    # rescue them; asking someone who publishes a whole-company count does.
+    unanswered = [s for s in stale if not shares.get(s)]
+    provider = (adapter or get_adapter()) if unanswered else None
+    if provider is not None and provider.name != "synthetic":
+        adapter = provider
+        adv_of = {r["symbol"]: adv for r, _, adv in priced}
+        ask = sorted(unanswered, key=lambda s: -adv_of.get(s, 0.0))
+        ask = ask[:PROVIDER_SHARES_BUDGET]
+        if notice:
+            notice(f"{len(unanswered):,} names have no current SEC share count; "
+                   f"asking {adapter.name} for the {len(ask)} most traded.")
+        rescued_counts: dict[str, float] = {}
+        for symbol in ask:
+            value = adapter.get_share_count(symbol)
+            if value:
+                rescued_counts[symbol] = value
+                reasons.pop(symbol, None)
+        store.set_shares(conn, rescued_counts)
+        shares.update(rescued_counts)
+        if notice and rescued_counts:
+            notice(f"  {adapter.name} supplied {len(rescued_counts)}: " + ", ".join(
+                f"{s} {v/1e6:,.0f}M" for s, v in rescued_counts.items()))
     # "We do not know this company's share count" and "this company is too small"
     # are different answers and they get different lines. Folded together, an SEC
     # outage reads as a market where nothing is big enough — which is how a

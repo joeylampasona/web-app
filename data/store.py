@@ -83,12 +83,21 @@ def upsert_bars(conn: sqlite3.Connection, bars: Iterable[Bar]) -> int:
     return len(rows)
 
 
-def get_shares(conn: sqlite3.Connection, max_age_days: int = 30) -> dict[str, float]:
-    """Cached share counts still inside their freshness window."""
-    rows = conn.execute(
-        "SELECT symbol, shares_outstanding FROM fundamentals"
-        " WHERE shares_outstanding IS NOT NULL"
-        " AND fetched_at > datetime('now', ?)", (f"-{int(max_age_days)} days",))
+def get_shares(conn: sqlite3.Connection, max_age_days: int = 30,
+               since: str | None = None) -> dict[str, float]:
+    """Cached share counts still inside their freshness window.
+
+    `since` discards anything fetched before a fix to how counts are read, so
+    a value the old code got wrong is not served for another month.
+    """
+    sql = ("SELECT symbol, shares_outstanding FROM fundamentals"
+           " WHERE shares_outstanding IS NOT NULL"
+           " AND fetched_at > datetime('now', ?)")
+    params: list = [f"-{int(max_age_days)} days"]
+    if since:
+        sql += " AND fetched_at >= ?"
+        params.append(since)
+    rows = conn.execute(sql, params)
     return {r["symbol"]: float(r["shares_outstanding"]) for r in rows}
 
 

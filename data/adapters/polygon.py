@@ -112,6 +112,27 @@ class PolygonGroupedAdapter(DataAdapter):
         from catalysts.yf import earnings_dates  # lazy: yfinance is optional
         return earnings_dates(symbols)
 
+    def get_share_count(self, symbol: str) -> float | None:
+        """Polygon's weighted shares outstanding, whole company.
+
+        weighted_shares_outstanding and not share_class_shares_outstanding,
+        because the companies that need this are exactly the multi-class ones
+        -- Visa, Berkshire -- and one class's count times one class's price is
+        a fraction of the company, published as if it were all of it.
+        Polygon's own market_cap is this figure times the close.
+        """
+        try:
+            payload = self._get(f"/v3/reference/tickers/{symbol}")
+        except PolygonError as exc:
+            log.warning("share count lookup failed for %s: %s", symbol, exc)
+            return None
+        value = (payload.get("results") or {}).get("weighted_shares_outstanding")
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
     def get_option_chain(self, symbol: str) -> OptionChain | None:
         """The listed book for one company.
 
