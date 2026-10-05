@@ -221,7 +221,11 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     screen_files: dict[str, dict] = {}
     for key, setups in result.screens.items():
         spec = param_module.SCREENS[key]
-        grouped = {stage: [s.to_json() for s in setups if s.stage == stage]
+        # Market cap on every row, so a screen can be sorted by size. Null
+        # where the share count is unknown (the heavily traded names kept
+        # without one), which sorts last rather than as zero.
+        grouped = {stage: [{**s.to_json(), "market_cap": market.caps.get(s.symbol)}
+                           for s in setups if s.stage == stage]
                    for stage in stages.ORDER}
         screen_files[key] = {
             "screen": key,
@@ -253,6 +257,15 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # not say what it is withholding is asking to be paid on trust.
     public_screens, screen_gated = gatedmod.screen_documents(screen_files, as_of)
     gated_documents.extend(screen_gated)
+
+    # Every forming base on every screen, in one list. Subscribers get the
+    # names; the public file is the counts, because forming is the stage the
+    # free tier sees none of on the screens themselves. Not under screens/:
+    # everything that globs that directory reads each file as a screen.
+    forming = gatedmod.forming_rollup(screen_files, as_of)
+    gated_documents.append(gatedmod.Document(gatedmod.FORMING_DOC, forming, as_of))
+    written.append(_write(out / "forming" / "summary.json",
+                          gatedmod.free_forming(forming)))
     for key, payload in public_screens.items():
         written.append(_write(out / "screens" / f"{key}.json", payload))
     written.append(_write(out / "screens" / "diff.json", diff_payload))

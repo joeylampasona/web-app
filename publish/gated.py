@@ -285,6 +285,78 @@ def screen_documents(screens: dict[str, dict],
     return public, documents
 
 
+FORMING_DOC = "forming/all.json"
+
+
+def forming_rollup(screens: dict[str, dict], as_of: dt.date) -> dict:
+    """Every base forming on any screen, one row per stock and direction.
+
+    One row per stock rather than per screen: a name forming on the VCP and
+    the squeeze screens at once is one stock with two readings, and listing it
+    twice would make agreement look like volume. The screens it is forming on
+    ride along, nearest pivot first, and the row's own figures are the nearest
+    reading -- the one closest to deciding something.
+
+    Split by direction, not merged. A rising wedge "forming" is a stock
+    setting up to break down; folded into a list of breakout candidates it
+    would read as the opposite of what it is. A stock forming both ways (a
+    triangle and a descending triangle) appears once in each list.
+    """
+    rows: dict[tuple[str, str], dict] = {}
+    counts: dict[str, dict] = {}
+    for key, payload in screens.items():
+        forming = (payload.get("setups") or {}).get("forming") or []
+        direction = payload.get("direction") or "long"
+        counts[key] = {"name": payload.get("name") or key,
+                       "direction": direction, "count": len(forming)}
+        for setup in forming:
+            symbol = setup.get("symbol")
+            if not symbol:
+                continue
+            reading = {
+                "screen": key, "name": payload.get("name") or key,
+                "pivot": setup.get("pivot"),
+                "now_vs_pivot_pct": setup.get("now_vs_pivot_pct"),
+                "base_weeks": setup.get("base_weeks"),
+            }
+            row = rows.setdefault((symbol, direction), {
+                "symbol": symbol, "name": setup.get("name"),
+                "direction": direction,
+                "industry": setup.get("industry"),
+                "market_cap": setup.get("market_cap"),
+                "rs_rating": setup.get("rs_rating"),
+                "close": setup.get("close"),
+                "next_earnings_date": (setup.get("catalysts") or {}).get("next_earnings_date"),
+                "days_until_earnings": (setup.get("catalysts") or {}).get("days_until_earnings"),
+                "screens": [],
+            })
+            row["screens"].append(reading)
+    def distance(gap):
+        # Nearest means smallest distance either side. A shape can sit a few
+        # per cent past its line and still be forming -- the line is fitted,
+        # not a price someone has to clear -- and ranking by the signed value
+        # put one 10% above its line at the top of "closest". Missing last.
+        return abs(gap) if gap is not None else float("inf")
+
+    out = []
+    for row in rows.values():
+        row["screens"].sort(key=lambda r: distance(r["now_vs_pivot_pct"]))
+        lead = row["screens"][0]
+        row.update(pivot=lead["pivot"], now_vs_pivot_pct=lead["now_vs_pivot_pct"],
+                   base_weeks=lead["base_weeks"], screen=lead["screen"])
+        out.append(row)
+    out.sort(key=lambda r: (r["direction"] != "long", distance(r["now_vs_pivot_pct"])))
+    return {"as_of": as_of.isoformat(), "screens": counts, "rows": out,
+            "stocks": {d: sum(1 for r in out if r["direction"] == d)
+                       for d in ("long", "short")}}
+
+
+def free_forming(rollup: dict) -> dict:
+    """What a free reader sees: how much is forming, where, and no names."""
+    return {"as_of": rollup["as_of"], "screens": rollup["screens"],
+            "stocks": rollup["stocks"], "gated": True}
+
+
 def free_symbols_on_screens(screens: dict[str, dict]) -> set[str]:
     """Every symbol a free reader can see on a screen page.
 

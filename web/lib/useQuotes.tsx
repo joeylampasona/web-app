@@ -106,6 +106,13 @@ export function useQuote(symbol: string | null | undefined): Quote | null {
   }, [set, symbol]);
 }
 
+/** Every delayed quote at once, for a list that sorts on live figures. Empty
+ *  until the first fetch resolves. */
+export function useQuotesMap(): Record<string, Quote> {
+  const set = useContext(QuotesContext);
+  return set.ready ? set.quotes : {};
+}
+
 export function useQuotesMeta() {
   const { fetched_at, live_at, live_symbols, ready, quotes } =
     useContext(QuotesContext);

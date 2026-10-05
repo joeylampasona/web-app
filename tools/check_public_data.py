@@ -139,6 +139,16 @@ def check(out: pathlib.Path) -> list[str]:
                 "market/positioning.json is not marked gated, so the page will "
                 "render its rows as the whole table and never offer the rest.")
 
+    forming_path = out / "forming" / "summary.json"
+    if forming_path.exists():
+        summary = _load(forming_path)
+        print(f"  forming/summary.json    {summary.get('stocks')} stock(s) counted, "
+              f"{len(summary.get('rows') or [])} named   gated={summary.get('gated')}")
+        if summary.get("rows") or "symbol" in json.dumps(summary):
+            failures.append(
+                "forming/summary.json names stocks. The free half of the "
+                "all-forming tab is the counts; the names are the product.")
+
     screen_paths = [p for p in sorted((out / "screens").glob("*.json"))
                     if p.name != "diff.json"]
     on_screen_free: set[str] = set()

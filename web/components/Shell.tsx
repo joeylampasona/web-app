@@ -23,6 +23,7 @@ const TABS: {
   {
     key: "screens", label: "Screens", glyph: "▦", match: "/screens",
     destinations: [
+      { href: "/screens/forming", title: "Forming (all)", blurb: "Every base forming, across every screen, in one list." },
       { href: "/screens/vcp", title: "VCP", blurb: "A leader pauses and the swings tighten." },
       { href: "/screens/blue_sky", title: "Blue sky", blurb: "Resting at the highest price it has ever traded." },
       { href: "/screens/multi_year", title: "Multi-year / deep comeback", blurb: "A lid that has held for a year or more." },

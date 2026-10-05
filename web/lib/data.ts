@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  PositioningFile, ScreenFile, StockFile,
+  FormingSummary, PositioningFile, ScreenFile, StockFile,
 } from "./types";
 
 // The web layer reads static JSON the pipeline wrote. It never queries a
@@ -248,6 +248,10 @@ export function getSeasonals() {
      *  has to mean "not gated" rather than "locked". */
     gated?: boolean;
   }>("market/seasonals.json");
+}
+
+export function getFormingSummary() {
+  return read<FormingSummary>("forming/summary.json");
 }
 
 export function getPositioning() {

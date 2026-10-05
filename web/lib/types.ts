@@ -123,11 +123,41 @@ export interface Setup {
   };
   themes: string[];
   industry: string;
+  /** Null when the share count is unknown; sorts last, not as zero. */
+  market_cap?: number | null;
   volume: number | null;
   ohlc: {
     date: string; open: number; high: number; low: number; close: number;
     change_pct: number | null;
   };
+}
+
+/** One reading of a forming base: which screen, and where price sits. */
+export interface FormingReading {
+  screen: string; name: string;
+  pivot: number | null; now_vs_pivot_pct: number | null; base_weeks: number | null;
+}
+
+/** One stock forming on one or more screens, in one direction. Its own
+ *  figures are the nearest reading's; `screens` holds all of them. */
+export interface FormingRow {
+  symbol: string; name: string; direction: string; industry: string | null;
+  market_cap: number | null; rs_rating: Rating; close: number | null;
+  next_earnings_date: string | null; days_until_earnings: number | null;
+  screen: string; pivot: number | null; now_vs_pivot_pct: number | null;
+  base_weeks: number | null;
+  screens: FormingReading[];
+}
+
+export interface FormingSummary {
+  as_of: string;
+  screens: Record<string, { name: string; direction: string; count: number }>;
+  stocks: { long: number; short: number };
+  gated?: boolean;
+}
+
+export interface FormingFile extends FormingSummary {
+  rows: FormingRow[];
 }
 
 export interface ScreenFile {

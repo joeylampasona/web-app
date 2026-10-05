@@ -5,16 +5,18 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { copy } from "@/lib/copy";
 import { downloadCsv, toCsv } from "@/lib/exportCsv";
-import { isRanked, price, ratio, rsText, signed } from "@/lib/format";
+import { compactMoney, isRanked, price, ratio, rsText, signed } from "@/lib/format";
 import type { Bar, ScreenFile, Setup } from "@/lib/types";
 import { STAGE_COLOURS, StageBadge } from "./Badges";
 import { StockCard } from "./StockCard";
 import { PriceChange } from "./PriceChange";
 
-type SortKey = "rs_rating" | "now_vs_pivot_pct" | "base_weeks" | "from_52w_high_pct" | "symbol";
+type SortKey = "rs_rating" | "now_vs_pivot_pct" | "base_weeks" | "from_52w_high_pct"
+  | "market_cap" | "symbol";
 
 const SORTS: { key: SortKey; label: string }[] = [
   { key: "rs_rating", label: "RS rating" },
+  { key: "market_cap", label: "Market cap" },
   { key: "now_vs_pivot_pct", label: "Now vs pivot" },
   { key: "base_weeks", label: "Base length" },
   { key: "from_52w_high_pct", label: "From 52-week high" },
@@ -40,16 +42,27 @@ export function ScreenBrowser({
   const [sort, setSort] = useState<SortKey>("rs_rating");
   const [descending, setDescending] = useState(true);
   const [view, setView] = useState<"grid" | "list">("grid");
+  const [query, setQuery] = useState("");
 
   const locked = stage !== null && lockedStages.includes(stage);
 
   const setups = useMemo(() => {
-    const rows: Setup[] = stage
+    const all: Setup[] = stage
       ? file.setups[stage] ?? []
       : STAGE_ORDER.flatMap((s) => file.setups[s] ?? []);
+    // Ticker, company or industry. A ticker typed in full ranks first, so
+    // "AMD" does not have to be found among every name containing the letters.
+    const q = query.trim().toLowerCase();
+    const rows = q
+      ? all.filter((s) => s.symbol.toLowerCase().includes(q)
+          || (s.name ?? "").toLowerCase().includes(q)
+          || (s.industry ?? "").toLowerCase().includes(q))
+      : all;
     const value = (setup: Setup): number | string => {
       if (sort === "symbol") return setup.symbol;
       if (sort === "rs_rating") return isRanked(setup.rs_rating) ? setup.rs_rating : -1;
+      // Unknown size sorts below every known one, whichever way the list runs.
+      if (sort === "market_cap") return setup.market_cap ?? (descending ? -Infinity : Infinity);
       return (setup[sort] as number | null) ?? -Infinity;
     };
     return [...rows].sort((a, b) => {
@@ -60,7 +73,7 @@ export function ScreenBrowser({
         : Number(left) - Number(right);
       return descending ? -cmp : cmp;
     });
-  }, [descending, file.setups, sort, stage]);
+  }, [descending, file.setups, query, sort, stage]);
 
   return (
     <>
@@ -102,6 +115,16 @@ export function ScreenBrowser({
       </div>
 
       <div className="row wrap" style={{ gap: "var(--gap-sm)", marginBottom: "var(--gap-lg)" }}>
+        <input
+          type="search"
+          className="control"
+          aria-label="Search this screen"
+          placeholder="Search ticker, company, industry"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          style={{ flex: "1 1 180px", maxWidth: 280, background: "var(--surface-2)",
+                   minHeight: "var(--h-control)" }}
+        />
         <div className="row" style={{ gap: 0 }}>
           <button type="button" className="control" aria-pressed={view === "grid"}
                   style={{ borderRadius: "var(--radius) 0 0 var(--radius)" }}
@@ -158,8 +181,11 @@ export function ScreenBrowser({
 
       {locked ? lockedPanel : setups.length === 0 && (
         <div className="card muted footnote">
-          Nothing is on this screen right now. That is a normal reading, not a fault —
-          the filters are deliberately narrow.
+          {query.trim()
+            ? <>Nothing on this list matches “{query.trim()}”.
+                {lockedStages.length > 0 && " Subscribers search the whole list, every stage."}</>
+            : <>Nothing is on this screen right now. That is a normal reading, not a fault —
+                the filters are deliberately narrow.</>}
         </div>
       )}
 
@@ -175,7 +201,7 @@ export function ScreenBrowser({
           <table className="data">
             <thead>
               <tr>
-                <th>Ticker</th><th>RS</th><th>Close</th><th>vs pivot</th>
+                <th>Ticker</th><th>RS</th><th>Mkt cap</th><th>Close</th><th>vs pivot</th>
                 <th>Base</th><th>Tighten</th><th>Dry-up</th><th>Stage</th>
               </tr>
             </thead>
@@ -189,6 +215,7 @@ export function ScreenBrowser({
                     </Link>
                   </td>
                   <td>{rsText(setup.rs_rating)}</td>
+                  <td>{setup.market_cap ? compactMoney(setup.market_cap) : "—"}</td>
                   <td>{price(setup.close)}</td>
                   <td><PriceChange value={setup.now_vs_pivot_pct} /></td>
                   <td>{setup.base_weeks?.toFixed(1) ?? "—"}w</td>
