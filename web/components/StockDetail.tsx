@@ -7,6 +7,7 @@ import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { GatedForecastPanel } from "./GatedForecastPanel";
+import { GatedEarningsMoves } from "./EarningsMoves";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
@@ -202,6 +203,12 @@ export function StockDetail({ stock, run }: {
           <CatalystCountdown events={stock.catalyst_roadmap} />
           <CatalystTimeline events={stock.catalyst_roadmap} />
         </div>
+      </section>
+
+      <section>
+        <div className="eyebrow">How it moves on earnings</div>
+        <GatedEarningsMoves symbol={stock.symbol} moves={stock.earnings_moves}
+                            locked={Boolean(stock.earnings_moves_gated)} />
       </section>
 
       <section>

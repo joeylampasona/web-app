@@ -160,6 +160,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             forecasts: dict[str, dict] | None = None,
             lost_leaders: list[str] | None = None,
             lost_leader_reasons: dict[str, str] | None = None,
+            positioning: dict | None = None,
+            earnings_moves: dict[str, dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -191,6 +193,29 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                        for symbol, payload in (forecasts or {}).items()}
     forecast_public = {symbol: payload for symbol, payload
                        in forecast_public.items() if payload}
+
+    # How each company has moved on its reports: the average is free, the
+    # dated reports are not. Same shape as the forecast split above.
+    gated_documents.extend(gatedmod.earnings_move_documents(earnings_moves, as_of))
+    moves_locked = {symbol for symbol, payload in (earnings_moves or {}).items()
+                    if payload}
+    moves_public = {symbol: gatedmod.free_earnings_moves(payload)
+                    for symbol, payload in (earnings_moves or {}).items()
+                    if payload}
+
+    # ---- CFTC positioning ---------------------------------------------
+    #
+    # From the Market Desk, weekly. Written only when the desk has supplied a
+    # table: a page reading "no positioning" because a feed has not caught up
+    # is better than an empty file that looks like a quiet week.
+    public_positioning = gatedmod.free_positioning(positioning)
+    if public_positioning:
+        gated_documents.extend(gatedmod.positioning_documents(positioning, as_of))
+        written.append(_write(out / "market" / "positioning.json", {
+            **public_positioning,
+            "count": len(positioning["markets"]),
+            "gated": True,
+        }))
 
     # ---- screens ------------------------------------------------------
     screen_files: dict[str, dict] = {}
@@ -333,7 +358,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              calendar, limit, insiders, news, desk,
                                              gamma_public, forecast_public,
                                              gamma_locked=gamma_locked,
-                                             forecast_locked=forecast_locked)))
+                                             forecast_locked=forecast_locked,
+                                             moves=moves_public,
+                                             moves_locked=moves_locked)))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -898,7 +925,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    gamma: dict[str, dict] | None = None,
                    forecasts: dict[str, dict] | None = None,
                    gamma_locked: set[str] | None = None,
-                   forecast_locked: set[str] | None = None) -> dict:
+                   forecast_locked: set[str] | None = None,
+                   moves: dict[str, dict] | None = None,
+                   moves_locked: set[str] | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -976,6 +1005,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # different things to tell a reader.
         "forecast": (forecasts or {}).get(symbol),
         "forecast_gated": symbol in (forecast_locked or set()),
+        # How far the stock has moved across its recent reports: the average
+        # and the count, free. The dated reports are fetched by subscribers.
+        "earnings_moves": (moves or {}).get(symbol),
+        "earnings_moves_gated": symbol in (moves_locked or set()),
         # Only for names on no screen: what is and is not in place. A stock
         # already on one has its own card saying the same thing better.
         "structure_check": (None if setups

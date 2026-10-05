@@ -221,3 +221,26 @@ def load_dates(conn, symbols, as_of: dt.date) -> dict[str, list[EarningsEvent]]:
             continue
         out.setdefault(symbol, []).append(EarningsEvent(symbol, day, row[2]))
     return out
+
+
+def reported_dates(conn, symbols, as_of: dt.date) -> dict[str, list[dt.date]]:
+    """Report dates that have happened, per symbol, newest first.
+
+    Only rows Yahoo returned with a reported EPS. Its future rows are
+    estimates, and a past date that was only ever estimated is a day the
+    company may not have reported at all -- measuring the move across it
+    would attribute an ordinary week to earnings.
+    """
+    wanted = {s.upper() for s in symbols}
+    out: dict[str, list[dt.date]] = {}
+    for row in conn.execute(
+            "SELECT symbol, date FROM earnings_dates"
+            " WHERE date < ? AND confirmed = 'confirmed' ORDER BY date DESC",
+            (as_of.isoformat(),)):
+        if row[0] not in wanted:
+            continue
+        try:
+            out.setdefault(row[0], []).append(dt.date.fromisoformat(row[1]))
+        except (TypeError, ValueError):
+            continue
+    return out

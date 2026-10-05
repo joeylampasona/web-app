@@ -89,6 +89,18 @@ FORECAST_FREE_KEYS = ("symbol", "ratings")
 # be more useful than the next one's. The site samples generously elsewhere;
 # this one is whole or not at all.
 
+# CFTC positioning: the two equity index futures everybody watches are free,
+# the other six are not. The S&P and Nasdaq rows show what the table is; the
+# reading is the comparison across markets -- small caps crowded short while
+# the S&P is not, gold long into a bid dollar -- and that needs all of them.
+FREE_POSITIONING_KEYS = ("ES", "NQ")
+
+# Earnings moves: the average size of the move is free, the reports behind it
+# are not. The average answers "how big a gap should a stop expect", which is
+# what the page is for; the dated list and the largest single move are the
+# work that answers it properly.
+EARNINGS_MOVE_FREE_KEYS = ("count", "avg_abs_pct")
+
 TABLE = "gated_content"
 TIMEOUT = 60
 # PostgREST takes an array and upserts it in one statement. Chunked anyway, so
@@ -202,6 +214,35 @@ def free_forecast(payload: dict | None) -> dict | None:
     head["revenue"] = []
     head["gated"] = True
     return head
+
+
+def positioning_documents(table: dict | None, as_of: dt.date) -> list[Document]:
+    """The whole positioning table as one document."""
+    if not (table and table.get("markets")):
+        return []
+    return [Document("market/positioning.json", table, as_of)]
+
+
+def free_positioning(table: dict | None) -> dict | None:
+    """The public table: the free markets only, history and all."""
+    if not (table and table.get("markets")):
+        return None
+    return {**table, "markets": [m for m in table["markets"]
+                                 if m.get("key") in FREE_POSITIONING_KEYS]}
+
+
+def earnings_move_documents(moves: dict[str, dict] | None,
+                            as_of: dt.date) -> list[Document]:
+    """One document per company with measured reports."""
+    return [Document(f"stocks/earnings/{symbol.lower()}.json", payload, as_of)
+            for symbol, payload in sorted((moves or {}).items()) if payload]
+
+
+def free_earnings_moves(payload: dict | None) -> dict | None:
+    """The average and how many reports it rests on. No dates, no largest."""
+    if not payload:
+        return None
+    return {k: payload[k] for k in EARNINGS_MOVE_FREE_KEYS if k in payload}
 
 
 def free_xray(history: list) -> list:

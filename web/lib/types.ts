@@ -343,6 +343,10 @@ export interface StockFile {
    *  from `forecast` being null, which means nobody covers it — a fact about
    *  the company, not about what you have paid for. */
   forecast_gated?: boolean;
+  /** Average move across recent earnings reports; the dated reports are
+   *  behind the paywall when `earnings_moves_gated` is set. */
+  earnings_moves?: EarningsMoves | null;
+  earnings_moves_gated?: boolean;
   /** This stock has more completed bases than the free sample shows. Flag
    *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
@@ -523,6 +527,52 @@ export interface DeskSignal {
   magnitude: number | null; url: string;
   /** The desk believes this reading is a corporate action, not a real move. */
   suspect: boolean;
+  /** The desk's own scorecard on this type of signal, or null when unscored. */
+  track?: DeskTrack | null;
+}
+
+/** How a signal type has done, measured by the desk against random unflagged
+ *  stocks over the following three sessions. */
+export interface DeskTrack {
+  /** "edge" | "inverted" | "noise" | "unclear" | "thin". "edge" on a type
+   *  with no claimed direction means only a reliable effect, either way. */
+  read: string;
+  n: number | null;
+  /** Excess three-session return over random stocks, in per cent. */
+  excess3: number | null;
+  /** +1 the type claims the stock rises, -1 falls, 0 makes no claim. */
+  thesis: number;
+}
+
+/** How a stock has moved across its recent earnings reports, close before the
+ *  report day to close after it. The free half is `count` and `avg_abs_pct`. */
+export interface EarningsMoves {
+  count: number;
+  avg_abs_pct: number;
+  largest?: { date: string; move_pct: number };
+  up?: number;
+  reports?: { date: string; move_pct: number }[];
+}
+
+/** One market in the CFTC Commitments of Traders table, from the Market Desk. */
+export interface PositioningMarket {
+  key: string; label: string; report: string;
+  /** Whose net is shown: leveraged funds in financial futures, large
+   *  speculators in commodities. */
+  group: string;
+  date: string; oi: number | null; net: number; chg: number | null;
+  net_oi: number | null;
+  pct52: number | null; pct156: number | null;
+  extreme: string | null;
+  weeks: number;
+  history: [string, number][];
+}
+
+export interface PositioningFile {
+  as_of: string;
+  markets: PositioningMarket[];
+  count?: number;
+  gated?: boolean;
 }
 
 export interface DeskRun {

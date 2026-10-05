@@ -296,6 +296,18 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/positioning": {
+    label: "Who is crowded",
+    art: (
+      <>
+        <path d="M3.5 12 L20.5 12" opacity={0.7} />
+        <path d="M6 12 L6 7" />
+        <path d="M10 12 L10 15.5" />
+        <path d="M14 12 L14 5" />
+        <path d="M18 12 L18 18.5" />
+      </>
+    ),
+  },
   "/market/seasonals": {
     label: "Month by month",
     art: (

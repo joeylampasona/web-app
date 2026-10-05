@@ -62,9 +62,11 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from publish.gated import (BACKTEST_GATED_KEYS, FREE_GAMMA_ROWS,  # noqa: E402
-                           FREE_SCREEN_LOCKED_STAGES, FREE_SCREEN_ROWS,
-                           FREE_SEASONAL_SYMBOL, FREE_XRAY_BASES)
+from publish.gated import (BACKTEST_GATED_KEYS,  # noqa: E402
+                           EARNINGS_MOVE_FREE_KEYS, FREE_GAMMA_ROWS,
+                           FREE_POSITIONING_KEYS, FREE_SCREEN_LOCKED_STAGES,
+                           FREE_SCREEN_ROWS, FREE_SEASONAL_SYMBOL,
+                           FREE_XRAY_BASES)
 
 
 def _load(path: pathlib.Path):
@@ -120,6 +122,22 @@ def check(out: pathlib.Path) -> list[str]:
                 f"the public seasonals file carries grids for "
                 f"{', '.join(str(s) for s in extra)}. Only "
                 f"{FREE_SEASONAL_SYMBOL} is free.")
+
+    positioning_path = out / "market" / "positioning.json"
+    if positioning_path.exists():
+        table = _load(positioning_path)
+        keys = [m.get("key") for m in (table.get("markets") or [])]
+        print(f"  market/positioning.json {len(keys)} public market(s) of "
+              f"{table.get('count', len(keys))}   gated={table.get('gated')}")
+        extra = [k for k in keys if k not in FREE_POSITIONING_KEYS]
+        if extra:
+            failures.append(
+                f"the public positioning file carries {', '.join(map(str, extra))}. "
+                f"Only {', '.join(FREE_POSITIONING_KEYS)} are free.")
+        if not table.get("gated"):
+            failures.append(
+                "market/positioning.json is not marked gated, so the page will "
+                "render its rows as the whole table and never offer the rest.")
 
     screen_paths = [p for p in sorted((out / "screens").glob("*.json"))
                     if p.name != "diff.json"]
@@ -189,6 +207,7 @@ def check(out: pathlib.Path) -> list[str]:
     leaked: list[str] = []
     forecast_leaked: list[str] = []
     xray_leaked: list[str] = []
+    moves_leaked: list[str] = []
     marked = 0
     forecast_marked = 0
     for path in stocks:
@@ -211,6 +230,9 @@ def check(out: pathlib.Path) -> list[str]:
             forecast_leaked.append(symbol)
         if len(payload.get("base_history") or []) > FREE_XRAY_BASES:
             xray_leaked.append(symbol)
+        moves = payload.get("earnings_moves") or {}
+        if set(moves) - set(EARNINGS_MOVE_FREE_KEYS):
+            moves_leaked.append(symbol)
 
     print(f"  stocks/             {len(stocks)} file(s)   "
           f"{len(free)} public gamma / {marked} gated   "
@@ -230,6 +252,8 @@ def check(out: pathlib.Path) -> list[str]:
     leak(forecast_leaked, "analyst price targets or estimates",
          "The free half is the ratings split and the current price. No target "
          "appears in it, not even the consensus.")
+    leak(moves_leaked, "dated earnings reports or the largest move",
+         "The free half is the average move and how many reports it rests on.")
     leak(xray_leaked, f"more than {FREE_XRAY_BASES} base(s) of history",
          "This is the field that made the old account gate decorative for "
          "months.")

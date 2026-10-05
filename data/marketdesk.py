@@ -148,12 +148,21 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
             (ticker, report, str(row.get("hour") or ""), stamp))
         dates += 1
 
+    # The desk's scorecard and its positioning table, kept whole. Both are
+    # optional within the major version -- edge since 1.1, positioning since
+    # 1.5 -- so their absence is stored as empty, not treated as a fault.
+    edge = payload.get("edge") if isinstance(payload.get("edge"), list) else []
+    positioning = payload.get("positioning")
+    if not (isinstance(positioning, dict) and positioning.get("markets")):
+        positioning = None
     conn.execute(
         "INSERT OR REPLACE INTO desk_runs"
-        "(as_of, generated_at, schema_version, universe_size, stage_status, fetched_at)"
-        " VALUES (?,?,?,?,?,?)",
+        "(as_of, generated_at, schema_version, universe_size, stage_status,"
+        " fetched_at, edge, positioning)"
+        " VALUES (?,?,?,?,?,?,?,?)",
         (stamp, str(payload.get("generated_at_utc") or ""), version,
-         payload.get("universe_size"), json.dumps(stage_status), now))
+         payload.get("universe_size"), json.dumps(stage_status), now,
+         json.dumps(edge), json.dumps(positioning)))
     conn.commit()
 
     if notice:
@@ -174,6 +183,60 @@ def latest_run(conn: sqlite3.Connection) -> dict | None:
             "stage_status": json.loads(row["stage_status"] or "{}")}
 
 
+def track_records(conn: sqlite3.Connection) -> dict[tuple[str, str], dict]:
+    """The desk's scorecard from its latest run, keyed by (source, reason).
+
+    Only the fields a reader can act on: the verdict, how many signals it rests
+    on, the excess three-day return over random unflagged names, and which way
+    the type claims the stock should go. The
+    t-statistic and the win rates stay in the desk, where its own dashboard
+    explains them.
+    """
+    row = conn.execute(
+        "SELECT edge FROM desk_runs ORDER BY as_of DESC LIMIT 1").fetchone()
+    if not row:
+        return {}
+    try:
+        table = json.loads(row["edge"] or "[]")
+    except (TypeError, ValueError):
+        return {}
+    out: dict[tuple[str, str], dict] = {}
+    for r in table if isinstance(table, list) else []:
+        source, reason = str(r.get("source") or ""), str(r.get("reason") or "")
+        if not (source and reason):
+            continue
+        out[(source.upper(), reason.upper())] = {
+            "read": str(r.get("read") or ""),
+            "n": r.get("n"),
+            "excess3": r.get("excess3"),
+            # +1 the type claims the stock goes up, -1 down, 0 no claim. The
+            # desk's "edge" on a type with no claim means only a reliable
+            # effect, in either direction -- gaps have lagged random names,
+            # and are scored "edge" for it. Without this a page would read
+            # that as a recommendation.
+            "thesis": r.get("thesis") or 0,
+        }
+    return out
+
+
+def positioning(conn: sqlite3.Connection) -> dict | None:
+    """The newest CFTC positioning table any stored run carried.
+
+    The newest run with one, not just the newest run: the table is weekly, and
+    a run from before the desk's 1.5 export or a night the desk dropped it
+    should not blank a panel whose data is still the current week's.
+    """
+    for row in conn.execute(
+            "SELECT positioning FROM desk_runs ORDER BY as_of DESC LIMIT 10"):
+        try:
+            table = json.loads(row["positioning"] or "null")
+        except (TypeError, ValueError):
+            continue
+        if isinstance(table, dict) and table.get("markets"):
+            return table
+    return None
+
+
 def earnings_dates(conn: sqlite3.Connection) -> dict[str, tuple[dt.date, str]]:
     """Symbol to (date, hour). Authoritative where present, absent otherwise."""
     out: dict[str, tuple[dt.date, str]] = {}
@@ -187,8 +250,15 @@ def earnings_dates(conn: sqlite3.Connection) -> dict[str, tuple[dt.date, str]]:
 
 
 def by_symbol(conn: sqlite3.Connection, symbols, limit: int = 8) -> dict[str, list[dict]]:
-    """The most recent desk signals per symbol, newest run first."""
+    """The most recent desk signals per symbol, newest run first.
+
+    Each carries `track`: the desk's own verdict on that signal type, or null
+    when the desk has not scored it. A signal shown without it reads as a
+    recommendation, and the desk's scorecard says several types -- large
+    insider buys among them -- have moved against their own claim.
+    """
     wanted = {s.upper() for s in symbols}
+    tracks = track_records(conn)
     out: dict[str, list[dict]] = {}
     rows = conn.execute(
         "SELECT as_of, symbol, source, reason, detail, magnitude, url"
@@ -207,5 +277,6 @@ def by_symbol(conn: sqlite3.Connection, symbols, limit: int = 8) -> dict[str, li
             # The desk marks a reading it believes is a corporate action rather
             # than a real move. Carried through so the site can say so too.
             "suspect": "⚠" in (row["detail"] or ""),
+            "track": tracks.get((row["source"].upper(), row["reason"].upper())),
         })
     return out

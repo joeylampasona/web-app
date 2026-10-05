@@ -1,4 +1,4 @@
-import type { DeskRun, DeskSignal } from "@/lib/types";
+import type { DeskRun, DeskSignal, DeskTrack } from "@/lib/types";
 
 /**
  * Signals from the Market Desk — a separate overnight scanner that sweeps the
@@ -52,6 +52,42 @@ function label(reason: string): string {
   return reason.replace(/_/g, " ").toLowerCase();
 }
 
+/**
+ * What the desk's own scorecard says about this type of signal, in words.
+ *
+ * Never the desk's verdict word on its own. "Edge" on a type that claims no
+ * direction means only a reliable effect, and for gaps that effect is down:
+ * stocks that gapped have lagged random ones. Printed bare, "edge" beside
+ * "Gapped" reads as a reason to buy. So the sentence says which way the type
+ * has actually gone, against what, and on how many cases.
+ */
+function trackSentence(t: DeskTrack): string | null {
+  const n = t.n ? `${t.n.toLocaleString("en-US")} cases` : "";
+  const x = t.excess3;
+  const size = x == null ? "" : `${Math.abs(x).toFixed(1)}%`;
+  const way = x == null ? "" : x >= 0 ? "outrun" : "lagged";
+  switch (t.read) {
+    case "edge":
+      return x == null ? null
+        : `After this signal, stocks have ${way} random stocks by ${size} over `
+          + `the next three sessions (${n}).`;
+    case "inverted":
+      return `This signal has moved against its own claim: stocks have ${way} `
+        + `random stocks by ${size} over three sessions (${n}).`;
+    case "noise":
+      return `No measurable effect: stocks behave like random ones over the `
+        + `next three sessions (${n}).`;
+    case "unclear":
+      return x == null ? null
+        : `Mixed: stocks have ${way} random stocks by ${size} over three `
+          + `sessions, not consistently enough to call (${n}).`;
+    case "thin":
+      return `Too few cases to judge yet (${n}).`;
+    default:
+      return null;
+  }
+}
+
 export function DeskSignals({
   signals, run,
 }: {
@@ -91,6 +127,13 @@ export function DeskSignals({
                   + "rather than a real move."}
               </div>
             )}
+            {s.track && trackSentence(s.track) && (
+              <div className="caption" style={{
+                color: s.track.read === "inverted" ? "var(--warn)" : "var(--text-secondary)",
+              }}>
+                {trackSentence(s.track)}
+              </div>
+            )}
           </>
         );
         return s.url ? (
@@ -109,7 +152,8 @@ export function DeskSignals({
       {broken.length > 0 && <Degraded broken={broken} />}
       <p className="caption dim" style={{ margin: 0 }}>
         From a separate overnight market sweep, not from the screens on this
-        site. What it flagged, not what it means.
+        site. What it flagged, not what it means. The track record is the
+        sweep's own, measured against random stocks over the last 90 days.
       </p>
     </div>
   );

@@ -725,6 +725,24 @@ def cmd_publish(args) -> int:
     from catalysts import releases as rel
     release_rows = rel.load(conn, market.as_of)
 
+    # The Market Desk's weekly positioning table, when it has supplied one.
+    from data import marketdesk as desk_mod
+    positioning = desk_mod.positioning(conn)
+
+    # How each company has moved across its recent reports, from the bars we
+    # already hold and the report dates the earnings cache already keeps.
+    from catalysts import reactions
+    from catalysts import yf as yfmod
+    reported = yfmod.reported_dates(conn, market.universe, market.as_of)
+    earnings_moves = {}
+    for symbol, dates in reported.items():
+        found = reactions.summary(reactions.moves(
+            market.series.get(symbol) or [], dates, market.as_of))
+        if found:
+            earnings_moves[symbol] = found
+    print(f"  → Earnings moves measured for {len(earnings_moves):,} of "
+          f"{len(market.universe):,} names.", flush=True)
+
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
@@ -732,7 +750,9 @@ def cmd_publish(args) -> int:
                              insider_recent=insider_recent,
                              forecasts=forecast_rows,
                              lost_leaders=lost_leaders,
-                             lost_leader_reasons=lost_reasons)
+                             lost_leader_reasons=lost_reasons,
+                             positioning=positioning,
+                             earnings_moves=earnings_moves)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

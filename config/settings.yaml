@@ -35,8 +35,11 @@ universe:
   min_market_cap: 300000000
   min_avg_dollar_volume: 5000000
   dollar_volume_lookback: 20
-  # Polygon reference types kept. CS is common stock.
-  allowed_types: ["CS"]
+  # Polygon reference types kept. CS is common stock; ADRC is a foreign
+  # company's common stock traded here as depositary receipts -- Alibaba, TSMC,
+  # Novo Nordisk. Their share counts come from the data provider, not SEC,
+  # because a receipt is often several home-market shares (data/universe.py).
+  allowed_types: ["CS", "ADRC"]
   # Name fragments that mark a vehicle we do not want even when typed CS.
   exclude_name_fragments:
     - " ETF"

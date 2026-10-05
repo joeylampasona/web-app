@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import sqlite3
 from dataclasses import dataclass, field
@@ -323,7 +324,24 @@ SHARES_TRUSTED_SINCE = "2026-09-27 00:00:00"
 # per night, most traded first. The provider's free tier allows five calls a
 # minute, so this is about six minutes at most. Found counts are cached like
 # SEC's, so the list shortens every night rather than being re-asked.
-PROVIDER_SHARES_BUDGET = 30
+PROVIDER_SHARES_BUDGET = 60
+
+# A name the provider could not answer is not asked again for this long, so
+# the same few unanswerable names cannot take the whole budget every night
+# and keep everyone behind them waiting.
+PROVIDER_MISS_DAYS = 14
+PROVIDER_MISSES_KEY = "universe.provider_share_misses"
+
+
+def _is_adr(row: sqlite3.Row) -> bool:
+    """A depositary receipt: a foreign company's shares, traded here in bundles.
+
+    These never take SEC's share count. A foreign issuer reports its home
+    market's ordinary shares, and one receipt is often several of them --
+    one Alibaba ADS is eight ordinary shares -- so SEC's count times the
+    receipt's price would put Alibaba at eight times its size.
+    """
+    return (row["type"] or "").upper().startswith("ADR")
 
 
 def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str]) -> bool:
@@ -390,18 +408,22 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
                                                  since=SHARES_TRUSTED_SINCE).items()
               if s in set(wanted)}
     stale = [s for s in wanted if s not in shares]
+    adrs = {r["symbol"] for r, _, _ in priced if _is_adr(r)}
+    sec_stale = [s for s in stale if s not in adrs]
     if notice:
-        notice(f"Shares outstanding: {len(shares):,} cached, {len(stale):,} to fetch"
-               + (f" from SEC — roughly {max(1, len(stale) // 350)} minutes." if stale
-                  else "."))
+        notice(f"Shares outstanding: {len(shares):,} cached, {len(sec_stale):,} to fetch"
+               + (f" from SEC — roughly {max(1, len(sec_stale) // 350)} minutes."
+                  if sec_stale else ".")
+               + (f" {len(stale) - len(sec_stale):,} depositary receipts go to the "
+                  "data provider instead." if len(stale) > len(sec_stale) else ""))
 
     def edgar_progress(done: int, total: int, found: int) -> None:
         if notice:
             notice(f"  EDGAR {done:,}/{total:,} — {found:,} share counts so far")
 
     reasons: dict[str, str] = {}
-    if stale:
-        fetched = shares_outstanding(stale, progress=edgar_progress,
+    if sec_stale:
+        fetched = shares_outstanding(sec_stale, progress=edgar_progress,
                                      reasons=reasons)
         store.set_shares(conn, fetched)
         shares.update(fetched)
@@ -411,7 +433,19 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     # leaves class-dimensioned facts out, so its newest undimensioned count
     # for both is from 2010 or 2011. Reading SEC more carefully does not
     # rescue them; asking someone who publishes a whole-company count does.
-    unanswered = [s for s in stale if not shares.get(s)]
+    #
+    # Depositary receipts come here first, not as a fallback: see _is_adr.
+    try:
+        misses = json.loads(store.get_kv(conn, PROVIDER_MISSES_KEY, "{}")) or {}
+    except (TypeError, ValueError):
+        misses = {}
+    cutoff = (dt.date.today() - dt.timedelta(days=PROVIDER_MISS_DAYS)).isoformat()
+    misses = {s: d for s, d in misses.items() if d >= cutoff}
+    for symbol in adrs:
+        if symbol in stale and not shares.get(symbol):
+            reasons.setdefault(symbol, "depositary receipt: waiting for the data "
+                                       "provider's count")
+    unanswered = [s for s in stale if not shares.get(s) and s not in misses]
     provider = (adapter or get_adapter()) if unanswered else None
     if provider is not None and provider.name != "synthetic":
         adapter = provider
@@ -427,7 +461,10 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
             if value:
                 rescued_counts[symbol] = value
                 reasons.pop(symbol, None)
+            else:
+                misses[symbol] = dt.date.today().isoformat()
         store.set_shares(conn, rescued_counts)
+        store.set_kv(conn, PROVIDER_MISSES_KEY, json.dumps(misses))
         shares.update(rescued_counts)
         if notice and rescued_counts:
             notice(f"  {adapter.name} supplied {len(rescued_counts)}: " + ", ".join(
