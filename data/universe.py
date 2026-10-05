@@ -334,14 +334,18 @@ PROVIDER_MISSES_KEY = "universe.provider_share_misses"
 
 
 def _is_adr(row: sqlite3.Row) -> bool:
-    """A depositary receipt: a foreign company's shares, traded here in bundles.
+    """A foreign company's shares traded here as receipts, often in bundles.
 
     These never take SEC's share count. A foreign issuer reports its home
     market's ordinary shares, and one receipt is often several of them --
     one Alibaba ADS is eight ordinary shares -- so SEC's count times the
     receipt's price would put Alibaba at eight times its size.
     """
-    return (row["type"] or "").upper().startswith("ADR")
+    kind = (row["type"] or "").upper()
+    # New York Registry Shares (ASML) are one-for-one with the home shares,
+    # but they are still a foreign filer's count, and routing them with the
+    # receipts costs nothing and keeps one rule for every foreign listing.
+    return kind.startswith("ADR") or kind == "NYRS"
 
 
 def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str]) -> bool:

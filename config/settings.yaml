@@ -37,9 +37,11 @@ universe:
   dollar_volume_lookback: 20
   # Polygon reference types kept. CS is common stock; ADRC is a foreign
   # company's common stock traded here as depositary receipts -- Alibaba, TSMC,
-  # Novo Nordisk. Their share counts come from the data provider, not SEC,
-  # because a receipt is often several home-market shares (data/universe.py).
-  allowed_types: ["CS", "ADRC"]
+  # Novo Nordisk. NYRS is the same thing in a different wrapper: New York
+  # Registry Shares, which is how ASML trades here. Their share counts come
+  # from the data provider, not SEC, because a receipt is often several
+  # home-market shares (data/universe.py).
+  allowed_types: ["CS", "ADRC", "NYRS"]
   # Name fragments that mark a vehicle we do not want even when typed CS.
   exclude_name_fragments:
     - " ETF"
