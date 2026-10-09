@@ -35,22 +35,30 @@ universe:
   min_market_cap: 300000000
   min_avg_dollar_volume: 5000000
   dollar_volume_lookback: 20
-  # Polygon reference types kept. CS is common stock; ADRC is a foreign
-  # company's common stock traded here as depositary receipts -- Alibaba, TSMC,
-  # Novo Nordisk. NYRS is the same thing in a different wrapper: New York
-  # Registry Shares, which is how ASML trades here. Their share counts come
-  # from the data provider, not SEC, because a receipt is often several
-  # home-market shares (data/universe.py).
-  allowed_types: ["CS", "ADRC", "NYRS"]
+  # Polygon reference types kept. CS is common stock. The rest are foreign
+  # companies listed here, in every wrapper they come in: ADRC, depositary
+  # receipts (Alibaba, TSMC, Novo); NYRS, New York Registry Shares (ASML);
+  # OS, ordinary shares listed directly (Manchester United, Genius Sports);
+  # GDR, global depositary receipts. Their share counts come from the data
+  # provider, not SEC, because a receipt is often several home-market shares
+  # (data/universe.py, _is_foreign).
+  allowed_types: ["CS", "ADRC", "NYRS", "OS", "GDR"]
   # Name fragments that mark a vehicle we do not want even when typed CS.
+  #
+  # Not " TRUST" and not " UNIT", which were here and cost about 70 real
+  # companies. " TRUST" dropped every REIT with Trust in its name (Digital
+  # Realty, Federal Realty, Vornado, Starwood) and Northern Trust, a bank;
+  # the trusts it was meant for, bitcoin and gold, are typed as funds and
+  # never reach this list. " UNIT" dropped every partnership whose shares
+  # are called common units (Energy Transfer, Plains, Brookfield
+  # Infrastructure); the SPAC units it was meant for are typed UNIT and are
+  # already excluded above.
   exclude_name_fragments:
     - " ETF"
     - " ETN"
     - "WARRANT"
-    - " UNIT"
     - "PREFERRED"
     - "ACQUISITION CORP"
-    - " TRUST"
     - " FUND"
   benchmark: SPY
 

@@ -333,19 +333,25 @@ PROVIDER_MISS_DAYS = 14
 PROVIDER_MISSES_KEY = "universe.provider_share_misses"
 
 
-def _is_adr(row: sqlite3.Row) -> bool:
-    """A foreign company's shares traded here as receipts, often in bundles.
+FOREIGN_TYPES = ("NYRS", "OS", "GDR")
+
+
+def _is_foreign(row: sqlite3.Row) -> bool:
+    """A foreign company's shares listed here, in any wrapper.
 
     These never take SEC's share count. A foreign issuer reports its home
     market's ordinary shares, and one receipt is often several of them --
     one Alibaba ADS is eight ordinary shares -- so SEC's count times the
     receipt's price would put Alibaba at eight times its size.
+
+    Registry shares and directly listed ordinary shares are one-for-one with
+    the home shares, so SEC would usually be right for them. They still go to
+    the provider: one rule for every foreign listing is easier to trust than
+    a rule per wrapper, and a foreign filer's SEC count is the least reliable
+    one it has.
     """
     kind = (row["type"] or "").upper()
-    # New York Registry Shares (ASML) are one-for-one with the home shares,
-    # but they are still a foreign filer's count, and routing them with the
-    # receipts costs nothing and keeps one rule for every foreign listing.
-    return kind.startswith("ADR") or kind == "NYRS"
+    return kind.startswith("ADR") or kind in FOREIGN_TYPES
 
 
 def _is_common_stock(row: sqlite3.Row, allowed: list[str], fragments: list[str]) -> bool:
@@ -412,13 +418,13 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
                                                  since=SHARES_TRUSTED_SINCE).items()
               if s in set(wanted)}
     stale = [s for s in wanted if s not in shares]
-    adrs = {r["symbol"] for r, _, _ in priced if _is_adr(r)}
+    adrs = {r["symbol"] for r, _, _ in priced if _is_foreign(r)}
     sec_stale = [s for s in stale if s not in adrs]
     if notice:
         notice(f"Shares outstanding: {len(shares):,} cached, {len(sec_stale):,} to fetch"
                + (f" from SEC — roughly {max(1, len(sec_stale) // 350)} minutes."
                   if sec_stale else ".")
-               + (f" {len(stale) - len(sec_stale):,} depositary receipts go to the "
+               + (f" {len(stale) - len(sec_stale):,} foreign listings go to the "
                   "data provider instead." if len(stale) > len(sec_stale) else ""))
 
     def edgar_progress(done: int, total: int, found: int) -> None:
@@ -438,7 +444,7 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     # for both is from 2010 or 2011. Reading SEC more carefully does not
     # rescue them; asking someone who publishes a whole-company count does.
     #
-    # Depositary receipts come here first, not as a fallback: see _is_adr.
+    # Foreign listings come here first, not as a fallback: see _is_foreign.
     try:
         misses = json.loads(store.get_kv(conn, PROVIDER_MISSES_KEY, "{}")) or {}
     except (TypeError, ValueError):
@@ -447,7 +453,7 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     misses = {s: d for s, d in misses.items() if d >= cutoff}
     for symbol in adrs:
         if symbol in stale and not shares.get(symbol):
-            reasons.setdefault(symbol, "depositary receipt: waiting for the data "
+            reasons.setdefault(symbol, "foreign listing: waiting for the data "
                                        "provider's count")
     unanswered = [s for s in stale if not shares.get(s) and s not in misses]
     provider = (adapter or get_adapter()) if unanswered else None
