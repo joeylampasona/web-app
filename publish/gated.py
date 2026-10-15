@@ -41,6 +41,7 @@ import json
 import os
 import pathlib
 import shutil
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -107,6 +108,13 @@ TIMEOUT = 60
 # a night with an unusually deep option universe cannot produce a request body
 # large enough to be refused.
 CHUNK = 200
+# And by size, because a count says nothing about weight. A backtest's trade
+# list is hundreds of times the size of a gamma row, and on 2026-10-15 one
+# batch of 200 that happened to hold the backtests ran past Supabase's
+# statement timeout (Postgres 57014). Everything after it in the night --
+# Vercel's rebuild, the run artefact, the Discord summary -- was skipped.
+MAX_BATCH_BYTES = 1_500_000
+RETRY_PAUSE = 5.0
 
 
 @dataclass(frozen=True)
@@ -540,6 +548,65 @@ def fetch(prefix: str) -> dict[str, Any]:
             if isinstance(row, dict) and "path" in row}
 
 
+def _size(row: dict) -> int:
+    return len(json.dumps(row, default=str).encode("utf-8"))
+
+
+def _batches(rows: list[dict]) -> Iterable[list[dict]]:
+    """Consecutive runs of rows, at most CHUNK of them and MAX_BATCH_BYTES."""
+    batch: list[dict] = []
+    weight = 0
+    for row in rows:
+        size = _size(row)
+        if batch and (len(batch) >= CHUNK or weight + size > MAX_BATCH_BYTES):
+            yield batch
+            batch, weight = [], 0
+        batch.append(row)
+        weight += size
+    if batch:
+        yield batch
+
+
+def _retryable(status: int) -> bool:
+    """A failure that a smaller or later request could get past.
+
+    0 is a network error or a client-side timeout, 5xx is the server --
+    including Postgres cancelling a statement that ran too long, which is what
+    a batch that is too heavy looks like. A 4xx is the request itself being
+    wrong, and sending half of it will not make it right.
+    """
+    return status == 0 or status == 408 or status == 413 or status >= 500
+
+
+def _write(rest: str, key: str, batch: list[dict], report: Upload) -> None:
+    """Upsert one batch, halving it until it fits or is a single document.
+
+    A single document gets one more try after a pause, for the night the
+    database is merely busy. One that still fails is a problem reported by
+    path, and the rest of the batch it came in with is still written.
+    """
+    status, body = _call("POST", f"{rest}?on_conflict=path", key, batch,
+                         prefer="resolution=merge-duplicates,return=minimal")
+    if status in (200, 201, 204):
+        report.written += len(batch)
+        return
+    if _retryable(status) and len(batch) > 1:
+        half = len(batch) // 2
+        _write(rest, key, batch[:half], report)
+        _write(rest, key, batch[half:], report)
+        return
+    if _retryable(status):
+        time.sleep(RETRY_PAUSE)
+        status, body = _call("POST", f"{rest}?on_conflict=path", key, batch,
+                             prefer="resolution=merge-duplicates,return=minimal")
+        if status in (200, 201, 204):
+            report.written += 1
+            return
+    report.problems.append(
+        f"writing {len(batch)} document(s) starting at "
+        f"{batch[0]['path']}: HTTP {status} {body[:200]}")
+
+
 def upload(documents: list[Document], as_of: dt.date,
            sweep: bool = True) -> Upload:
     """Upsert tonight's documents and delete anything left over from before.
@@ -565,17 +632,9 @@ def upload(documents: list[Document], as_of: dt.date,
     # claim to have been written on the first of them.
     now = dt.datetime.now(dt.timezone.utc).isoformat()
 
-    for start in range(0, len(documents), CHUNK):
-        batch = [dict(document.row(), updated_at=now)
-                 for document in documents[start:start + CHUNK]]
-        status, body = _call("POST", f"{rest}?on_conflict=path", key, batch,
-                             prefer="resolution=merge-duplicates,return=minimal")
-        if status in (200, 201, 204):
-            report.written += len(batch)
-        else:
-            report.problems.append(
-                f"writing {len(batch)} document(s) starting at "
-                f"{batch[0]['path']}: HTTP {status} {body[:200]}")
+    rows = [dict(document.row(), updated_at=now) for document in documents]
+    for batch in _batches(rows):
+        _write(rest, key, batch, report)
 
     if not sweep:
         # For a writer that owns a fixed set of paths and overwrites them in

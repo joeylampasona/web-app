@@ -338,6 +338,7 @@ jobs:
       # paying for last week's gamma, which is the kind of fault this project
       # keeps finding weeks late.
       - name: Upload the gated content
+        id: gated
         if: steps.gate.outputs.run == 'true'
         env:
           # Bypasses every row-level security policy, which is correct for the
@@ -351,13 +352,19 @@ jobs:
         # Pushing to the data branch does not trigger a deployment on its own,
         # so the site would serve last night's numbers forever. Inert until the
         # hook is set, so this does nothing before there is a site to refresh.
-        if: steps.gate.outputs.run == 'true' && env.VERCEL_DEPLOY_HOOK != ''
+        #
+        # Keyed to the data branch, not to everything before it. The gated
+        # upload failing must not keep the public site on yesterday: on
+        # 2026-10-15 it did, because this step only ran if every step above
+        # had passed, and the session sat published but undeployed all day.
+        if: ${{ !cancelled() && steps.data.outcome == 'success' && env.VERCEL_DEPLOY_HOOK != '' }}
         run: |
           curl -sS -X POST "$VERCEL_DEPLOY_HOOK" \
             -o /dev/null -w 'Vercel deploy hook: HTTP %{http_code}\n'
 
       - name: Keep a copy as a run artefact
-        if: steps.gate.outputs.run == 'true'
+        # Most useful on the nights something failed.
+        if: ${{ !cancelled() && steps.gate.outputs.run == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: out
@@ -475,6 +482,7 @@ jobs:
           [ "${{ steps.publish.outcome }}"   = failure ] && stage=publish
           [ "${{ steps.verify.outcome }}"    = failure ] && stage=verify-output
           [ "${{ steps.data.outcome }}"      = failure ] && stage=data-branch
+          [ "${{ steps.gated.outcome }}"     = failure ] && stage=gated-upload
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           STAGE="$stage" RUN_URL="$run_url" python - <<'PY'
           import json, os, urllib.request
