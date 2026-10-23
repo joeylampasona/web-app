@@ -212,8 +212,14 @@ def compose(*, meta: dict, indexes: dict, breadth: dict, feed: dict,
         blocks.append(f"{sum(counts.values()):,} bases forming across "
                       f"{len(counts)} screens, most in {most}.")
 
-    fresh = sorted(feed.get("setups") or [],
-                   key=lambda r: -(r.get("rs_rating") or 0))[:NAMES]
+    # Ranked names only. A listing with under 200 sessions of history carries the
+    # rating "not ranked yet", a string; sorting on it raised, and the drafts
+    # for the 10/21 and 10/22 sessions never reached Discord. An unranked name
+    # cannot be "strongest" on a strength it has not been measured for, so
+    # it is left out rather than ranked as zero.
+    ranked = [r for r in feed.get("setups") or []
+              if isinstance(r.get("rs_rating"), (int, float))]
+    fresh = sorted(ranked, key=lambda r: -r["rs_rating"])[:NAMES]
     if fresh:
         blocks.append("Strongest fresh breakouts: "
                       + _tickers(r["symbol"] for r in fresh))
