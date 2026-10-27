@@ -65,6 +65,9 @@ jobs:
         id: gate
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read-only use here: one row, the gated upload's completion marker.
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           # The question is "has the last completed session been published yet",
           # not "is it the right time". It used to insist the Eastern hour be
@@ -121,7 +124,29 @@ jobs:
             # there is nothing another attempt can add.
             age=$(printf '%s' "$meta" | python3 -c 'import datetime as d,json,sys;w=d.datetime.fromisoformat(json.load(sys.stdin)["generated_at"]);w=w if w.tzinfo else w.replace(tzinfo=d.timezone.utc);print(int((d.datetime.now(d.timezone.utc)-w).total_seconds()//3600))' 2>/dev/null || echo 99999)
             echo "The data branch holds the ${published:-<unknown>} session, written ${age}h ago."
-            if [ "$published" = "$session" ]; then
+            # The public half of a night is not the whole night. On 10/15 the
+            # data branch was published and the subscriber upload then failed,
+            # and every later slot saw the session on the data branch and stood
+            # down. The upload writes a marker only when all of it landed;
+            # a published session without one is retried. An unreadable marker
+            # (no key, Supabase down) is not evidence of anything and does not
+            # trigger a retry on its own, and nor does no marker at all: that is
+            # every night before the marker existed, and the first slot after
+            # this shipped would otherwise rerun an hour for a session that
+            # uploaded fine.
+            uploaded=""
+            if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+              uploaded=$(curl -sf \
+                -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+                -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+                "$SUPABASE_URL/rest/v1/gated_content?select=as_of&path=eq.status/gated_upload.json" \
+                | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[0]["as_of"] if r else "none")' \
+                2>/dev/null || echo "")
+            fi
+            echo "The subscriber upload last completed for ${uploaded:-<unreadable>}."
+            if [ "$published" = "$session" ] && [ -n "$uploaded" ] && [ "$uploaded" != "none" ] && [ "$uploaded" != "$session" ]; then
+              decide true none "Running again: $session is on the data branch but its subscriber upload never finished."
+            elif [ "$published" = "$session" ]; then
               decide false expected "Skipped: the $session session is already published."
             elif [ "$age" -lt 4 ]; then
               decide false expected \
@@ -372,6 +397,7 @@ jobs:
           retention-days: 14
 
       - name: Tell Discord how it went
+        id: summary
         # A notification that will not send is not a failed scan. This run did
         # the whole job — universe, ranks, screens, filings, publish, deploy —
         # and then reported Failure because a chat message got a 403, which
@@ -446,9 +472,38 @@ jobs:
       # fail the run would also fire the "it broke" step about a night whose
       # data published perfectly.
       - name: Send the X draft to Discord
+        id: briefing
         continue-on-error: true
         if: success() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
         run: python -m cli briefing --send
+
+      # The two steps above may fail without failing the run, and that is how
+      # the X draft went missing for the 10/21 and 10/22 sessions with every
+      # run green: a TypeError in the composer, swallowed. A step allowed to
+      # fail still has to say that it did. If Discord itself is what refused,
+      # this one fails too and nothing is lost by trying.
+      - name: Tell Discord a message step failed
+        continue-on-error: true
+        if: >-
+          always() && env.DISCORD_WEBHOOK_URL != '' &&
+          (steps.summary.outcome == 'failure' || steps.briefing.outcome == 'failure')
+        shell: bash
+        run: |
+          failed=""
+          [ "${{ steps.summary.outcome }}"  = failure ] && failed="the nightly summary"
+          [ "${{ steps.briefing.outcome }}" = failure ] && failed="${failed:+$failed and }the X draft"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          FAILED="$failed" RUN_URL="$run_url" python - <<'PY'
+          import json, os, urllib.request
+          body = {"content": f"⚠️ The data published, but {os.environ['FAILED']} "
+                             f"failed to build or send.\n{os.environ['RUN_URL']}"}
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json",
+                       "User-Agent": "base-and-breakout-nightly/1.0"})
+          urllib.request.urlopen(request, timeout=20)
+          PY
 
       - name: Tell Discord the session was missed
         continue-on-error: true

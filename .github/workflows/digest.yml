@@ -48,6 +48,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       SITE_URL: https://thetape.cc
       DIGEST_FROM: "The Tape <noreply@thetape.cc>"
     steps:
@@ -102,3 +103,23 @@ jobs:
           path: var/digest-preview/
           if-no-files-found: ignore
           retention-days: 14
+
+      # The 10/18 letter never went out and the only trace was a red run on
+      # GitHub. Sunday's send is the one thing subscribers get by email, so a
+      # failure says so where somebody is looking.
+      - name: Tell Discord the digest failed
+        if: ${{ failure() && github.event_name == 'schedule' && env.DISCORD_WEBHOOK_URL != '' }}
+        continue-on-error: true
+        run: |
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          RUN_URL="$run_url" python - <<'PY'
+          import json, os, urllib.request
+          body = {"content": "⚠️ The weekly digest did not send. Subscribers have "
+                             f"not had this week's letter.\n{os.environ['RUN_URL']}"}
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=json.dumps(body).encode(),
+              headers={"Content-Type": "application/json",
+                       "User-Agent": "base-and-breakout-nightly/1.0"})
+          urllib.request.urlopen(request, timeout=20)
+          PY

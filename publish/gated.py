@@ -103,6 +103,11 @@ FREE_POSITIONING_KEYS = ("ES", "NQ")
 EARNINGS_MOVE_FREE_KEYS = ("count", "avg_abs_pct")
 
 TABLE = "gated_content"
+# Written last, and only when every document landed. The nightly's gate reads
+# it: a session on the public data branch with no matching marker here means
+# the subscriber half of that night did not finish, and the run is retried
+# rather than every later slot standing down because the public half did.
+UPLOAD_MARKER = "status/gated_upload.json"
 TIMEOUT = 60
 # PostgREST takes an array and upserts it in one statement. Chunked anyway, so
 # a night with an unusually deep option universe cannot produce a request body

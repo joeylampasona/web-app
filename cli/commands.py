@@ -894,6 +894,15 @@ def cmd_gated(args) -> int:
 
     as_of = max(document.as_of for document in staged)
     report = gatedmod.upload(staged, as_of)
+    if report.configured and report.ok:
+        # Its own write, unswept, after everything else has landed: the
+        # marker claims the whole upload finished, so it cannot ride in the
+        # same batches as the documents it vouches for.
+        marker = gatedmod.Document(
+            gatedmod.UPLOAD_MARKER,
+            {"as_of": as_of.isoformat(), "documents": report.written}, as_of)
+        done = gatedmod.upload([marker], as_of, sweep=False)
+        report.problems.extend(f"completion marker: {p}" for p in done.problems)
     _banner("Gated upload")
     print(f"  {report.render()}")
     if not report.configured:
