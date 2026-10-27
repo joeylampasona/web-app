@@ -1,4 +1,5 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
+import { IndustryHeatGrid } from "@/components/IndustryHeatGrid";
 import { MarketCTA } from "@/components/MarketCTA";
 import { Treemap } from "@/components/Treemap";
 import { getMeta, getTreemap, hasData } from "@/lib/data";
@@ -17,6 +18,7 @@ export default function MapPage() {
         members. The badge counts fresh breakouts inside it. Tap to drill in.
       </p>
       <Treemap tiles={treemap.tiles} />
+      <IndustryHeatGrid rows={treemap.tiles} />
       <MarketCTA />
     </div>
   );
