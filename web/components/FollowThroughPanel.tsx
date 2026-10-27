@@ -5,7 +5,9 @@ import { ProvisionalBadge } from "./Badges";
 import { PriceChange } from "./PriceChange";
 import { TickerLink } from "./StockDrawer";
 import { rsText } from "@/lib/format";
-import type { BreakoutOutcome, FollowThroughFile, FollowThroughScreen } from "@/lib/types";
+import type {
+  BreakoutOutcome, FollowThroughFile, FollowThroughHorizon, FollowThroughScreen,
+} from "@/lib/types";
 
 /** The same control the screens use, over the columns this page actually has.
  *  Default is worst-first: the list exists to be checked, and a page that opens
@@ -75,6 +77,8 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
         </p>
       </div>
 
+      <AcrossScreens file={file} />
+
       <div className="row wrap" style={{ gap: "var(--gap-sm)" }}>
         {screens.map((s) => (
           <button
@@ -90,7 +94,8 @@ export function FollowThroughPanel({ file }: { file: FollowThroughFile }) {
         ))}
       </div>
 
-      <Summary row={shown} />
+      <Summary row={shown} benchmark={file.benchmark ?? "SPY"}
+               horizons={file.horizons ?? []} />
 
       <section className="stack" style={{ gap: "var(--gap-sm)" }}>
         <div className="between wrap" style={{ gap: "var(--gap-sm)" }}>
@@ -261,7 +266,79 @@ function Range({ worst, peak, now }: { worst: number; peak: number; now: number 
   );
 }
 
-function Summary({ row }: { row: FollowThroughScreen }) {
+function signed(v: number | null | undefined): string {
+  if (v == null) return "—";
+  // Rounded before the sign is chosen, or -0.04 prints as "-0.0%".
+  const r = Math.round(v * 10) / 10;
+  return `${r > 0 ? "+" : ""}${r === 0 ? "0.0" : r.toFixed(1)}%`;
+}
+
+function tone(v: number | null | undefined): string | undefined {
+  if (v == null || v === 0) return undefined;
+  return v > 0 ? "var(--gain)" : "var(--loss)";
+}
+
+/** Every screen side by side at fixed distances from the breakout.
+ *
+ * The tabs answer "how did this screen do"; this answers "which screen does
+ * best", which the tabs made you work out by clicking through each and
+ * remembering. Each figure is a median at that many sessions after the
+ * breakout, beside the median excess over the benchmark across the same
+ * sessions: a screen that made 4% in a month the market made 5% did not help.
+ */
+function AcrossScreens({ file }: { file: FollowThroughFile }) {
+  const horizons = file.horizons ?? [];
+  const rows = Object.values(file.screens).filter((s) => s.horizons);
+  if (!horizons.length || !rows.length) return null;
+  const bench = file.benchmark ?? "SPY";
+  return (
+    <section className="stack" style={{ gap: "var(--gap-sm)" }}>
+      <div className="eyebrow">Every screen, at fixed distances</div>
+      <div className="scroll-x">
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Screen</th>
+              {horizons.map((h) => <th key={h}>{h} sessions</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => (
+              <tr key={s.screen}>
+                <td className="text">{s.name}</td>
+                {horizons.map((h) => {
+                  const cell: FollowThroughHorizon | undefined = s.horizons?.[String(h)];
+                  if (!cell || cell.n === 0) return <td key={h} className="dim">—</td>;
+                  return (
+                    <td key={h} title={`${cell.n} breakouts old enough`}>
+                      <div style={{ color: tone(cell.median_pct) }}>
+                        {signed(cell.median_pct)}
+                        <span className="caption dim"> ({cell.n})</span>
+                      </div>
+                      <div className="caption dim" style={{ whiteSpace: "nowrap" }}>
+                        {signed(cell.median_vs_bench_pct)} vs {bench}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="caption dim" style={{ margin: 0 }}>
+        Median return that many sessions after the breakout, and below it the
+        median difference from {bench} over the same sessions. In brackets, how
+        many breakouts are old enough to have a figure, so the longer horizons
+        rest on the earlier part of the window.
+      </p>
+    </section>
+  );
+}
+
+function Summary({ row, benchmark, horizons }: {
+  row: FollowThroughScreen; benchmark: string; horizons: number[];
+}) {
   if (!row.settled) {
     return (
       <div className="card muted footnote">
@@ -284,6 +361,20 @@ function Summary({ row }: { row: FollowThroughScreen }) {
         <Cell label="Median best point" value={`${row.median_peak_pct}%`}
               note="the most it was ever up" />
       </div>
+      {row.horizons && horizons.length > 0 && (
+        <div className="grid-3">
+          {horizons.map((h) => {
+            const cell = row.horizons?.[String(h)];
+            return (
+              <Cell key={h} label={`After ${h} sessions`}
+                    value={cell && cell.n ? signed(cell.median_pct) : "—"}
+                    note={cell && cell.n
+                      ? `${signed(cell.median_vs_bench_pct)} vs ${benchmark} · ${cell.share_up_pct}% up · n ${cell.n}`
+                      : "none old enough yet"} />
+            );
+          })}
+        </div>
+      )}
       <p className="caption dim" style={{ margin: 0 }}>
         Medians, not averages — one name up three hundred per cent should not be
         able to carry the rest.

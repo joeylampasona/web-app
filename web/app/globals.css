@@ -248,10 +248,12 @@ button { font: inherit; color: inherit; }
 .shell-width { max-width: var(--page-max); margin: 0 auto; }
 
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-md); }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-md); }
 .grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap-md); }
 
 @media (max-width: 420px) {
   .grid-auto { grid-template-columns: 1fr; }
+  .grid-3 { gap: var(--gap-sm); }
 }
 
 table.data { width: 100%; border-collapse: collapse; font-size: var(--size-footnote); }

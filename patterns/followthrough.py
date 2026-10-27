@@ -39,6 +39,13 @@ SETTLED_SESSIONS = 10
 # almost everything as a failure, which is worse than not reporting it.
 FAILURE_SESSIONS = 10
 
+# Fixed horizons, in sessions after the breakout day. "Return since" mixes a
+# breakout from last week with one from April and so says little about either;
+# a return at a fixed distance compares like with like, and the same window of
+# the benchmark beside it says whether the screen beat simply owning the
+# market. A breakout too young for a horizon has no figure for it, not zero.
+HORIZONS = (5, 20, 60)
+
 
 @dataclass
 class Outcome:
@@ -55,12 +62,17 @@ class Outcome:
     failed_fast: bool
     now_below_pivot: bool
     rs_at_breakout: int | None
+    # {"5": {"pct": ..., "bench_pct": ...}, ...}; a horizon is absent until
+    # the breakout is that many sessions old.
+    horizons: dict
 
 
 def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) -> dict:
     """Per screen: every breakout inside the window, and how it has gone."""
     as_of = market.as_of
     out: dict[str, dict] = {}
+    bench_bars = market.series.get(market.benchmark) or []
+    bench_at = {b.date: i for i, b in enumerate(bench_bars)}
     # Base screens only. This reuses engine.candidates to re-derive breakouts
     # historically, and the engine can only rebuild a base — see
     # BASE_SCREEN_KEYS. A shape screen's history is not reconstructable here.
@@ -96,6 +108,7 @@ def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) ->
                                     for b in after[:FAILURE_SESSIONS]),
                     now_below_pivot=after[-1].close < cand.pivot,
                     rs_at_breakout=cand.rs_rating,
+                    horizons=_horizons(after, entry, cand.date, bench_bars, bench_at),
                 ))
         rows.sort(key=lambda r: r.breakout_date, reverse=True)
         out[key] = {"screen": key, "name": spec.name,
@@ -104,7 +117,49 @@ def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) ->
                     "breakouts": [asdict(r) for r in rows]}
     return {"as_of": as_of.isoformat() if as_of else None,
             "window_days": window_days,
+            "benchmark": market.benchmark,
+            "horizons": list(HORIZONS),
             "screens": out}
+
+
+def _horizons(after, entry: float, day: dt.date, bench_bars, bench_at) -> dict:
+    found: dict[str, dict] = {}
+    start = bench_at.get(day)
+    for h in HORIZONS:
+        if len(after) < h:
+            continue
+        pct = round(100.0 * (after[h - 1].close - entry) / entry, 2)
+        bench = None
+        if start is not None and start + h < len(bench_bars):
+            base = bench_bars[start].close
+            if base > 0:
+                bench = round(100.0 * (bench_bars[start + h].close - base) / base, 2)
+        found[str(h)] = {"pct": pct, "bench_pct": bench}
+    return found
+
+
+def _horizon_summary(rows: list[Outcome]) -> dict:
+    """Per horizon: how many, the median, the share up, and the median excess
+    over the benchmark across the same sessions."""
+    summary: dict[str, dict] = {}
+    for h in HORIZONS:
+        key = str(h)
+        reached = [r.horizons[key] for r in rows if key in r.horizons]
+        if not reached:
+            summary[key] = {"n": 0, "median_pct": None, "share_up_pct": None,
+                            "median_vs_bench_pct": None}
+            continue
+        pcts = [x["pct"] for x in reached]
+        excess = [x["pct"] - x["bench_pct"] for x in reached
+                  if x["bench_pct"] is not None]
+        summary[key] = {
+            "n": len(reached),
+            "median_pct": round(statistics.median(pcts), 2),
+            "share_up_pct": round(100.0 * sum(1 for v in pcts if v > 0) / len(pcts), 1),
+            "median_vs_bench_pct": (round(statistics.median(excess), 2)
+                                    if excess else None),
+        }
+    return summary
 
 
 def _summarise(rows: list[Outcome]) -> dict:
@@ -113,7 +168,8 @@ def _summarise(rows: list[Outcome]) -> dict:
         return {"total": len(rows), "settled": 0, "too_soon": len(rows),
                 "up": 0, "down": 0, "failed_fast": 0, "below_pivot": 0,
                 "median_now_pct": None, "median_peak_pct": None,
-                "share_up_pct": None, "share_failed_pct": None}
+                "share_up_pct": None, "share_failed_pct": None,
+                "horizons": _horizon_summary(rows)}
     returns = [r.now_pct for r in settled]
     up = sum(1 for r in settled if r.now_pct > 0)
     failed = sum(1 for r in settled if r.failed_fast)
@@ -130,4 +186,5 @@ def _summarise(rows: list[Outcome]) -> dict:
         "median_peak_pct": round(statistics.median([r.peak_pct for r in settled]), 2),
         "share_up_pct": round(100.0 * up / len(settled), 1),
         "share_failed_pct": round(100.0 * failed / len(settled), 1),
+        "horizons": _horizon_summary(rows),
     }

@@ -496,6 +496,17 @@ export interface BreakoutOutcome {
   now_pct: number; peak_pct: number; worst_pct: number;
   failed_fast: boolean; now_below_pivot: boolean;
   rs_at_breakout: number | null;
+  /** Return at a fixed number of sessions after the breakout, with the
+   *  benchmark over the same sessions. Absent until the breakout is that old. */
+  horizons?: Record<string, { pct: number; bench_pct: number | null }>;
+}
+
+export interface FollowThroughHorizon {
+  n: number;
+  median_pct: number | null;
+  share_up_pct: number | null;
+  /** Median of (breakout return minus benchmark return) over the same sessions. */
+  median_vs_bench_pct: number | null;
 }
 
 export interface FollowThroughScreen {
@@ -504,12 +515,15 @@ export interface FollowThroughScreen {
   up: number; down: number; failed_fast: number; below_pivot: number;
   median_now_pct: number | null; median_peak_pct: number | null;
   share_up_pct: number | null; share_failed_pct: number | null;
+  horizons?: Record<string, FollowThroughHorizon>;
   breakouts: BreakoutOutcome[];
 }
 
 export interface FollowThroughFile {
   as_of: string | null;
   window_days: number;
+  benchmark?: string;
+  horizons?: number[];
   screens: Record<string, FollowThroughScreen>;
 }
 
