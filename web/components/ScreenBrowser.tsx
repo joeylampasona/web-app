@@ -7,7 +7,7 @@ import { copy } from "@/lib/copy";
 import { downloadCsv, toCsv } from "@/lib/exportCsv";
 import { compactMoney, isRanked, price, ratio, rsText, signed } from "@/lib/format";
 import type { Bar, ScreenFile, Setup } from "@/lib/types";
-import { STAGE_COLOURS, StageBadge } from "./Badges";
+import { EarningsBadge, STAGE_COLOURS, StageBadge } from "./Badges";
 import { StockCard } from "./StockCard";
 import { PriceChange } from "./PriceChange";
 
@@ -213,6 +213,16 @@ export function ScreenBrowser({
                       <span className="mono" style={{ color: "var(--link)" }}>{setup.symbol}</span>{" "}
                       <span className="dim caption">{setup.name}</span>
                     </Link>
+                    {/* The cards carried this and the list did not, so switching
+                        views quietly dropped the one warning that changes how a
+                        breakout should be traded. */}
+                    {setup.catalysts?.earnings_within_7d &&
+                      setup.catalysts.days_until_earnings !== null && (
+                        <>
+                          {" "}
+                          <EarningsBadge days={setup.catalysts.days_until_earnings} />
+                        </>
+                    )}
                   </td>
                   <td>{rsText(setup.rs_rating)}</td>
                   <td>{setup.market_cap ? compactMoney(setup.market_cap) : "—"}</td>
