@@ -46,9 +46,13 @@ jobs:
       # about. A shallow single-branch clone of the published tree is far
       # cheaper than rebuilding anything.
       - name: Fetch the published screens
+        env:
+          # Authenticated so the clone still works once the repository is
+          # private. The workflow's own token can read its own repository.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git clone --depth 1 --branch data --single-branch \
-            "https://github.com/${GITHUB_REPOSITORY}" out
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" out
           rm -rf out/.git
           echo "screens: $(ls out/screens/*.json 2>/dev/null | wc -l | tr -d ' ')"
 
