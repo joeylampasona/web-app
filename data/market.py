@@ -7,6 +7,7 @@ import sqlite3
 from dataclasses import dataclass, field
 
 from data import settings, store
+from data.universe import class_share_counts
 from data.types import Bar, TickerRef
 from patterns import indicators
 
@@ -22,6 +23,8 @@ class Market:
     industries: dict[str, str] = field(default_factory=dict)
     themes: dict[str, list[str]] = field(default_factory=dict)
     benchmark: str = "SPY"
+    # Caps built from one share class's count: a floor, labelled as such.
+    class_caps: frozenset[str] = frozenset()
 
     # ---- cached per-symbol derivations -------------------------------
 
@@ -92,4 +95,5 @@ def load(conn: sqlite3.Connection | None = None, include_all: bool = False) -> M
         industries=industries,
         themes=store.themes_for(conn),
         benchmark=benchmark,
+        class_caps=frozenset(class_share_counts(conn)),
     )

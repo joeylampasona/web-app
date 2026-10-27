@@ -113,25 +113,38 @@ class PolygonGroupedAdapter(DataAdapter):
         return earnings_dates(symbols)
 
     def get_share_count(self, symbol: str) -> float | None:
-        """Polygon's weighted shares outstanding, whole company.
+        return self.get_share_count_basis(symbol)[0]
 
-        weighted_shares_outstanding and not share_class_shares_outstanding,
-        because the companies that need this are exactly the multi-class ones
-        -- Visa, Berkshire -- and one class's count times one class's price is
-        a fraction of the company, published as if it were all of it.
-        Polygon's own market_cap is this figure times the close.
+    def get_share_count_basis(self, symbol: str) -> tuple[float | None, str]:
+        """Weighted shares when Polygon has them, else the traded class.
+
+        Weighted first, because the companies that need this are mostly the
+        multi-class ones -- Visa, Berkshire -- and one class's count times one
+        class's price is a fraction of the company. Polygon's own market_cap
+        is the weighted figure times the close.
+
+        Brookfield Renewable, Genius Sports and Tempus AI were out of the
+        universe for weeks because the weighted figure is blank for them, and
+        every retry after the fourteen-day wait came back blank again. The
+        class count is the whole company for a partnership or a foreign
+        ordinary share, and a floor for a multi-class filer like Tempus, so
+        it is used only when there is nothing better and it is labelled.
         """
         try:
             payload = self._get(f"/v3/reference/tickers/{symbol}")
         except PolygonError as exc:
             log.warning("share count lookup failed for %s: %s", symbol, exc)
-            return None
-        value = (payload.get("results") or {}).get("weighted_shares_outstanding")
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            return None
-        return value if value > 0 else None
+            return None, "company"
+        results = payload.get("results") or {}
+        for field_name, basis in (("weighted_shares_outstanding", "company"),
+                                  ("share_class_shares_outstanding", "share_class")):
+            try:
+                value = float(results.get(field_name))
+            except (TypeError, ValueError):
+                continue
+            if value > 0:
+                return value, basis
+        return None, "company"
 
     def get_option_chain(self, symbol: str) -> OptionChain | None:
         """The listed book for one company.

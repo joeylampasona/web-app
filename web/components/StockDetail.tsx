@@ -90,6 +90,11 @@ export function StockDetail({ stock, run }: {
             <h1 style={{ fontSize: "var(--size-h2)" }}>{stock.name}</h1>
             <div className="num dim footnote">
               {stock.symbol} · {stock.industry} · {compactMoney(stock.market_cap)}
+              {stock.market_cap_basis === "share_class" && stock.market_cap != null && (
+                <span title="Built from one share class's count. Other classes are not included, so the company may be worth more.">
+                  {" "}(one share class)
+                </span>
+              )}
             </div>
           </div>
           <div className="row" style={{ gap: "var(--gap-sm)", alignItems: "center" }}>

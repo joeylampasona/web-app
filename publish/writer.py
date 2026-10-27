@@ -975,6 +975,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "rs_rating": bundle.now.get(symbol),
         "rs_change_m1": bundle.change(symbol, "m1"),
         "market_cap": market.caps.get(symbol),
+        # "share_class" when the cap is one class's count times its price: a
+        # floor for a multi-class company, labelled on the page.
+        "market_cap_basis": ("share_class" if symbol in market.class_caps
+                             else "company"),
         "quadrant": (primary.quadrant if primary else
                      rotation.quadrant_for(bundle.now.get(symbol)
                                            if isinstance(bundle.now.get(symbol), int) else None,

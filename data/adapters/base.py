@@ -38,3 +38,12 @@ class DataAdapter(abc.ABC):
         fallback, so a provider without one simply has none to offer.
         """
         return None
+
+    def get_share_count_basis(self, symbol: str) -> tuple[float | None, str]:
+        """The count and what it counts: "company" or "share_class".
+
+        A provider that can only offer the traded class's count says so, and
+        the market cap built from it is labelled rather than passed off as
+        the whole company.
+        """
+        return self.get_share_count(symbol), "company"

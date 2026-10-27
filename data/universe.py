@@ -330,7 +330,22 @@ PROVIDER_SHARES_BUDGET = 60
 # the same few unanswerable names cannot take the whole budget every night
 # and keep everyone behind them waiting.
 PROVIDER_MISS_DAYS = 14
-PROVIDER_MISSES_KEY = "universe.provider_share_misses"
+# Versioned: v1 holds misses recorded before the provider could fall back to
+# the traded class's count, and those names deserve an immediate second ask.
+PROVIDER_MISSES_KEY = "universe.provider_share_misses.v2"
+# Symbols whose cached count is one share class rather than the company, so
+# the market cap built from it can say so. Kept until a later ask returns a
+# whole-company figure.
+CLASS_COUNTS_KEY = "universe.share_class_counts"
+
+
+def class_share_counts(conn: sqlite3.Connection) -> list[str]:
+    """Symbols whose market cap rests on one share class's count."""
+    try:
+        value = json.loads(store.get_kv(conn, CLASS_COUNTS_KEY, "[]")) or []
+    except (TypeError, ValueError):
+        return []
+    return [s for s in value if isinstance(s, str)]
 
 
 FOREIGN_TYPES = ("NYRS", "OS", "GDR")
@@ -466,15 +481,21 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
             notice(f"{len(unanswered):,} names have no current SEC share count; "
                    f"asking {adapter.name} for the {len(ask)} most traded.")
         rescued_counts: dict[str, float] = {}
+        class_counts = set(class_share_counts(conn))
         for symbol in ask:
-            value = adapter.get_share_count(symbol)
+            value, basis = adapter.get_share_count_basis(symbol)
             if value:
                 rescued_counts[symbol] = value
                 reasons.pop(symbol, None)
+                if basis == "share_class":
+                    class_counts.add(symbol)
+                else:
+                    class_counts.discard(symbol)
             else:
                 misses[symbol] = dt.date.today().isoformat()
         store.set_shares(conn, rescued_counts)
         store.set_kv(conn, PROVIDER_MISSES_KEY, json.dumps(misses))
+        store.set_kv(conn, CLASS_COUNTS_KEY, json.dumps(sorted(class_counts)))
         shares.update(rescued_counts)
         if notice and rescued_counts:
             notice(f"  {adapter.name} supplied {len(rescued_counts)}: " + ", ".join(
