@@ -597,8 +597,10 @@ def cmd_quotes(args) -> int:
 
     distance: dict[str, float] = {}
     free: set[str] = set()
+    full_lists: list[dict] = []
 
     def absorb(payload: dict, public: bool) -> None:
+        full_lists.append(payload)
         for stage in (payload.get("setups") or {}).values():
             for row in stage:
                 symbol = row.get("symbol")
@@ -670,11 +672,33 @@ def cmd_quotes(args) -> int:
         print("The published screens list no names; nothing to quote.")
         return 1
 
+    alerting = bool(getattr(args, "alerts", False))
+    if alerting:
+        # Names a subscriber is waiting on go just behind the market-wide few,
+        # so the sweep's budget never runs out before the one they starred.
+        from digest import alerts as alertsmod
+        for symbol in alertsmod.watched_symbols():
+            if symbol in distance and distance[symbol] >= 0:
+                distance[symbol] = -0.5
+
     ordered = sorted(distance, key=lambda s: (distance[s], s))
     _banner(f"Quotes — {len(ordered):,} names on a screen, nearest pivot first")
     payload = quotesmod.collect(ordered, notice=lambda m: print(f"  → {m}", flush=True))
 
     quotes = payload.get("quotes") or {}
+    alert_failures = 0
+    if alerting:
+        # After the sweep and before the split, so a subscriber's alert can be
+        # about a name outside the free sample. A failure here is reported but
+        # does not stop the quotes being published.
+        _banner("Watchlist alerts")
+        try:
+            alert_failures = alertsmod.run(
+                full_lists, quotes, send=bool(getattr(args, "send_alerts", False)),
+                notice=lambda m: print(f"  {m}", flush=True))
+        except Exception as exc:  # noqa: BLE001 - never cost the quotes
+            alert_failures = 1
+            print(f"  alerts failed: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
     locked = {symbol: quote for symbol, quote in quotes.items()
               if symbol not in free}
     payload["quotes"] = {symbol: quote for symbol, quote in quotes.items()
@@ -700,6 +724,12 @@ def cmd_quotes(args) -> int:
         print(f"  {report.render()}")
         if report.configured and not report.ok:
             return 1
+
+    if alert_failures:
+        # A warning, not an exit code: the quotes are published by the next
+        # step, which a non-zero exit here would skip, and a missed email is
+        # not worth a page of stale prices.
+        print(f"::warning::{alert_failures} watchlist alert email(s) failed to send")
 
     # A file of nothing is worse than no file: the page would show a delayed
     # price section that is permanently empty and say nothing about why.

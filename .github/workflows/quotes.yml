@@ -66,7 +66,13 @@ jobs:
           # free names to the quotes branch, the rest to gated_content.
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python -m cli quotes
+          # Watchlist alerts ride on this sweep: it already holds every
+          # pivot and a fresh price. Only subscribers who switched alerts on
+          # in settings are emailed, and each event once per session.
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_FROM: "The Tape <noreply@thetape.cc>"
+          SITE_URL: https://thetape.cc
+        run: python -m cli quotes --alerts --send-alerts
 
       - name: Publish to the quotes branch
         run: |

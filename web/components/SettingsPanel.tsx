@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useWatchlist } from "@/lib/useWatchlist";
 import { useEmailPrefs } from "@/lib/useEmailPrefs";
+import { useSubscription } from "@/lib/useSubscription";
 import {
   readChoice, resolve, setChoice, subscribe, systemTheme, type ThemeChoice,
 } from "@/lib/theme";
@@ -202,6 +203,62 @@ function Digest() {
   );
 }
 
+function WatchlistAlerts() {
+  const { configured, ready: authReady, signedIn } = useAuth();
+  const { ready, watchlistAlerts, saving, error, configured: table, setWatchlistAlerts } =
+    useEmailPrefs();
+  const subscription = useSubscription();
+
+  if (!authReady || !ready || !configured || !signedIn || !table) return null;
+
+  // Subscribers only, and said so rather than hidden: the email names the
+  // pivot of stocks outside the free sample, which is part of what is paid
+  // for. The job checks the subscription too; this only decides the switch.
+  if (subscription.ready && !subscription.active && !watchlistAlerts) {
+    return (
+      <p className="caption dim" style={{ margin: 0 }}>
+        Watchlist alerts — an email when a stock you starred reaches its
+        pivot — come with a subscription.
+      </p>
+    );
+  }
+
+  return (
+    <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+      <div className="row" style={{ gap: "var(--gap-sm)" }}>
+        <button
+          type="button"
+          className={watchlistAlerts ? "control primary" : "control"}
+          aria-pressed={watchlistAlerts}
+          disabled={saving}
+          onClick={() => setWatchlistAlerts(!watchlistAlerts)}
+        >
+          {saving ? "Saving…" : watchlistAlerts ? "Alerts on" : "Email me watchlist alerts"}
+        </button>
+        {watchlistAlerts && !saving && (
+          <button type="button" className="control"
+                  onClick={() => setWatchlistAlerts(false)}>
+            Stop
+          </button>
+        )}
+      </div>
+      <p className="caption dim" style={{ margin: 0 }}>
+        {watchlistAlerts
+          ? "During market hours, checked every fifteen minutes on delayed "
+            + "quotes: a starred stock crossing its pivot, within 1.5% of it, "
+            + "or a breakdown through its level. Each at most once a day."
+          : "An email when a stock on your watchlist reaches its pivot. "
+            + "Only stocks forming a base on a screen can trigger one."}
+      </p>
+      {error && (
+        <p className="footnote" style={{ margin: 0, color: "var(--warn)" }}>
+          That did not save: {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SettingsPanel({
   asOf, provider, universeCount, benchmark, live,
 }: {
@@ -226,9 +283,10 @@ export function SettingsPanel({
 
       <Section
         title="Email"
-        blurb="One letter on Sundays, about the week ahead. Off unless you turn it on."
+        blurb="One letter on Sundays, about the week ahead, and alerts for your watchlist. Each off unless you turn it on."
       >
         <Digest />
+        <WatchlistAlerts />
       </Section>
 
       <Section

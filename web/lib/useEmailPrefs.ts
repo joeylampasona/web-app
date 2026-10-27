@@ -18,16 +18,20 @@ import { client } from "./supabase";
 export interface EmailPrefs {
   ready: boolean;
   weeklyDigest: boolean;
+  /** Email when a starred stock reaches its pivot. Subscribers only. */
+  watchlistAlerts: boolean;
   saving: boolean;
   error: string | null;
   /** Null when the table has not been set up on this project yet. */
   configured: boolean;
   setWeeklyDigest: (on: boolean) => void;
+  setWatchlistAlerts: (on: boolean) => void;
 }
 
 export function useEmailPrefs(): EmailPrefs {
   const { signedIn, user, ready: authReady } = useAuth();
   const [weeklyDigest, setWeekly] = useState(false);
+  const [watchlistAlerts, setAlerts] = useState(false);
   const [ready, setReady] = useState(false);
   const [configured, setConfigured] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,7 +47,7 @@ export function useEmailPrefs(): EmailPrefs {
     void (async () => {
       const { data, error: readError } = await supabase
         .from("email_prefs")
-        .select("weekly_digest")
+        .select("weekly_digest, watchlist_alerts")
         .eq("user_id", user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -54,13 +58,15 @@ export function useEmailPrefs(): EmailPrefs {
         setError(readError.message);
       } else {
         setWeekly(Boolean(data?.weekly_digest));
+        setAlerts(Boolean(data?.watchlist_alerts));
       }
       setReady(true);
     })();
     return () => { cancelled = true; };
   }, [authReady, signedIn, user]);
 
-  const setWeeklyDigest = useCallback((on: boolean) => {
+  const save = useCallback((column: "weekly_digest" | "watchlist_alerts", on: boolean,
+                            applied: (on: boolean) => void) => {
     const supabase = client();
     if (!supabase || !user) return;
     setSaving(true);
@@ -71,7 +77,7 @@ export function useEmailPrefs(): EmailPrefs {
         .upsert({
           user_id: user.id,
           email: user.email,
-          weekly_digest: on,
+          [column]: on,
           // Only stamped when switching on. Switching off is not a consent
           // event and must not look like one.
           ...(on ? { consented_at: new Date().toISOString(), disabled_at: null } : {}),
@@ -80,9 +86,15 @@ export function useEmailPrefs(): EmailPrefs {
       if (writeError) { setError(writeError.message); return; }
       // Only after the write lands. A switch that flips before the row is
       // saved is a switch that lies when the save fails.
-      setWeekly(on);
+      applied(on);
     })();
   }, [user]);
 
-  return { ready, weeklyDigest, saving, error, configured, setWeeklyDigest };
+  const setWeeklyDigest = useCallback(
+    (on: boolean) => save("weekly_digest", on, setWeekly), [save]);
+  const setWatchlistAlerts = useCallback(
+    (on: boolean) => save("watchlist_alerts", on, setAlerts), [save]);
+
+  return { ready, weeklyDigest, watchlistAlerts, saving, error, configured,
+           setWeeklyDigest, setWatchlistAlerts };
 }
