@@ -70,6 +70,12 @@ def text(d: Digest, site: str, unsubscribe_url: str) -> str:
         for e in d.week_events:
             lines.append(f"  {_day(e['date'])}  {e['name']}")
 
+    if d.priced_moves:
+        lines += ["", "PRICED FOR THE BIGGEST MOVES ON EARNINGS"]
+        for r in d.priced_moves:
+            lines.append(f"  {_day(r['date'])}  {r['symbol']}  ±{r['priced']:.1f}%")
+        lines.append(f"  {_priced_note(d.priced_record)}")
+
     if d.quiet:
         lines += ["", "Nothing is set up and nothing is dated. A quiet week is a",
                   "quiet week — there is no reading hidden in it."]
@@ -80,6 +86,16 @@ def text(d: Digest, site: str, unsubscribe_url: str) -> str:
               f"Open the site: {site}",
               f"Stop these emails: {unsubscribe_url}"]
     return "\n".join(lines)
+
+
+def _priced_note(record: dict | None) -> str:
+    """What the priced move is, and how often it has held."""
+    base = ("The at-the-money straddle at the first expiry after the report: "
+            "how big a move the options pay for, either way.")
+    if not record:
+        return base
+    return (f"{base} The actual move has stayed inside it on "
+            f"{record['inside_pct']}% of the last {record['n']} reports read.")
 
 
 def _section(title: str, body: str) -> str:
@@ -147,6 +163,16 @@ def html(d: Digest, site: str, unsubscribe_url: str) -> str:
                  esc(e["name"]))
             for e in d.week_events)
         parts.append(_section("Dated this week", body))
+
+    if d.priced_moves:
+        body = "".join(
+            _row(f'<span style="color:{WARN};">{esc(_day(r["date"]))}</span> '
+                 f'<span style="font-family:{MONO};">{esc(r["symbol"])}</span>',
+                 f'&plusmn;{r["priced"]:.1f}%')
+            for r in d.priced_moves)
+        body += (f'<p style="margin:8px 0 0 0;font-size:12px;line-height:1.5;'
+                 f'color:{DIM};">{esc(_priced_note(d.priced_record))}</p>')
+        parts.append(_section("Priced for the biggest moves on earnings", body))
 
     if d.quiet:
         parts.append(_section("A quiet week", _row(

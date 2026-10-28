@@ -30,6 +30,7 @@ from typing import Any
 # nobody reads, and the site is one tap away for the rest.
 MAX_PER_SCREEN = 6
 MAX_EVENTS = 8
+MAX_PRICED = 8
 
 
 @dataclass
@@ -42,6 +43,11 @@ class Digest:
     indexes: list[dict] = field(default_factory=list)
     setups: list[dict] = field(default_factory=list)
     week_events: list[dict] = field(default_factory=list)
+    # The coming week's reporters with the largest move the options price,
+    # and how often that priced move has held. From the Market Desk's chain
+    # read, through the published calendar.
+    priced_moves: list[dict] = field(default_factory=list)
+    priced_record: dict | None = None
     quiet: bool = False
 
 
@@ -155,7 +161,20 @@ def build(out: pathlib.Path) -> Digest:
                                    "name": meeting.get("label", "FOMC decision"),
                                    "notable": True})
 
-    quiet = not setups and not week_events
+    # Biggest priced moves among the company's own reports in the next week.
+    # A peer's read-through row carries no priced move, so it cannot appear.
+    upcoming = _read(out, "catalysts/upcoming.json") or {}
+    priced_moves = sorted(
+        ({"symbol": e["ticker"], "date": e["date"], "priced": e["priced_move_pct"]}
+         for e in upcoming.get("events") or []
+         if e.get("type") == "earnings" and not e.get("readthrough")
+         and e.get("priced_move_pct") and 0 <= e.get("days_until", 99) <= 9),
+        key=lambda r: -r["priced"])[:MAX_PRICED]
+    context = _read(out, "market/context.json") or {}
+    record = context.get("earnings_priced")
+    priced_record = record if record and record.get("n") and record.get("inside_pct") is not None else None
+
+    quiet = not setups and not week_events and not priced_moves
 
     return Digest(
         as_of=meta.get("as_of", ""),
@@ -165,6 +184,8 @@ def build(out: pathlib.Path) -> Digest:
         indexes=(indexes or {}).get("rows", []),
         setups=setups,
         week_events=week_events,
+        priced_moves=priced_moves,
+        priced_record=priced_record,
         quiet=quiet,
     )
 
