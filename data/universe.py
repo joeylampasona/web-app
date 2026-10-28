@@ -339,6 +339,34 @@ PROVIDER_MISSES_KEY = "universe.provider_share_misses.v2"
 CLASS_COUNTS_KEY = "universe.share_class_counts"
 
 
+# A share count that makes the company smaller than a few days of its own
+# trading is a wrong count, not a small company. SEC's cover-page figure for
+# Tempus AI was 179,404 shares (a $13M company trading $360M a day); for
+# Brookfield Renewable 6M units and for Genius Sports 10M shares, each a
+# fraction of the real figure. All three passed "has a share count", failed
+# the size gate, and refreshed the same wrong count from SEC every month.
+# Twenty sessions averaging more than this share of the implied company a day
+# sends the count to the data provider instead.
+SUSPECT_TURNOVER = 0.15
+# A suspect the provider has answered is not asked again for this long: a
+# stock that genuinely trades that much would otherwise spend the budget
+# every night on the same confirmation.
+CONFIRMED_KEY = "universe.provider_confirmed_counts"
+CONFIRMED_DAYS = 30
+
+
+def suspect_counts(priced, shares: dict[str, float]) -> list[str]:
+    """Symbols whose count implies they turn over an implausible share of
+    themselves every day."""
+    out = []
+    for row, close, adv in priced:
+        symbol = row["symbol"]
+        count = shares.get(symbol)
+        if count and close and close > 0 and adv / (count * close) > SUSPECT_TURNOVER:
+            out.append(symbol)
+    return out
+
+
 def class_share_counts(conn: sqlite3.Connection) -> list[str]:
     """Symbols whose market cap rests on one share class's count."""
     try:
@@ -471,15 +499,31 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
             reasons.setdefault(symbol, "foreign listing: waiting for the data "
                                        "provider's count")
     unanswered = [s for s in stale if not shares.get(s) and s not in misses]
-    provider = (adapter or get_adapter()) if unanswered else None
+    try:
+        confirmed = json.loads(store.get_kv(conn, CONFIRMED_KEY, "{}")) or {}
+    except (TypeError, ValueError):
+        confirmed = {}
+    since = (dt.date.today() - dt.timedelta(days=CONFIRMED_DAYS)).isoformat()
+    confirmed = {s: d for s, d in confirmed.items() if d >= since}
+    suspects = [s for s in suspect_counts(priced, shares)
+                if s not in misses and s not in unanswered and s not in confirmed]
+    provider = (adapter or get_adapter()) if (unanswered or suspects) else None
     if provider is not None and provider.name != "synthetic":
         adapter = provider
         adv_of = {r["symbol"]: adv for r, _, adv in priced}
-        ask = sorted(unanswered, key=lambda s: -adv_of.get(s, 0.0))
+        # Names with no count at all first: they are out of the universe
+        # until answered, while a suspect at least has a figure to stand on.
+        ask = (sorted(unanswered, key=lambda s: -adv_of.get(s, 0.0))
+               + sorted(suspects, key=lambda s: -adv_of.get(s, 0.0)))
         ask = ask[:PROVIDER_SHARES_BUDGET]
         if notice:
-            notice(f"{len(unanswered):,} names have no current SEC share count; "
+            notice(f"{len(unanswered):,} names have no current SEC share count and "
+                   f"{len(suspects):,} have one too small for how they trade; "
                    f"asking {adapter.name} for the {len(ask)} most traded.")
+            for symbol in suspects:
+                if symbol in ask:
+                    notice(f"  suspect count for {symbol}: "
+                           f"{shares[symbol]:,.0f} shares")
         rescued_counts: dict[str, float] = {}
         class_counts = set(class_share_counts(conn))
         for symbol in ask:
@@ -487,6 +531,8 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
             if value:
                 rescued_counts[symbol] = value
                 reasons.pop(symbol, None)
+                if symbol in suspects:
+                    confirmed[symbol] = dt.date.today().isoformat()
                 if basis == "share_class":
                     class_counts.add(symbol)
                 else:
@@ -496,6 +542,7 @@ def build(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
         store.set_shares(conn, rescued_counts)
         store.set_kv(conn, PROVIDER_MISSES_KEY, json.dumps(misses))
         store.set_kv(conn, CLASS_COUNTS_KEY, json.dumps(sorted(class_counts)))
+        store.set_kv(conn, CONFIRMED_KEY, json.dumps(confirmed))
         shares.update(rescued_counts)
         if notice and rescued_counts:
             notice(f"  {adapter.name} supplied {len(rescued_counts)}: " + ", ".join(
