@@ -155,14 +155,27 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
     positioning = payload.get("positioning")
     if not (isinstance(positioning, dict) and positioning.get("markets")):
         positioning = None
+    # 1.6 and 1.7 blocks, each optional: absent on an older run, null on a
+    # night the desk had nothing, and stored as null either way.
+    context = payload.get("market_context")
+    context = context if isinstance(context, dict) else None
+    earn_iv = payload.get("earnings_iv")
+    earn_iv = earn_iv if isinstance(earn_iv, dict) else None
+    holders = payload.get("holders")
+    holders = holders if isinstance(holders, dict) and holders.get("by_ticker") else None
     conn.execute(
         "INSERT OR REPLACE INTO desk_runs"
         "(as_of, generated_at, schema_version, universe_size, stage_status,"
-        " fetched_at, edge, positioning)"
-        " VALUES (?,?,?,?,?,?,?,?)",
+        " fetched_at, edge, positioning, market_context, earnings_iv, holders)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (stamp, str(payload.get("generated_at_utc") or ""), version,
          payload.get("universe_size"), json.dumps(stage_status), now,
-         json.dumps(edge), json.dumps(positioning)))
+         json.dumps(edge), json.dumps(positioning), json.dumps(context),
+         json.dumps(earn_iv), json.dumps(holders)))
+    if holders:
+        # Half a megabyte a night, in a database the nightly caches whole.
+        # Only the newest copy is ever read.
+        conn.execute("UPDATE desk_runs SET holders = 'null' WHERE as_of < ?", (stamp,))
     conn.commit()
 
     if notice:
@@ -215,6 +228,15 @@ def track_records(conn: sqlite3.Connection) -> dict[tuple[str, str], dict]:
             # and are scored "edge" for it. Without this a page would read
             # that as a recommendation.
             "thesis": r.get("thesis") or 0,
+            # The sign of a measured effect, for types that claim none.
+            "direction": r.get("direction") or 0,
+            # Against the stock's own sector over the same sessions, so a
+            # type that only rode its sector's good week reads as that.
+            "excess_sector3": r.get("excess_sector3"),
+            "n_sector": r.get("n_sector"),
+            # Separate nights the verdict rests on. Signals on one night
+            # share a market; the desk's verdict is computed per night.
+            "nights": r.get("nights"),
         }
     return out
 
@@ -235,6 +257,52 @@ def positioning(conn: sqlite3.Connection) -> dict | None:
         if isinstance(table, dict) and table.get("markets"):
             return table
     return None
+
+
+def _newest_block(conn: sqlite3.Connection, column: str, runs: int):
+    """The newest non-null JSON block in `column` over the last `runs` runs."""
+    for row in conn.execute(
+            f"SELECT {column} FROM desk_runs ORDER BY as_of DESC LIMIT ?", (runs,)):
+        try:
+            value = json.loads(row[column] or "null")
+        except (TypeError, ValueError):
+            continue
+        if isinstance(value, dict) and value:
+            return value
+    return None
+
+
+def market_context(conn: sqlite3.Connection) -> dict | None:
+    """CBOE put/call and the desk's regime label, from the newest run only.
+
+    The newest run, not the newest with a reading: the desk already nulls a
+    reading past its own clock, and reaching back to an older run would undo
+    exactly that and file last week's ratio as tonight's.
+    """
+    row = conn.execute(
+        "SELECT market_context FROM desk_runs ORDER BY as_of DESC LIMIT 1").fetchone()
+    if not row:
+        return None
+    try:
+        value = json.loads(row["market_context"] or "null")
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    if not (value.get("put_call") or value.get("regime")):
+        return None
+    return {"put_call": value.get("put_call"), "regime": value.get("regime")}
+
+
+def earnings_iv(conn: sqlite3.Connection) -> dict | None:
+    """The priced-against-realised earnings read from the last few runs."""
+    return _newest_block(conn, "earnings_iv", 3)
+
+
+def holders(conn: sqlite3.Connection) -> dict | None:
+    """The tracked funds' 13F holders per ticker. Quarterly, so a run or two
+    without the block does not empty it."""
+    return _newest_block(conn, "holders", 10)
 
 
 def earnings_dates(conn: sqlite3.Connection) -> dict[str, tuple[dt.date, str]]:

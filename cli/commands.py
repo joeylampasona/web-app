@@ -758,6 +758,15 @@ def cmd_publish(args) -> int:
     # The Market Desk's weekly positioning table, when it has supplied one.
     from data import marketdesk as desk_mod
     positioning = desk_mod.positioning(conn)
+    # And its 1.6/1.7 blocks: put/call and regime, the priced earnings read,
+    # and the tracked funds' holders. Each is None until the desk sends it.
+    market_context = desk_mod.market_context(conn)
+    earnings_iv = desk_mod.earnings_iv(conn)
+    holders = desk_mod.holders(conn)
+
+    # Filed figures, from the fundamentals step's cache. Never fetched here.
+    from data import fundamentals as fundamentals_mod
+    filed = fundamentals_mod.load(conn)
 
     # How each company has moved across its recent reports, from the bars we
     # already hold and the report dates the earnings cache already keeps.
@@ -782,7 +791,11 @@ def cmd_publish(args) -> int:
                              lost_leaders=lost_leaders,
                              lost_leader_reasons=lost_reasons,
                              positioning=positioning,
-                             earnings_moves=earnings_moves)
+                             earnings_moves=earnings_moves,
+                             market_context=market_context,
+                             earnings_iv=earnings_iv,
+                             holders=holders,
+                             fundamentals=filed)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")
@@ -942,6 +955,28 @@ def cmd_gated(args) -> int:
         # identical from the outside.
         return 0
     return 0 if report.ok else 1
+
+
+def cmd_fundamentals(args) -> int:
+    """Trailing-twelve-month figures from SEC filings, most traded names first.
+
+    A budget a night and a month between refreshes, so the first week fills
+    the universe in and every night after that touches only what aged out.
+    """
+    from data import edgar, fundamentals
+    conn = _conn()
+    rows = sorted(store.universe_rows(conn), key=lambda r: -(r["adv20"] or 0.0))
+    _banner(f"Fundamentals — {len(rows):,} names in the universe")
+    try:
+        result = fundamentals.refresh(conn, [r["symbol"] for r in rows],
+                                      notice=lambda m: print(m, flush=True))
+    except edgar.EdgarUnavailable as exc:
+        print(f"  {exc}")
+        return 1
+    print(f"  asked {result['asked']}: {result['stored']} with figures, "
+          f"{result['empty']} with none in US GAAP, {result.get('refused', 0)} refused; "
+          f"{result['remaining']} still to fetch")
+    return 0
 
 
 def cmd_all(args) -> int:

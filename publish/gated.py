@@ -102,6 +102,10 @@ FREE_POSITIONING_KEYS = ("ES", "NQ")
 # work that answers it properly.
 EARNINGS_MOVE_FREE_KEYS = ("count", "avg_abs_pct")
 
+# Tracked-fund holders: how many hold it and what they did last quarter is
+# free; which funds, and how much of each book it is, is the work.
+HOLDER_FREE_KEYS = ("n", "new", "added", "trimmed", "sold")
+
 TABLE = "gated_content"
 # Written last, and only when every document landed. The nightly's gate reads
 # it: a session on the public data branch with no matching marker here means
@@ -256,6 +260,20 @@ def free_earnings_moves(payload: dict | None) -> dict | None:
     if not payload:
         return None
     return {k: payload[k] for k in EARNINGS_MOVE_FREE_KEYS if k in payload}
+
+
+def holder_documents(holders: dict[str, dict] | None,
+                     as_of: dt.date) -> list[Document]:
+    """One document per company a tracked fund holds or just sold."""
+    return [Document(f"stocks/holders/{symbol.lower()}.json", payload, as_of)
+            for symbol, payload in sorted((holders or {}).items()) if payload]
+
+
+def free_holders(payload: dict | None) -> dict | None:
+    """The counts. No fund names, no weights."""
+    if not payload:
+        return None
+    return {k: payload[k] for k in HOLDER_FREE_KEYS if k in payload}
 
 
 def free_xray(history: list) -> list:

@@ -63,7 +63,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from publish.gated import (BACKTEST_GATED_KEYS,  # noqa: E402
-                           EARNINGS_MOVE_FREE_KEYS, FREE_GAMMA_ROWS,
+                           EARNINGS_MOVE_FREE_KEYS, FREE_GAMMA_ROWS, HOLDER_FREE_KEYS,
                            FREE_POSITIONING_KEYS, FREE_SCREEN_LOCKED_STAGES,
                            FREE_SCREEN_ROWS, FREE_SEASONAL_SYMBOL,
                            FREE_XRAY_BASES)
@@ -218,6 +218,7 @@ def check(out: pathlib.Path) -> list[str]:
     forecast_leaked: list[str] = []
     xray_leaked: list[str] = []
     moves_leaked: list[str] = []
+    holders_leaked: list[str] = []
     marked = 0
     forecast_marked = 0
     for path in stocks:
@@ -243,6 +244,10 @@ def check(out: pathlib.Path) -> list[str]:
         moves = payload.get("earnings_moves") or {}
         if set(moves) - set(EARNINGS_MOVE_FREE_KEYS):
             moves_leaked.append(symbol)
+        # Counts and the filing period only: never which funds, or weights.
+        held = payload.get("holders") or {}
+        if set(held) - set(HOLDER_FREE_KEYS) - {"period", "counted"}:
+            holders_leaked.append(symbol)
 
     print(f"  stocks/             {len(stocks)} file(s)   "
           f"{len(free)} public gamma / {marked} gated   "
@@ -256,6 +261,8 @@ def check(out: pathlib.Path) -> list[str]:
         failures.append(f"{len(names)} stock file(s) publish {what} "
                         f"({shown}{more}). {why}")
 
+    leak(holders_leaked, "which tracked funds hold the stock",
+         "The count is free; the fund list and weights are the subscriber half.")
     leak(leaked, "gamma for names outside the free sample",
          "The board is gated and its rows are not, which gives the board away "
          "to anyone who fetches the files.")

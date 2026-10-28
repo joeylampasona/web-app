@@ -232,6 +232,15 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         run: python -m cli catalysts
 
+      # Context on the stock page, never part of a screen, so a bad night at
+      # SEC must not stop the session publishing. It says so in Discord
+      # instead, through the step below that reports quiet failures.
+      - name: Fundamentals from SEC filings
+        id: fundamentals
+        continue-on-error: true
+        if: steps.gate.outputs.run == 'true'
+        run: python -m cli fundamentals
+
       - name: Precompute default backtests and publish
         id: publish
         if: steps.gate.outputs.run == 'true'
@@ -486,17 +495,19 @@ jobs:
         continue-on-error: true
         if: >-
           always() && env.DISCORD_WEBHOOK_URL != '' &&
-          (steps.summary.outcome == 'failure' || steps.briefing.outcome == 'failure')
+          (steps.summary.outcome == 'failure' || steps.briefing.outcome == 'failure' ||
+           steps.fundamentals.outcome == 'failure')
         shell: bash
         run: |
           failed=""
           [ "${{ steps.summary.outcome }}"  = failure ] && failed="the nightly summary"
           [ "${{ steps.briefing.outcome }}" = failure ] && failed="${failed:+$failed and }the X draft"
+          [ "${{ steps.fundamentals.outcome }}" = failure ] && failed="${failed:+$failed and }the fundamentals refresh"
           run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           FAILED="$failed" RUN_URL="$run_url" python - <<'PY'
           import json, os, urllib.request
           body = {"content": f"⚠️ The data published, but {os.environ['FAILED']} "
-                             f"failed to build or send.\n{os.environ['RUN_URL']}"}
+                             f"failed.\n{os.environ['RUN_URL']}"}
           request = urllib.request.Request(
               os.environ["DISCORD_WEBHOOK_URL"],
               data=json.dumps(body).encode(),

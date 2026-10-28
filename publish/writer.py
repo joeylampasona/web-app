@@ -162,6 +162,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             lost_leader_reasons: dict[str, str] | None = None,
             positioning: dict | None = None,
             earnings_moves: dict[str, dict] | None = None,
+            market_context: dict | None = None,
+            earnings_iv: dict | None = None,
+            holders: dict | None = None,
+            fundamentals: dict[str, dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -215,6 +219,49 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             **public_positioning,
             "count": len(positioning["markets"]),
             "gated": True,
+        }))
+
+    # ---- Market Desk: holders, priced earnings moves, market context ----
+    #
+    # Holders: how many tracked funds hold a name is free; which ones is not,
+    # split exactly like the earnings moves above.
+    holder_rows = {symbol.upper(): payload for symbol, payload
+                   in ((holders or {}).get("by_ticker") or {}).items()}
+    holder_meta = {"period": (holders or {}).get("period"),
+                   "counted": (holders or {}).get("counted")}
+    gated_documents.extend(gatedmod.holder_documents(
+        {s: {**p, **holder_meta} for s, p in holder_rows.items()
+         if s in set(market.universe)}, as_of))
+    holders_public = {symbol: {**gatedmod.free_holders(payload), **holder_meta}
+                      for symbol, payload in holder_rows.items()}
+
+    # Priced moves: the latest read per name, upcoming first. A settled read
+    # is kept beside it so a page can say whether the last priced move held.
+    priced_next: dict[str, dict] = {}
+    priced_last: dict[str, dict] = {}
+    for row in (earnings_iv or {}).get("upcoming") or []:
+        symbol = str(row.get("ticker") or "").upper()
+        if symbol and row.get("implied_pct") and symbol not in priced_next:
+            priced_next[symbol] = {k: row.get(k) for k in
+                                   ("report_date", "hour", "expiry", "implied_pct", "d")}
+    for row in (earnings_iv or {}).get("settled") or []:
+        symbol = str(row.get("ticker") or "").upper()
+        if symbol and row.get("implied_pct") and symbol not in priced_last:
+            priced_last[symbol] = {k: row.get(k) for k in
+                                   ("report_date", "implied_pct", "realised_pct", "inside")}
+
+    # Put/call and the desk's regime label, and the running record of how
+    # often the options market's priced earnings move has held. Free: market
+    # level, and the record is the honest half of the priced-move feature.
+    if market_context or (earnings_iv or {}).get("tally"):
+        written.append(_write(out / "market" / "context.json", {
+            "as_of": as_of.isoformat(),
+            "put_call": (market_context or {}).get("put_call"),
+            "regime": (market_context or {}).get("regime"),
+            "earnings_priced": ({**earnings_iv["tally"],
+                                 "as_of": earnings_iv.get("as_of")}
+                                if (earnings_iv or {}).get("tally") else None),
+            "source": "Market Desk",
         }))
 
     # ---- screens ------------------------------------------------------
@@ -373,7 +420,13 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              gamma_locked=gamma_locked,
                                              forecast_locked=forecast_locked,
                                              moves=moves_public,
-                                             moves_locked=moves_locked)))
+                                             moves_locked=moves_locked,
+                                             holders=holders_public,
+                                             holders_locked=set(holder_rows),
+                                             priced=(priced_next.get(symbol),
+                                                     priced_last.get(symbol)),
+                                             fundamentals=(fundamentals or {}).get(symbol),
+                                             fundamentals_known=symbol in (fundamentals or {}))))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -406,7 +459,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "count": len(upcoming),
         "owned": sum(1 for e in upcoming if not e.readthrough),
         "readthrough": sum(1 for e in upcoming if e.readthrough),
-        "events": [e.to_json(as_of) for e in upcoming],
+        "events": [_with_priced(e.to_json(as_of), priced_next) for e in upcoming],
         "type_labels": ev.TYPE_LABELS,
     }))
     # Handed in from the cache the catalysts stage fills, like news and insiders:
@@ -930,6 +983,33 @@ def _news_articles(articles: list[dict], market: Market,
         })
     return out
 
+def _with_priced(event: dict, priced: dict[str, dict]) -> dict:
+    """An earnings event with the move the options price into it, when the
+    desk read that name's chain for this same report."""
+    hit = priced.get(str(event.get("ticker") or "").upper())
+    if (hit and event.get("type") == "earnings" and not event.get("readthrough")
+            and hit.get("report_date") == event.get("date")):
+        return {**event, "priced_move_pct": hit.get("implied_pct")}
+    return event
+
+
+def _fundamentals_view(payload: dict | None, cap: float | None) -> dict | None:
+    """The filed figures plus the multiples a market cap makes of them.
+
+    A multiple on a loss is not a number anyone should read, so P/E is null
+    when earnings are not positive; the margin beside it says the rest.
+    """
+    if not payload:
+        return None
+    view = dict(payload)
+    revenue, income, fcf = (payload.get("revenue_ttm"), payload.get("net_income_ttm"),
+                            payload.get("fcf_ttm"))
+    view["price_to_sales"] = round(cap / revenue, 2) if cap and revenue and revenue > 0 else None
+    view["price_to_earnings"] = round(cap / income, 2) if cap and income and income > 0 else None
+    view["fcf_yield"] = round(100.0 * fcf / cap, 1) if cap and fcf is not None else None
+    return view
+
+
 def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    setups_by_symbol: dict, calendar: ev.Calendar, bar_limit: int,
                    insiders: dict[str, dict] | None = None,
@@ -940,7 +1020,12 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    gamma_locked: set[str] | None = None,
                    forecast_locked: set[str] | None = None,
                    moves: dict[str, dict] | None = None,
-                   moves_locked: set[str] | None = None) -> dict:
+                   moves_locked: set[str] | None = None,
+                   holders: dict[str, dict] | None = None,
+                   holders_locked: set[str] | None = None,
+                   priced: tuple[dict | None, dict | None] = (None, None),
+                   fundamentals: dict | None = None,
+                   fundamentals_known: bool = False) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -1026,6 +1111,21 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # and the count, free. The dated reports are fetched by subscribers.
         "earnings_moves": (moves or {}).get(symbol),
         "earnings_moves_gated": symbol in (moves_locked or set()),
+        # The move the options price into the next report, from the Market
+        # Desk's chain read, and whether the last priced move held.
+        "earnings_priced": priced[0],
+        "earnings_priced_last": priced[1],
+        # How many of the desk's tracked funds hold it. Which funds is fetched
+        # by subscribers.
+        # Absent entirely until the desk has sent a holders table, so a page
+        # does not say "no tracked fund holds it" about every company on a
+        # night when the feed simply has not arrived.
+        **({"holders": holders.get(symbol),
+            "holders_gated": symbol in (holders_locked or set())} if holders else {}),
+        # Absent until the fundamentals step has asked SEC about the company;
+        # null once it has and there was nothing in US GAAP to read.
+        **({"fundamentals": _fundamentals_view(fundamentals, market.caps.get(symbol))}
+           if fundamentals_known else {}),
         # Only for names on no screen: what is and is not in place. A stock
         # already on one has its own card saying the same thing better.
         "structure_check": (None if setups

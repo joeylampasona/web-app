@@ -50,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
                      help="with --alerts, actually email them (default: dry run)")
     sub.add_parser("publish", help="write the out/ JSON tree")
     sub.add_parser("gated", help="upload the staged gated/ documents to Supabase")
+    sub.add_parser("fundamentals",
+                   help="refresh XBRL fundamentals for the most traded stale names")
     p_brief = sub.add_parser("briefing",
                              help="compose the X post draft from the published tree")
     p_brief.add_argument("--send", action="store_true",
