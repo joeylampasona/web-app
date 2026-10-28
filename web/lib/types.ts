@@ -392,6 +392,8 @@ export interface StockFile {
   holders_gated?: boolean;
   /** Trailing twelve months from the company's own XBRL filings. */
   fundamentals?: Fundamentals | null;
+  /** Prices tested three or more times in the last 120 sessions. */
+  levels?: LevelsSummary | null;
   /** This stock has more completed bases than the free sample shows. Flag
    *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
@@ -650,6 +652,19 @@ export interface Fundamentals {
   cash: number | null; net_debt: number | null; equity: number | null;
   price_to_sales: number | null; price_to_earnings: number | null;
   fcf_yield: number | null;
+}
+
+export interface PriceLevel {
+  price: number; touches: number;
+  /** Sessions since the most recent touch. */
+  sessions_ago: number;
+}
+
+export interface LevelsSummary {
+  close: number; atr: number | null; lookback: number;
+  support: PriceLevel | null; resistance: PriceLevel | null;
+  /** Every level within 25% of the close, by price. */
+  levels: PriceLevel[];
 }
 
 export interface MarketContextFile {

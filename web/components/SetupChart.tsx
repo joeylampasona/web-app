@@ -20,6 +20,10 @@ import type { ShapeGeometry } from "@/lib/types";
  * either way, and a searched stock deserves to see them.
  */
 
+export type ChartLevel = {
+  price: number; touches: number; side: "support" | "resistance" | "other";
+};
+
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
 
 /** A chart asked to size itself picks a height from its own width, held
@@ -52,7 +56,7 @@ function token(name: string, fallback = "transparent"): string {
 
 export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
-  movingAverages, shape,
+  movingAverages, shape, levels,
 }: {
   bars: Bar[];
   /** Null when the stock is not on a screen: there is no pivot to draw. */
@@ -75,6 +79,9 @@ export function SetupChart({
    *  trendlines and marks the swings they were fitted through, so the reader
    *  can see the structure the screen claims rather than take it on trust. */
   shape?: ShapeGeometry | null;
+  /** Three-touch support and resistance, drawn dotted with their touch
+   *  counts. Only the stock page's levels chart passes these. */
+  levels?: ChartLevel[] | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [measured, setMeasured] = useState<number | null>(null);
@@ -189,6 +196,19 @@ export function SetupChart({
           crosshairMarkerVisible: false,
         });
         line.setData(points as never);
+      }
+
+      for (const level of levels ?? []) {
+        candles.createPriceLine({
+          price: level.price,
+          color: level.side === "support" ? token("--gain")
+            : level.side === "resistance" ? token("--loss")
+              : token("--chart-prior-base"),
+          lineWidth: level.side === "other" ? 1 : 2,
+          lineStyle: lw.LineStyle.Dotted,
+          axisLabelVisible: level.side !== "other",
+          title: `${level.touches}×`,
+        });
       }
 
       if (pivot !== null) {
@@ -334,7 +354,7 @@ export function SetupChart({
       cleanup();
     };
   }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady,
-      movingAverages, shape]);
+      movingAverages, shape, levels]);
 
   return (
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>

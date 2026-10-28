@@ -13,7 +13,7 @@ from catalysts import news as newsmod
 from data import classify, settings
 from data.market import Market
 from patterns import detectors, flags as flagsmod, params as param_module
-from patterns import scan, stages
+from patterns import levels as levels_mod, scan, stages
 from publish import gated as gatedmod
 from publish import schema
 from rankings import breadth, groups, indexes as index_rows
@@ -1070,6 +1070,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                                            bundle.change(symbol, "m1"))),
         "bars_format": BAR_FORMAT,
         "bars": _bars_for(market, symbol, bar_limit),
+        # Prices tested three or more times in the last 120 sessions, and the
+        # nearest either side of the close. Where they sit, not a forecast.
+        "levels": levels_mod.summary(market.series.get(symbol) or []),
         # Only the 200. The 9, 21 and 50 need at most fifty prior bars, and the
         # hundred and eighty we ship contain them, so the browser derives those
         # three itself. Publishing all four would add about 11MB to every

@@ -11,6 +11,7 @@ import { GatedEarningsMoves } from "./EarningsMoves";
 import { EarningsPriced } from "./EarningsPriced";
 import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
+import { LevelsPanel } from "./LevelsPanel";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
@@ -165,6 +166,13 @@ export function StockDetail({ stock, run }: {
             </div>
           )}
         </div>
+      )}
+
+      {stock.levels !== undefined && (
+        <section className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <div className="eyebrow">Support and resistance</div>
+          <LevelsPanel summary={stock.levels} bars={chartBars} symbol={stock.symbol} />
+        </section>
       )}
 
       {/* Below the chart the page stops being one column on a wide screen.
