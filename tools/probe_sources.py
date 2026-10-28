@@ -326,6 +326,7 @@ def main() -> int:
     probe_open_interest(agent)
     probe_flag_gates()
     probe_quote_sources(agent)
+    probe_universe_trace()
     print()
     print(RULE)
     print("Probe complete. Nothing was written.")
@@ -386,6 +387,69 @@ def probe_flag_gates() -> None:
     for width in (3, 4, 5, 6, 8, 10, 12, 15, 20):
         print(f"      pause may wander {width:>2}% high-to-low          "
               f"{count(max_channel_pct=float(width)):4d}")
+
+
+def probe_universe_trace() -> None:
+    """Where named tickers fall out of the universe, gate by gate.
+
+    BEP, GENI and TEM pass every published filter on any public screener and
+    are still absent, and never reach the share-count step in the nightly
+    log. This prints, for each, what the cached database holds and what
+    Polygon's reference endpoint says, so the gate that drops them is read
+    off rather than guessed. PROBE_SYMBOLS overrides the list.
+    """
+    print()
+    print(RULE)
+    print("5. UNIVERSE TRACE — where named tickers drop out")
+    print(RULE)
+    symbols = [s.strip().upper() for s in
+               (os.environ.get("PROBE_SYMBOLS") or "BEP,GENI,TEM").split(",") if s.strip()]
+    try:
+        from data import settings, store
+        from data.universe import PROVIDER_MISSES_KEY, CLASS_COUNTS_KEY
+        conn = store.open_db()
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   no usable database here: {exc}")
+        return
+    cfg = settings.get("universe", {}) or {}
+    print(f"   allowed types {cfg.get('allowed_types')}")
+    misses = json.loads(store.get_kv(conn, PROVIDER_MISSES_KEY, "{}") or "{}")
+    classes = set(json.loads(store.get_kv(conn, CLASS_COUNTS_KEY, "[]") or "[]"))
+    last = store.last_session(conn)
+    key = os.environ.get("POLYGON_API_KEY", "").strip()
+    for sym in symbols:
+        print(f"\n   {sym}")
+        row = conn.execute("SELECT * FROM tickers WHERE symbol=?", (sym,)).fetchone()
+        print("     reference row: " + ("none" if row is None else
+              json.dumps({k: row[k] for k in row.keys()}, default=str)))
+        bar = conn.execute("SELECT date, close, volume FROM bars WHERE symbol=? "
+                           "ORDER BY date DESC LIMIT 1", (sym,)).fetchone()
+        print(f"     newest bar: {None if bar is None else tuple(bar)} (session {last})")
+        try:
+            sh = conn.execute("SELECT shares_outstanding, fetched_at FROM fundamentals "
+                              "WHERE symbol=?", (sym,)).fetchone()
+            print(f"     cached share count: {None if sh is None else tuple(sh)}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"     cached share count: unreadable ({exc})")
+        print(f"     parked as a provider miss: {misses.get(sym)}; "
+              f"class count: {sym in classes}")
+        uni = conn.execute("SELECT * FROM universe WHERE symbol=?", (sym,)).fetchone()
+        print("     universe row: " + ("none" if uni is None else
+              json.dumps({k: uni[k] for k in uni.keys()}, default=str)))
+        if key:
+            try:
+                resp = requests.get(f"https://api.polygon.io/v3/reference/tickers/{sym}",
+                                    params={"apiKey": key}, timeout=30)
+                res = (resp.json() or {}).get("results") or {}
+                print(f"     polygon {resp.status_code}: " + json.dumps(
+                    {k: res.get(k) for k in ("type", "market", "locale", "active",
+                                             "primary_exchange", "name",
+                                             "weighted_shares_outstanding",
+                                             "share_class_shares_outstanding")}))
+            except Exception as exc:                  # noqa: BLE001
+                print(f"     polygon: request failed ({type(exc).__name__})")
+        else:
+            print("     polygon: POLYGON_API_KEY not set for the probe")
 
 
 if __name__ == "__main__":

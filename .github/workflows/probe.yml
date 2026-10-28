@@ -36,4 +36,6 @@ jobs:
         env:
           # The contact address SEC requires. The probe never prints it.
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          # For the universe trace's reference lookups. Never printed.
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python tools/probe_sources.py
