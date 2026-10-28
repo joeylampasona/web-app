@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - name: Install dependencies
@@ -27,7 +27,7 @@ jobs:
       # Read-only. The flag sweep needs real prices, and this is where they
       # are; nothing here writes the cache back.
       - name: Restore the database
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         with:
           path: var
           key: market-db-polygon-

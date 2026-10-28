@@ -52,9 +52,9 @@ jobs:
       SITE_URL: https://thetape.cc
       DIGEST_FROM: "The Tape <noreply@thetape.cc>"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
@@ -97,7 +97,7 @@ jobs:
       # Only a dry run produces these. A real send writes nothing to disk.
       - name: Upload the letters for review
         if: ${{ github.event_name != 'schedule' && inputs.send != true }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: digest-preview
           path: var/digest-preview/

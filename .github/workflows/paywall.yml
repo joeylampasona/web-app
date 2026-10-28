@@ -29,11 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -63,7 +63,7 @@ jobs:
       # a reverted commit, or a night that predates the check would all leave
       # gated content sitting on a public branch with nothing having failed.
       - name: Fetch the published data branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: data
           path: published

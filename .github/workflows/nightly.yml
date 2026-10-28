@@ -156,10 +156,10 @@ jobs:
             fi
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: steps.gate.outputs.run == 'true'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.gate.outputs.run == 'true'
         with:
           python-version: "3.11"
@@ -202,7 +202,7 @@ jobs:
 
       - name: Restore the database
         if: steps.gate.outputs.run == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: var
           # Scoped by provider. An unscoped key let a fixture run's database be
@@ -399,7 +399,7 @@ jobs:
       - name: Keep a copy as a run artefact
         # Most useful on the nights something failed.
         if: ${{ !cancelled() && steps.gate.outputs.run == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: out
           path: out
