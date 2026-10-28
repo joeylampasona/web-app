@@ -281,7 +281,7 @@ export function CalendarPanel({ file, releases }: {
               <div className="grid-auto" style={{ gap: "var(--gap-xs)" }}>
                 {events.map((event) => (
                   <TickerLink
-                    key={`${event.ticker}-${event.type}-${event.date}`}
+                    key={`${event.ticker}-${event.type}-${event.date}-${event.readthrough?.from ?? "own"}`}
                     symbol={event.ticker}
                     className="card"
                     style={{ padding: "var(--pad-sm) var(--pad-md)", width: "100%" }}
@@ -308,6 +308,11 @@ export function CalendarPanel({ file, releases }: {
                       </span>
                       {event.readthrough && (
                         <span>· reads through from {event.readthrough.from}</span>
+                      )}
+                      {event.priced_move_pct != null && (
+                        <span title="The at-the-money straddle at the first expiry after the report">
+                          · options price ±{event.priced_move_pct.toFixed(1)}%
+                        </span>
                       )}
                     </div>
                   </TickerLink>

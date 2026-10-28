@@ -59,6 +59,9 @@ export interface CatalystEvent {
   ticker: string; type: string; type_label: string; date: string;
   confirmed: string; days_until: number; title: string; details: string;
   readthrough: { from: string; tag: string; theme: string } | null;
+  /** The move the options price into this report, % either way, when the
+   *  Market Desk read the chain. */
+  priced_move_pct?: number | null;
 }
 
 /** A scheduled economic data release. Not ticker-scoped and not a forecast —
@@ -379,6 +382,16 @@ export interface StockFile {
    *  behind the paywall when `earnings_moves_gated` is set. */
   earnings_moves?: EarningsMoves | null;
   earnings_moves_gated?: boolean;
+  /** The move the options price into the next report (Market Desk's chain
+   *  read), and whether the last priced move held. */
+  earnings_priced?: EarningsPriced | null;
+  earnings_priced_last?: EarningsPricedLast | null;
+  /** How many of the Market Desk's tracked funds hold it. The fund list is
+   *  behind the paywall when `holders_gated` is set. */
+  holders?: HolderCounts | null;
+  holders_gated?: boolean;
+  /** Trailing twelve months from the company's own XBRL filings. */
+  fundamentals?: Fundamentals | null;
   /** This stock has more completed bases than the free sample shows. Flag
    *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
@@ -588,6 +601,65 @@ export interface DeskTrack {
   excess3: number | null;
   /** +1 the type claims the stock rises, -1 falls, 0 makes no claim. */
   thesis: number;
+  /** Sign of a measured effect, for types that claim none. */
+  direction?: number;
+  /** Excess over the stock's own sector ETF across the same sessions. */
+  excess_sector3?: number | null;
+  n_sector?: number | null;
+  /** Separate nights the verdict rests on. */
+  nights?: number | null;
+}
+
+export interface EarningsPriced {
+  report_date: string; hour: string; expiry: string | null;
+  /** ATM straddle at the first expiry covering the reaction, % of spot. */
+  implied_pct: number;
+  /** The night the chain was read. */
+  d: string;
+}
+
+export interface EarningsPricedLast {
+  report_date: string; implied_pct: number; realised_pct: number | null;
+  inside: boolean | null;
+}
+
+export interface HolderCounts {
+  n: number; new: number; added: number; trimmed: number; sold: number;
+  /** The quarter the 13F filings are for, and how many funds were counted. */
+  period: string | null; counted: number | null;
+}
+
+export interface HolderFund {
+  name: string;
+  change: "new" | "increased" | "decreased" | "static" | "sold";
+  /** The position's share of that fund's book, %. */
+  pct: number;
+}
+
+export interface HolderDetail extends HolderCounts {
+  value: number;
+  funds: HolderFund[];
+}
+
+export interface Fundamentals {
+  /** The end of the latest quarter in the trailing twelve months (ISO date). */
+  period_end: string;
+  revenue_ttm: number; revenue_growth: number | null;
+  gross_margin: number | null; op_margin: number | null; net_margin: number | null;
+  net_income_ttm: number | null; fcf_ttm: number | null;
+  cash: number | null; net_debt: number | null; equity: number | null;
+  price_to_sales: number | null; price_to_earnings: number | null;
+  fcf_yield: number | null;
+}
+
+export interface MarketContextFile {
+  as_of: string;
+  put_call: { total: number | null; equity: number | null; index: number | null;
+              spx: number | null; as_of: string; source: string } | null;
+  regime: { label: string; score: number; as_of: string } | null;
+  earnings_priced: { n: number; inside_pct?: number; mean_ratio?: number;
+                     as_of?: string } | null;
+  source: string;
 }
 
 /** How a stock has moved across its recent earnings reports, close before the

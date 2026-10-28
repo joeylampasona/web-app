@@ -1,8 +1,9 @@
 import { BreadthGrid } from "@/components/BreadthGrid";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
+import { MarketContext } from "@/components/MarketContext";
 import { longDate } from "@/lib/format";
-import { getBreadth, getMeta, hasData } from "@/lib/data";
+import { getBreadth, getMarketContext, getMeta, hasData } from "@/lib/data";
 
 export default function BreadthPage() {
   if (!hasData()) return <NoData />;
@@ -21,6 +22,7 @@ export default function BreadthPage() {
         signals about what happens next.
       </p>
       <BreadthGrid cards={breadth.cards} universe={breadth.universe_size} />
+      <MarketContext file={getMarketContext()} />
       <MarketCTA />
     </div>
   );

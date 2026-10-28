@@ -69,12 +69,16 @@ function groupByDay(
 }
 
 function Tickers({ events }: { events: CatalystEvent[] }) {
-  const shown = events.slice(0, TICKERS_PER_DAY);
-  const rest = events.length - shown.length;
+  // A company that reports on the day a peer's report reads through to it is
+  // two events with one ticker. It is one name on this line.
+  const unique = events.filter((event, i) =>
+    events.findIndex((other) => other.ticker === event.ticker) === i);
+  const shown = unique.slice(0, TICKERS_PER_DAY);
+  const rest = unique.length - shown.length;
   return (
     <span className="wrap" style={{ display: "inline" }}>
       {shown.map((event, index) => (
-        <span key={event.ticker + event.type}>
+        <span key={event.ticker}>
           <TickerLink symbol={event.ticker} className="mono">{event.ticker}</TickerLink>
           {index < shown.length - 1 ? ", " : ""}
         </span>

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  FormingSummary, PositioningFile, ScreenFile, StockFile,
+  FormingSummary, MarketContextFile, PositioningFile, ScreenFile, StockFile,
 } from "./types";
 
 // The web layer reads static JSON the pipeline wrote. It never queries a
@@ -256,6 +256,12 @@ export function getFormingSummary() {
 
 export function getPositioning() {
   return read<PositioningFile>("market/positioning.json");
+}
+
+/** Put/call, the Market Desk's regime label, and the priced-earnings record.
+ *  Null until the desk has sent any of them. */
+export function getMarketContext() {
+  return read<MarketContextFile>("market/context.json");
 }
 
 export function getInsiderCalendar() {

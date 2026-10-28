@@ -8,6 +8,9 @@ import { DeskSignals } from "./DeskSignals";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { GatedForecastPanel } from "./GatedForecastPanel";
 import { GatedEarningsMoves } from "./EarningsMoves";
+import { EarningsPriced } from "./EarningsPriced";
+import { FundamentalsPanel } from "./FundamentalsPanel";
+import { GatedHolders } from "./Holders";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
@@ -212,9 +215,28 @@ export function StockDetail({ stock, run }: {
 
       <section>
         <div className="eyebrow">How it moves on earnings</div>
-        <GatedEarningsMoves symbol={stock.symbol} moves={stock.earnings_moves}
-                            locked={Boolean(stock.earnings_moves_gated)} />
+        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <EarningsPriced next={stock.earnings_priced} last={stock.earnings_priced_last}
+                          usual={stock.earnings_moves} />
+          <GatedEarningsMoves symbol={stock.symbol} moves={stock.earnings_moves}
+                              locked={Boolean(stock.earnings_moves_gated)} />
+        </div>
       </section>
+
+      {stock.fundamentals !== undefined && (
+        <section>
+          <div className="eyebrow">The business</div>
+          <FundamentalsPanel f={stock.fundamentals} />
+        </section>
+      )}
+
+      {stock.holders !== undefined && (
+        <section>
+          <div className="eyebrow">Tracked funds</div>
+          <GatedHolders symbol={stock.symbol} counts={stock.holders}
+                        locked={Boolean(stock.holders_gated)} />
+        </section>
+      )}
 
       <section>
         <div className="eyebrow">Flagged by the market sweep</div>

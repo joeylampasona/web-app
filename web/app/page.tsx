@@ -9,11 +9,12 @@ import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
-  getAllScreens, getBreadth, getDiff, getIndexes, getMeta, getNews, getReleases,
+  getAllScreens, getBreadth, getMarketContext, getDiff, getIndexes, getMeta, getNews, getReleases,
   getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
 import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
+import { MarketContext } from "@/components/MarketContext";
 import { screenClass } from "@/lib/screenColour";
 import { SITE_NAME } from "@/lib/copy";
 
@@ -196,8 +197,11 @@ export default function Home() {
         </p>
       </div>
 
-      <HomeRead read={read} indexes={indexes?.rows ?? []}
-                session={`${shortDate(meta?.as_of)} close`} />
+      <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+        <HomeRead read={read} indexes={indexes?.rows ?? []}
+                  session={`${shortDate(meta?.as_of)} close`} />
+        <MarketContext file={getMarketContext()} compact />
+      </div>
 
       <HomeStrongest
         industry={sectors?.strongest?.[0] ?? null}

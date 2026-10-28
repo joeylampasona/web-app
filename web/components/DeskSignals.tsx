@@ -32,6 +32,13 @@ const REASON_LABEL: Record<string, string> = {
   MENTION_SPIKE: "Spike in online mentions",
   EARNINGS_UPCOMING: "Earnings coming",
   EARNINGS_DATE_MOVED: "Earnings date moved",
+  PEAD_UP: "Moved 5%+ up on earnings",
+  PEAD_DOWN: "Moved 5%+ down on earnings",
+  BREAKOUT: "Closed above its 20- and 50-day on heavy volume",
+  BREAKDOWN: "Closed below its 20- and 50-day on heavy volume",
+  THEME_PULLBACK: "Pulled back while its group leads",
+  THRUST_COMPRESSION: "Tightening after a sharp run",
+  OI_BUILD: "A new options position opened",
 };
 
 /** 8-K item codes are the filing's own reference; spelling out the common ones
@@ -62,7 +69,22 @@ function label(reason: string): string {
  * has actually gone, against what, and on how many cases.
  */
 function trackSentence(t: DeskTrack): string | null {
-  const n = t.n ? `${t.n.toLocaleString("en-US")} cases` : "";
+  const base = trackVerdict(t);
+  if (!base || t.read === "thin" || t.read === "noise") return base;
+  // Against the stock's own sector too, when the desk could map enough of
+  // them: a type whose whole effect was its sector's good week says so here.
+  const xs = t.excess_sector3;
+  if (xs == null || !t.n_sector) return base;
+  if (Math.abs(xs) < 0.1) return `${base} Against their own sector, about level.`;
+  const way = xs >= 0 ? "outrun" : "lagged";
+  return `${base} Against their own sector they have ${way} by `
+    + `${Math.abs(xs).toFixed(1)}%.`;
+}
+
+function trackVerdict(t: DeskTrack): string | null {
+  const cases = t.n ? `${t.n.toLocaleString("en-US")} cases` : "";
+  // The verdict is computed per night, so the nights are the honest sample.
+  const n = cases && t.nights ? `${cases} over ${t.nights} nights` : cases;
   const x = t.excess3;
   const size = x == null ? "" : `${Math.abs(x).toFixed(1)}%`;
   const way = x == null ? "" : x >= 0 ? "outrun" : "lagged";
