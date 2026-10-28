@@ -413,6 +413,26 @@ def probe_universe_trace() -> None:
         return
     cfg = settings.get("universe", {}) or {}
     print(f"   allowed types {cfg.get('allowed_types')}")
+    # How many cached counts the turnover rule would send to the provider.
+    try:
+        from data.universe import SUSPECT_TURNOVER
+        last_day = store.last_session(conn)
+        rows = conn.execute(
+            "SELECT b.symbol, AVG(b.close * b.volume) adv, "
+            "  (SELECT close FROM bars x WHERE x.symbol=b.symbol AND x.date=?) close, "
+            "  f.shares_outstanding sh "
+            "FROM bars b JOIN fundamentals f ON f.symbol=b.symbol "
+            "WHERE b.date > date(?, '-30 days') GROUP BY b.symbol",
+            (str(last_day), str(last_day))).fetchall()
+        flagged = sorted(((r["adv"] / (r["sh"] * r["close"]), r["symbol"])
+                          for r in rows if r["close"] and r["close"] > 5 and r["sh"]
+                          and r["adv"] / (r["sh"] * r["close"]) > SUSPECT_TURNOVER),
+                         reverse=True)
+        print(f"   counts the turnover rule flags (>{SUSPECT_TURNOVER:.0%} a day): "
+              f"{len(flagged)} of {len(rows)}")
+        print("   " + ", ".join(f"{s} {t:.0%}" for t, s in flagged[:40]))
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   turnover count unavailable: {exc}")
     misses = json.loads(store.get_kv(conn, PROVIDER_MISSES_KEY, "{}") or "{}")
     classes = set(json.loads(store.get_kv(conn, CLASS_COUNTS_KEY, "[]") or "[]"))
     last = store.last_session(conn)
