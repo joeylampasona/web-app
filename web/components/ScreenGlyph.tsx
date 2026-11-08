@@ -229,6 +229,29 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/radar": {
+    label: "Ratios against the market",
+    art: (
+      <>
+        <circle cx="12" cy="12" r="8.5" opacity={0.45} />
+        <circle cx="12" cy="12" r="4.5" opacity={0.45} />
+        <path d="M12 12 L18 6" />
+        <circle cx="16" cy="8" r="1.5" fill="currentColor" stroke="none" />
+      </>
+    ),
+  },
+  "/market/leadership": {
+    label: "Stock against its industry",
+    art: (
+      <>
+        <path d="M3 20 L21 20" opacity={0.6} />
+        <path d="M6 20 L6 13" />
+        <path d="M12 20 L12 8" />
+        <path d="M18 20 L18 15" />
+        <path d="M9.5 6 L12 3.5 L14.5 6" />
+      </>
+    ),
+  },
   "/market/sectors": {
     label: "Strongest and weakest groups",
     art: (

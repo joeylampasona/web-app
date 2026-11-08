@@ -84,6 +84,44 @@ rankings:
   # equities but track VIX futures, which is a different number that decays --
   # do not add one here and label it VIX.
   indexes: [SPY, QQQ]
+  # The Market Strength Radar (rankings/radar.py): the key relationships and
+  # the group ETFs read against SPY, beside the sector ETFs above. All of them
+  # trade as US equities, so their bars are already in the database from the
+  # grouped-daily call and adding one costs no request. A fund with under a
+  # year of history reads as a dash at the longer windows, not as zero.
+  radar_pairs:
+    - [QQQ, SPY, "Growth vs market"]
+    - [IWM, QQQ, "Small caps vs growth"]
+    - [IWM, SPY, "Small caps vs market"]
+    - [RSP, SPY, "Equal weight vs market"]
+  radar_groups:
+    - [SMH, "Semiconductors"]
+    - [IGV, "Software"]
+    - [CIBR, "Cybersecurity"]
+    - [ARKK, "Speculative growth"]
+    - [XBI, "Biotech"]
+    - [IBB, "Biotech, large"]
+    - [KRE, "Regional banks"]
+    - [XHB, "Homebuilders"]
+    - [XRT, "Retail"]
+    - [ITA, "Aerospace and defence"]
+    - [IYT, "Transports"]
+    - [JETS, "Airlines"]
+    - [XOP, "Oil and gas producers"]
+    - [OIH, "Oil services"]
+    - [TAN, "Solar"]
+    - [URA, "Uranium"]
+    - [NLR, "Nuclear"]
+    - [LIT, "Lithium and batteries"]
+    - [GDX, "Gold miners"]
+    - [COPX, "Copper miners"]
+    - [XME, "Metals and mining"]
+    - [BOTZ, "Robotics"]
+    - [ARKX, "Space"]
+    - [BITQ, "Crypto equities"]
+    - [KWEB, "China internet"]
+    - [EEM, "Emerging markets"]
+    - [EFA, "Developed markets ex-US"]
 
 patterns:
   # Detector defaults live in patterns/params.py so the Learn funnel and the

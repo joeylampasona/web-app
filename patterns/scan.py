@@ -16,6 +16,8 @@ from rankings.rotation import quadrant_for
 from rankings.rs import Bundle
 
 STATE_KEY = "scan_state"
+NIGHTS_KEY = "scan_nights"
+NIGHTS_WINDOW = 20
 
 
 @dataclass
@@ -23,6 +25,7 @@ class ScanResult:
     as_of: dt.date
     screens: dict[str, list[Setup]] = field(default_factory=dict)
     diff: dict = field(default_factory=dict)
+    nights: dict = field(default_factory=dict)
 
     def counts(self, screen: str) -> dict[str, int]:
         out = {s: 0 for s in stages.ORDER}
@@ -125,4 +128,58 @@ def diff(conn: sqlite3.Connection, result: ScanResult, persist: bool = True) -> 
     if persist:
         store.set_kv(conn, STATE_KEY, json.dumps(current, sort_keys=True))
     result.diff = out
+    return out
+
+
+# ---------------------------------------------------------------- nights
+
+def nights(conn: sqlite3.Connection, result: ScanResult, persist: bool = True) -> dict:
+    """How long each name has been on each screen: {screen: {symbol: {run, of}}}.
+
+    `run` is the consecutive scanned sessions ending tonight, `of` how many of
+    the last NIGHTS_WINDOW scanned sessions it was on, and `window` how many
+    sessions that is so far. Counted over sessions this site actually
+    scanned, so a night the pipeline never ran does not break a run; running
+    the same session twice counts it once.
+    """
+    raw = store.get_kv(conn, NIGHTS_KEY, "")
+    try:
+        state = json.loads(raw) if raw else {}
+    except ValueError:
+        state = {}
+    today = result.as_of.isoformat()
+    sessions = sorted(set(state.get("sessions", [])) | {today})[-NIGHTS_WINDOW:]
+    window = set(sessions)
+    seen_before = state.get("seen", {})
+    seen: dict[str, dict[str, list[str]]] = {}
+    out: dict[str, dict] = {}
+    for key, setups in result.screens.items():
+        now = {s.symbol for s in setups}
+        prior = seen_before.get(key, {})
+        kept: dict[str, list[str]] = {}
+        for symbol in set(prior) | now:
+            dates = {d for d in prior.get(symbol, []) if d in window}
+            if symbol in now:
+                dates.add(today)
+            elif today in dates:
+                # Rescanned tonight and gone: the earlier run of this session
+                # no longer stands.
+                dates.discard(today)
+            if dates:
+                kept[symbol] = sorted(dates)
+        seen[key] = kept
+        rows: dict[str, dict] = {}
+        for symbol in now:
+            dates = set(kept[symbol])
+            run = 0
+            for day in reversed(sessions):
+                if day not in dates:
+                    break
+                run += 1
+            rows[symbol] = {"run": run, "of": len(dates), "window": len(sessions)}
+        out[key] = rows
+    if persist:
+        store.set_kv(conn, NIGHTS_KEY, json.dumps({"sessions": sessions, "seen": seen},
+                                                  sort_keys=True))
+    result.nights = out
     return out

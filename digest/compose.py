@@ -48,6 +48,9 @@ class Digest:
     # read, through the published calendar.
     priced_moves: list[dict] = field(default_factory=list)
     priced_record: dict | None = None
+    # The strength radar's label for the week, its key ratios and the leading
+    # and weakest groups, with the leadership layers' front-line count.
+    radar: dict | None = None
     quiet: bool = False
 
 
@@ -176,6 +179,24 @@ def build(out: pathlib.Path) -> Digest:
 
     quiet = not setups and not week_events and not priced_moves
 
+    radar = None
+    radar_file = _read(out, "market/radar.json")
+    if radar_file and radar_file.get("read"):
+        by = {g["symbol"]: g for g in radar_file.get("groups") or []}
+        layers = (_read(out, "market/leadership.json") or {})
+        counts, week_ago = layers.get("counts") or {}, layers.get("week_ago") or {}
+        radar = {
+            "label": radar_file["read"]["label"],
+            "sub": radar_file["read"]["sub"],
+            "pairs": [{"label": p["label"], "rs126": p["now"].get("rs126"),
+                       "start126": (p.get("start") or {}).get("rs126")}
+                      for p in radar_file.get("pairs") or []],
+            "leaders": [by[k]["label"] for k in radar_file["map"]["leaders"][:4] if k in by],
+            "weakest": [by[k]["label"] for k in radar_file["map"]["weakest"][:3] if k in by],
+            "front": counts.get("front"),
+            "front_week_ago": week_ago.get("front"),
+        }
+
     return Digest(
         as_of=meta.get("as_of", ""),
         verdict=verdict,
@@ -186,6 +207,7 @@ def build(out: pathlib.Path) -> Digest:
         week_events=week_events,
         priced_moves=priced_moves,
         priced_record=priced_record,
+        radar=radar,
         quiet=quiet,
     )
 

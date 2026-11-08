@@ -144,7 +144,8 @@ Production build. Checks types and prerenders every static route.
 config/      settings.yaml and themes.yaml — every tunable
 data/        adapters, the liquidity funnel, the SQLite store
 patterns/    param schema, base detection, the four detectors, stages, the diff
-rankings/    RS, group aggregation, breadth, rotation, treemap
+rankings/    RS, group aggregation, breadth, rotation, treemap, the strength radar
+             and leadership layers
 catalysts/   dated events, read-through, implied-volatility scoring
 backtest/    the configurable replay engine and its metrics
 publish/     the out/ writer and the meta.json schema

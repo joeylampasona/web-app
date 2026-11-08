@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  FormingSummary, MarketContextFile, PositioningFile, ScreenFile, StockFile,
+  FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  StockFile,
 } from "./types";
 
 // The web layer reads static JSON the pipeline wrote. It never queries a
@@ -262,6 +263,17 @@ export function getPositioning() {
  *  Null until the desk has sent any of them. */
 export function getMarketContext() {
   return read<MarketContextFile>("market/context.json");
+}
+
+/** The Market Strength Radar: the key ratios and the group funds against
+ *  SPY. Null when SPY itself has no bars. */
+export function getRadar() {
+  return read<Radar>("market/radar.json");
+}
+
+/** Every stock's leadership layer, counted, with the strongest per layer. */
+export function getLeadership() {
+  return read<LeadershipSummary>("market/leadership.json");
 }
 
 export function getInsiderCalendar() {

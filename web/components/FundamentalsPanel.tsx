@@ -1,4 +1,5 @@
 import { compactMoney } from "@/lib/format";
+import { QuarterlyPanel } from "./QuarterlyPanel";
 import type { Fundamentals } from "@/lib/types";
 
 /**
@@ -76,6 +77,7 @@ export function FundamentalsPanel({ f }: { f: Fundamentals | null | undefined })
         from the annual report. Revenue growth is the latest quarter against
         the same quarter a year earlier.
       </p>
+      <QuarterlyPanel q={f.quarterly} />
     </div>
   );
 }

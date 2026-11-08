@@ -27,6 +27,8 @@ const COLUMNS: { key: string; of: (s: Setup) => string | number | null | undefin
   { key: "volume_dryup_ratio", of: (s) => s.volume_dryup_ratio },
   { key: "industry", of: (s) => s.industry },
   { key: "days_until_earnings", of: (s) => s.catalysts?.days_until_earnings },
+  { key: "leadership_layer", of: (s) => s.layer },
+  { key: "nights_running", of: (s) => s.nights?.run },
 ];
 
 export function toCsv(setups: Setup[]): string {

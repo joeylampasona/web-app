@@ -6,8 +6,9 @@ import { useAuth } from "@/lib/auth";
 import { copy } from "@/lib/copy";
 import { downloadCsv, toCsv } from "@/lib/exportCsv";
 import { compactMoney, isRanked, price, ratio, rsText, signed } from "@/lib/format";
-import type { Bar, ScreenFile, Setup } from "@/lib/types";
-import { EarningsBadge, STAGE_COLOURS, StageBadge } from "./Badges";
+import type { Bar, LeadershipLayer, ScreenFile, Setup } from "@/lib/types";
+import { EarningsBadge, NightsBadge, STAGE_COLOURS, StageBadge } from "./Badges";
+import { LAYER_HELP } from "./Leadership";
 import { StockCard } from "./StockCard";
 import { PriceChange } from "./PriceChange";
 
@@ -24,6 +25,16 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 const STAGE_ORDER = ["forming", "fresh_breakout", "climbing", "played_out"];
+
+const LAYERS: { key: LeadershipLayer; label: string }[] = [
+  { key: "front", label: "Front line" },
+  { key: "specific", label: "Stock-specific strength" },
+  { key: "developing", label: "Developing" },
+  { key: "weak_in_strong", label: "Strong industry, weak stock" },
+  { key: "turning", label: "Turning" },
+  { key: "caution", label: "Caution" },
+  { key: "unconfirmed", label: "Unconfirmed" },
+];
 
 export function ScreenBrowser({
   file, bars, lockedStages = [], lockedPanel = null,
@@ -43,6 +54,11 @@ export function ScreenBrowser({
   const [descending, setDescending] = useState(true);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
+  const [layer, setLayer] = useState<LeadershipLayer | "">("");
+  // Files written before the layers existed have none; no filter then.
+  const hasLayers = useMemo(
+    () => STAGE_ORDER.some((s) => (file.setups[s] ?? []).some((row) => row.layer)),
+    [file.setups]);
 
   const locked = stage !== null && lockedStages.includes(stage);
 
@@ -53,11 +69,12 @@ export function ScreenBrowser({
     // Ticker, company or industry. A ticker typed in full ranks first, so
     // "AMD" does not have to be found among every name containing the letters.
     const q = query.trim().toLowerCase();
-    const rows = q
+    const matched = q
       ? all.filter((s) => s.symbol.toLowerCase().includes(q)
           || (s.name ?? "").toLowerCase().includes(q)
           || (s.industry ?? "").toLowerCase().includes(q))
       : all;
+    const rows = layer ? matched.filter((s) => s.layer === layer) : matched;
     const value = (setup: Setup): number | string => {
       if (sort === "symbol") return setup.symbol;
       if (sort === "rs_rating") return isRanked(setup.rs_rating) ? setup.rs_rating : -1;
@@ -73,7 +90,7 @@ export function ScreenBrowser({
         : Number(left) - Number(right);
       return descending ? -cmp : cmp;
     });
-  }, [descending, file.setups, query, sort, stage]);
+  }, [descending, file.setups, layer, query, sort, stage]);
 
   return (
     <>
@@ -138,6 +155,23 @@ export function ScreenBrowser({
           </button>
         </div>
 
+        {hasLayers && (
+          <label className="row footnote dim" style={{ gap: "var(--gap-xs)" }}>
+            <span className="visually-hidden">Leadership layer</span>
+            <select
+              className="control"
+              value={layer}
+              onChange={(event) => setLayer(event.target.value as LeadershipLayer | "")}
+              title={layer ? LAYER_HELP[layer] : "Each stock against its own industry; see Market, Leadership layers."}
+              style={{ background: "var(--surface-2)", minHeight: "var(--h-control)" }}
+            >
+              <option value="">Any leadership layer</option>
+              {LAYERS.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="row footnote dim" style={{ gap: "var(--gap-xs)" }}>
           <span className="visually-hidden">Sort by</span>
           <select
@@ -181,7 +215,9 @@ export function ScreenBrowser({
 
       {locked ? lockedPanel : setups.length === 0 && (
         <div className="card muted footnote">
-          {query.trim()
+          {layer && !query.trim()
+            ? <>No name on this list is in that leadership layer tonight.</>
+            : query.trim()
             ? <>Nothing on this list matches “{query.trim()}”.
                 {lockedStages.length > 0 && " Subscribers search the whole list, every stage."}</>
             : <>Nothing is on this screen right now. That is a normal reading, not a fault —
@@ -222,6 +258,9 @@ export function ScreenBrowser({
                           {" "}
                           <EarningsBadge days={setup.catalysts.days_until_earnings} />
                         </>
+                    )}
+                    {setup.nights && setup.nights.window >= 2 && (
+                      <> <NightsBadge nights={setup.nights} /></>
                     )}
                   </td>
                   <td>{rsText(setup.rs_rating)}</td>

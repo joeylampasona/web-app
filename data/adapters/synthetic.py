@@ -91,6 +91,11 @@ class SyntheticAdapter(DataAdapter):
         self.end = end or self._last_weekday(dt.date.today())
         self.benchmark = settings.get("universe.benchmark", "SPY")
         self.sector_etfs = list(settings.get("rankings.sector_etfs", []))
+        # Every fund the site reads, so a made-up stock never takes one's name.
+        extra = [str(s) for row in settings.get("rankings.radar_pairs", []) or []
+                 for s in row[:2]]
+        extra += [str(row[0]) for row in settings.get("rankings.radar_groups", []) or []]
+        self.funds = list(dict.fromkeys([self.benchmark] + self.sector_etfs + extra))
         self.dates = sessions_ending(self.end, self.n_days)
         self._refs: list[TickerRef] | None = None
         self._series: dict[str, list[Bar]] = {}
@@ -112,7 +117,7 @@ class SyntheticAdapter(DataAdapter):
         while len(refs) < self.n_symbols:
             sym = "".join(rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
                           for _ in range(rng.choice([3, 3, 4])))
-            if sym in seen or sym in self.sector_etfs or sym == self.benchmark:
+            if sym in seen or sym in self.funds:
                 continue
             seen.add(sym)
             srng = random.Random(_seed_for(sym, self.seed))
@@ -127,7 +132,7 @@ class SyntheticAdapter(DataAdapter):
             refs.append(TickerRef(symbol=sym, name=name, type="CS",
                                   exchange=srng.choice(["XNAS", "XNYS"]),
                                   industry=industry, list_date=list_date))
-        for sym in [self.benchmark] + self.sector_etfs:
+        for sym in self.funds:
             refs.append(TickerRef(symbol=sym, name=f"{sym} index proxy", type="ETF",
                                   exchange="ARCX", industry="Exchange Traded Fund",
                                   list_date=self.end - dt.timedelta(days=6000)))

@@ -33,6 +33,31 @@ export function EarningsBadge({ days }: { days: number }) {
   );
 }
 
+function ordinal(n: number): string {
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? "th"
+    : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[n % 10] ?? "th";
+  return `${n}${tail}`;
+}
+
+/**
+ * How long a name has been on this screen. Grey, not a colour: a name that
+ * keeps qualifying is more of the same evidence, not a stronger signal.
+ * Nothing on the first night counted, when every name would read as new.
+ */
+export function NightsBadge({ nights }: {
+  nights: { run: number; of: number; window: number } | null | undefined;
+}) {
+  if (!nights || nights.window < 2) return null;
+  const text = nights.run >= 2 ? `${ordinal(nights.run)} night running`
+    : nights.of > 1 ? `${nights.of} of ${nights.window} nights`
+    : "new to the screen";
+  return (
+    <span className="badge" title={`On this screen ${nights.of} of the last ${nights.window} sessions scanned, ${nights.run} in a row ending tonight.`}>
+      {text}
+    </span>
+  );
+}
+
 export function ProvisionalBadge({ title }: { title?: string }) {
   return (
     <span className="badge badge--provisional" title={title}>

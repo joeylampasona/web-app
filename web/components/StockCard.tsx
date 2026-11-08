@@ -7,7 +7,7 @@ import { copy } from "@/lib/copy";
 import {
   change, decimal, longDate, price, ratio, rsText, shortDate, signed, tone, volume,
 } from "@/lib/format";
-import { EarningsBadge, FlagBadge, QuadrantBadge, StageBadge } from "./Badges";
+import { EarningsBadge, FlagBadge, NightsBadge, QuadrantBadge, StageBadge } from "./Badges";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { MetricRow } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
@@ -148,6 +148,7 @@ export function StockCard({
             <EarningsBadge days={setup.catalysts.days_until_earnings} />
           )}
         <StageBadge stage={setup.stage} />
+        <NightsBadge nights={setup.nights} />
         <CriteriaMeter criteria={setup.criteria} />
       </div>
 

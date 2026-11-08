@@ -80,6 +80,62 @@ check("a later filing of the same period replaces the first",
       f.parse(doc(Revenues=restated), today=D("2026-10-01"))["revenue_ttm"], 444)
 check("a company with nothing in US GAAP", f.parse({"facts": {"ifrs-full": {}}}), None)
 
+# ---- quarter by quarter, and the read of the latest one
+from data import earnings_read as er  # noqa: E402
+
+def inst(end: str, val: float) -> dict:
+    return {"end": end, "val": val, "filed": "2026-08-01"}
+
+def shares(start: str, end: str, val: float) -> dict:
+    return {"start": start, "end": end, "val": val, "filed": "2026-08-01"}
+
+ENDS = [r["end"] for r in REVENUE if r["end"] != "2025-09-27"] + ["2025-09-27"]
+full = {"facts": {"us-gaap": {
+    "Revenues": {"units": {"USD": REVENUE}},
+    "GrossProfit": {"units": {"USD": [dict(r, val=r["val"] * 0.5) for r in REVENUE[:-1]]
+                              + [dict(REVENUE[-1], val=56)]}},
+    "NetIncomeLoss": {"units": {"USD": [dict(r, val=-10) for r in REVENUE[:-1]]
+                                + [dict(REVENUE[-1], val=-4)]}},
+    "NetCashProvidedByUsedInOperatingActivities": {"units": {"USD": CFO}},
+    "ShareBasedCompensation": {"units": {"USD": [
+        fact("2025-09-28", "2025-12-27", 5), fact("2025-09-28", "2026-03-28", 10),
+        fact("2025-09-28", "2026-06-27", 23)]}},
+    "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": [
+        shares("2025-03-30", "2025-06-28", 100), shares("2026-03-29", "2026-06-27", 108)]}},
+    "CashAndCashEquivalentsAtCarryingValue": {"units": {"USD": [
+        inst("2026-03-28", 50), inst("2026-06-27", 60)]}},
+    "LongTermDebtNoncurrent": {"units": {"USD": [
+        inst("2026-03-28", 100), inst("2026-06-27", 120)]}},
+    "RevenueRemainingPerformanceObligation": {"units": {"USD": [inst("2026-06-27", 880)]}},
+}}}
+qs = f.quarterly(full["facts"])
+check("quarters kept, oldest first", [q["end"] for q in qs][-2:], ["2026-03-28", "2026-06-27"])
+check("derived fiscal Q4 has no share count", next(q["shares"] for q in qs
+                                                   if q["end"] == "2025-09-27"), None)
+check("cash flow by quarter in the quarterly rows", [q["cfo"] for q in qs][-3:], [40, 30, 25])
+check("stock pay differenced from year to date", qs[-1]["sbc"], 13)
+check("debt and cash at the quarter end", (qs[-1]["debt"], qs[-1]["cash"]), (120, 60))
+parsed = f.parse(full, today=D("2026-08-15"))
+check("parse carries the quarters", len(parsed["quarters"]), 7)
+
+r = er.read(qs)
+g = r["glance"]
+check("revenue on the quarter before", g["revenue_qoq"], -9.1)
+check("revenue on a year ago", g["revenue_yoy"], 25.0)
+check("gross margin move in points", g["gross_margin_move"], 6.0)
+check("share count on a year ago", g["shares_yoy"], 8.0)
+kinds = {x["kind"]: (x["tone"], x["text"]) for x in r["flags"]}
+check("growth flag at 20% or more", kinds["growth"][0], "good")
+check("loss narrowed", kinds["profit"], ("neutral", "Loss narrowed to -$4"))
+check("dilution of 5% or more", kinds["funding"][0], "bad")
+check("net debt", kinds["balance"], ("neutral", "Net debt of $60"))
+check("stock pay at half of cash flow is noted",
+      any(n.startswith("Stock compensation") for n in r["notes"]), True)
+check("debt up a tenth is noted", any(n.startswith("Debt rose 20%") for n in r["notes"]), True)
+check("backlog against twelve months' revenue",
+      any("2.0 times" in n for n in r["notes"]), True)
+check("one quarter is not enough to read", er.read(qs[:1]), None)
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}): " + ", ".join(failures))

@@ -472,6 +472,7 @@ def _pipeline(conn, with_followthrough: bool = True):
     bundle = rs.Bundle(market)
     result = scan.run(market, bundle)
     changes = scan.diff(conn, result)
+    scan.nights(conn, result)
     adapter = get_adapter()
 
     population = sorted({s.symbol for s in result.all_setups()})
@@ -963,13 +964,21 @@ def cmd_fundamentals(args) -> int:
     A budget a night and a month between refreshes, so the first week fills
     the universe in and every night after that touches only what aged out.
     """
+    from catalysts import yf as yfmod
     from data import edgar, fundamentals
     conn = _conn()
     rows = sorted(store.universe_rows(conn), key=lambda r: -(r["adv20"] or 0.0))
     _banner(f"Fundamentals — {len(rows):,} names in the universe")
+    # Companies that have just reported go first, every night until the
+    # quarter they reported is in the cache.
+    today = dt.date.today()
+    reporters = fundamentals.due(
+        conn, yfmod.reported_dates(conn, [r["symbol"] for r in rows], today), today)
+    print(f"  {len(reporters)} recent reporter(s) without their new quarter yet")
     try:
         result = fundamentals.refresh(conn, [r["symbol"] for r in rows],
-                                      notice=lambda m: print(m, flush=True))
+                                      notice=lambda m: print(m, flush=True),
+                                      first=reporters)
     except edgar.EdgarUnavailable as exc:
         print(f"  {exc}")
         return 1

@@ -12,6 +12,7 @@ import { EarningsPriced } from "./EarningsPriced";
 import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
 import { LevelsPanel } from "./LevelsPanel";
+import { StockLeadership } from "./Leadership";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
@@ -184,6 +185,13 @@ export function StockDetail({ stock, run }: {
         <div className="eyebrow">The read</div>
         <p className="muted footnote">{plainRead(stock)}</p>
       </section>
+
+      {stock.leadership !== undefined && (
+        <section>
+          <div className="eyebrow">Against its industry</div>
+          <StockLeadership r={stock.leadership} />
+        </section>
+      )}
 
       {stock.setups.length > 1 && (
         <section>

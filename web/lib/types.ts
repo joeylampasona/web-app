@@ -106,6 +106,11 @@ export interface Setup {
   /** Fitted geometry, on the shape screens only. */
   shape?: ShapeGeometry | null;
   quadrant: string | null;
+  /** Screen rows only: the stock's leadership layer tonight. */
+  layer?: LeadershipLayer | null;
+  /** Screen rows only: consecutive scanned sessions on this screen ending
+   *  tonight, how many of the last `window` it was on. */
+  nights?: { run: number; of: number; window: number } | null;
   breakout_date: string | null;
   sessions_since_breakout: number | null;
   breakout_metrics: {
@@ -394,6 +399,9 @@ export interface StockFile {
   fundamentals?: Fundamentals | null;
   /** Prices tested three or more times in the last 120 sessions. */
   levels?: LevelsSummary | null;
+  /** Where it sits against its own industry, and the industry against the
+   *  S&P 500. Absent on files written before the layers existed. */
+  leadership?: LeadershipReading | null;
   /** This stock has more completed bases than the free sample shows. Flag
    *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
@@ -652,6 +660,121 @@ export interface Fundamentals {
   cash: number | null; net_debt: number | null; equity: number | null;
   price_to_sales: number | null; price_to_earnings: number | null;
   fcf_yield: number | null;
+  /** The latest quarter read by fixed rules, with the quarters it draws.
+   *  Absent until the company has been fetched since quarters were kept. */
+  quarterly?: QuarterlyRead | null;
+}
+
+export interface QuarterlyGlance {
+  end: string;
+  revenue: number | null; revenue_qoq: number | null; revenue_yoy: number | null;
+  gross_margin: number | null; gross_margin_move: number | null;
+  op_income: number | null; net_income: number | null;
+  cfo: number | null; fcf: number | null;
+  shares_yoy: number | null;
+  cash: number | null; debt: number | null;
+  runway_quarters: number | null;
+}
+
+export interface QuarterlyFlag {
+  kind: "growth" | "margin" | "profit" | "cash" | "funding" | "balance";
+  tone: "good" | "bad" | "neutral";
+  text: string;
+}
+
+export interface QuarterlyRead {
+  glance: QuarterlyGlance;
+  flags: QuarterlyFlag[];
+  notes: string[];
+  bars: { end: string; revenue: number | null; fcf: number | null; net_income: number | null }[];
+}
+
+export type LeadershipLayer =
+  | "front" | "specific" | "developing" | "weak_in_strong"
+  | "turning" | "caution" | "unconfirmed";
+
+export type Alignment = "full" | "partial" | "none";
+
+export interface LeadershipReading {
+  layer: LeadershipLayer;
+  label: string;
+  /** The industry it is read against, or "S&P 500" when the industry is too
+   *  small to make an index of. */
+  vs: string;
+  vs_slug: string | null;
+  rs21: number | null; rs63: number | null; rs126: number | null;
+  group: { aligned: Alignment | null; pos126: boolean; rs126: number | null;
+           rs21: number | null } | null;
+}
+
+export interface LeadershipRow {
+  symbol: string; name: string; vs: string; vs_slug: string | null;
+  layer: LeadershipLayer;
+  rs21: number | null; rs63: number | null; rs126: number | null;
+}
+
+export type LayerCounts = { date: string; n: number } & Record<LeadershipLayer, number>;
+
+export interface LeadershipSummary {
+  as_of: string;
+  order: LeadershipLayer[];
+  labels: Record<LeadershipLayer, string>;
+  n: number;
+  grouped: number;
+  counts: LayerCounts | null;
+  yesterday: LayerCounts | null;
+  week_ago: LayerCounts | null;
+  path: LayerCounts[];
+  top: Partial<Record<LeadershipLayer, LeadershipRow[]>>;
+  industries: ({ slug: string; name: string; aligned: Alignment | null;
+                 rs126: number | null; n: number } & Record<LeadershipLayer, number>)[];
+  industries_aligned: { full: number; partial: number; none: number;
+                        positive: number; n: number };
+}
+
+export interface RadarReading {
+  date: string;
+  rs21: number | null; rs42: number | null; rs63: number | null;
+  rs126: number | null; rs252: number | null;
+  t21_63: boolean | null; t42_126: boolean | null; t63_126: boolean | null;
+}
+
+export interface RadarPair {
+  a: string; b: string; label: string;
+  now: RadarReading; start: RadarReading | null;
+  /** The six-month reading over the last six sessions, oldest first. */
+  path: (number | null)[];
+  chg126: number | null;
+  aligned: Alignment | null;
+  /** The ratio over the last 63 sessions, rebased to 100. */
+  spark: number[];
+}
+
+export interface RadarGroup {
+  symbol: string; label: string; kind: "sector" | "group";
+  now: RadarReading; start: RadarReading | null;
+  aligned: Alignment | null; aligned_start: Alignment | null;
+  chg126: number | null; chg21: number | null;
+}
+
+export interface RadarBreadth {
+  date: string; n: number;
+  pos21: number; pos42: number; pos63: number; pos126: number;
+  full: number; partial: number; none: number;
+}
+
+export interface Radar {
+  as_of: string; from: string | null; to: string | null;
+  windows: number[];
+  pairs: RadarPair[];
+  groups: RadarGroup[];
+  breadth: RadarBreadth[];
+  map: { leaders: string[]; cooling: string[]; improving: string[];
+         weakest: string[]; fell: string[] };
+  spy_week: number | null;
+  read: { label: string; sub: string; reasons: string[];
+          full_share: number; pos126_share: number };
+  watch: { q: string; now: string; met: boolean }[];
 }
 
 export interface PriceLevel {

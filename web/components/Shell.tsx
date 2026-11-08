@@ -51,6 +51,8 @@ const TABS: {
       { href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
       { href: "/market/rotation", title: "Rotation", blurb: "Strength now against momentum since last month." },
       { href: "/market/sectors", title: "Sector strength", blurb: "Strongest and weakest, heating and cooling." },
+      { href: "/market/radar", title: "Strength radar", blurb: "Growth, small caps, equal weight and every group against the market." },
+      { href: "/market/leadership", title: "Leadership layers", blurb: "Every stock against its own industry." },
       { href: "/market/map", title: "The map", blurb: "Every industry sized by market value." },
       { href: "/market/high-iv", title: "High IV", blurb: "Rich options pricing around a dated event." },
       { href: "/market/gamma", title: "Gamma concentration", blurb: "Where the option book anchors the most gamma." },

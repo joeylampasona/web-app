@@ -34,6 +34,8 @@ log = logging.getLogger(__name__)
 
 REFRESH_DAYS = 30
 BUDGET = 400
+DUE_DAYS = 40
+COVERED_DAYS = 75
 IFRAME = re.compile(r"^CY(\d{4})Q([1-4])I$")
 
 # Candidate concepts, freshest series wins. Flows are summed over four quarters.
@@ -48,6 +50,30 @@ FLOWS = {
     "capex": ["PaymentsToAcquirePropertyPlantAndEquipment",
               "PaymentsToAcquireProductiveAssets"],
 }
+# Read only for the quarter-by-quarter view and its forensic lines; none of
+# these enters a trailing total.
+EXTRA_FLOWS = {
+    "sbc": ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
+    "dna": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization",
+            "DepreciationAmortizationAndAccretionNet", "Depreciation"],
+    "interest": ["InterestExpense", "InterestExpenseNonoperating", "InterestExpenseDebt"],
+    # Cash-flow line: positive when customers paid ahead of the revenue.
+    "deferred_change": ["IncreaseDecreaseInContractWithCustomerLiability",
+                        "IncreaseDecreaseInDeferredRevenue"],
+    "buyback": ["PaymentsForRepurchaseOfCommonStock"],
+}
+SHARES = ["WeightedAverageNumberOfDilutedSharesOutstanding",
+          "WeightedAverageNumberOfSharesOutstandingBasic"]
+QUARTER_INSTANTS = {
+    "cash": ["CashAndCashEquivalentsAtCarryingValue",
+             "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+    "lt_debt": ["LongTermDebtNoncurrent", "LongTermDebt",
+                "LongTermDebtAndCapitalLeaseObligations"],
+    "st_debt": ["LongTermDebtCurrent", "DebtCurrent", "ShortTermBorrowings"],
+    "rpo": ["RevenueRemainingPerformanceObligation"],
+}
+QUARTERS_KEPT = 10
+
 INSTANTS = {
     "cash": ["CashAndCashEquivalentsAtCarryingValue",
              "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
@@ -90,7 +116,8 @@ def _date(text) -> dt.date | None:
         return None
 
 
-def _durations(facts: dict, concepts: list[str]) -> list[tuple[dt.date, dt.date, float]]:
+def _durations(facts: dict, concepts: list[str],
+               unit: str = "USD") -> list[tuple[dt.date, dt.date, float]]:
     """Every (start, end, value) for the candidate concept whose figures run
     latest, in dollars, one per period (the most recently filed wins, so a
     restatement replaces the original). Companies retire concepts -- Apple's
@@ -102,7 +129,7 @@ def _durations(facts: dict, concepts: list[str]) -> list[tuple[dt.date, dt.date,
         node = (facts.get("us-gaap") or {}).get(concept)
         if not node:
             continue
-        rows = (node.get("units") or {}).get("USD") or []
+        rows = (node.get("units") or {}).get(unit) or []
         latest: dict = {}
         for row in rows:
             start, end = _date(row.get("start")), _date(row.get("end"))
@@ -122,6 +149,73 @@ def _durations(facts: dict, concepts: list[str]) -> list[tuple[dt.date, dt.date,
                 best = [(s, e, v) for (s, e), (_, v) in latest.items()]
                 best_end = newest
     return best
+
+
+def _instants(facts: dict, concepts: list[str]) -> dict[dt.date, float]:
+    """{period end: value} for a balance-sheet item, from the candidate concept
+    whose figures run latest; the most recently filed wins for each date."""
+    best: dict = {}
+    for concept in concepts:
+        node = (facts.get("us-gaap") or {}).get(concept)
+        if not node:
+            continue
+        latest: dict = {}
+        for row in (node.get("units") or {}).get("USD") or []:
+            end = _date(row.get("end"))
+            if not end or row.get("start"):
+                continue
+            try:
+                value = float(row["val"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            filed = str(row.get("filed") or "")
+            if end not in latest or filed >= latest[end][0]:
+                latest[end] = (filed, value)
+        if latest and (not best or max(latest) > max(best)):
+            best = {e: v for e, (_, v) in latest.items()}
+    return best
+
+
+def _near(values: dict, end: dt.date, days: int = 7):
+    """The value filed for a date within `days` of end, or None."""
+    for when, value in values.items():
+        if abs((when - end).days) <= days:
+            return value
+    return None
+
+
+def quarterly(facts: dict, keep: int = QUARTERS_KEPT) -> list[dict]:
+    """The last `keep` quarters, oldest first, each with its flows and the
+    balance sheet at its end. Every figure is None where the filing has none.
+
+    Revenue sets the quarters; each other line is matched to them by end
+    date. Share counts are weighted averages, which neither difference nor
+    subtract from a year, so they come from three-month periods only and the
+    fiscal fourth quarter has none.
+    """
+    revenue = _quarters(_durations(facts, FLOWS["revenue"]))[-keep:]
+    if not revenue:
+        return []
+    lines = {key: {e: v for _, e, v in _quarters(_durations(facts, concepts))}
+             for key, concepts in {**FLOWS, **EXTRA_FLOWS}.items() if key != "revenue"}
+    shares = {e: v for s, e, v in _durations(facts, SHARES, unit="shares")
+              if 80 <= (e - s).days <= 100}
+    balances = {key: _instants(facts, concepts)
+                for key, concepts in QUARTER_INSTANTS.items()}
+    out = []
+    for start, end, value in revenue:
+        row: dict = {"start": start.isoformat(), "end": end.isoformat(), "revenue": value}
+        for key, values in lines.items():
+            row[key] = _near(values, end)
+        row["shares"] = _near(shares, end)
+        for key, values in balances.items():
+            row[key] = _near(values, end)
+        cfo, capex = row.get("cfo"), row.get("capex")
+        row["fcf"] = None if cfo is None else cfo - abs(capex or 0.0)
+        lt, st = row.pop("lt_debt"), row.pop("st_debt")
+        row["debt"] = None if lt is None and st is None else (lt or 0.0) + (st or 0.0)
+        out.append(row)
+    return out
 
 
 def _quarters(durations) -> list[tuple[dt.date, dt.date, float]]:
@@ -225,26 +319,72 @@ def parse(doc: dict, today: dt.date | None = None) -> dict | None:
     # Only what a page shows; the intermediate concepts stay here.
     keep = ("period_end", "revenue_ttm", "revenue_growth", "gross_margin", "op_margin",
             "net_margin", "net_income_ttm", "fcf_ttm", "cash", "net_debt", "equity")
-    return {k: out[k] for k in keep}
+    figures = {k: out[k] for k in keep}
+    figures["quarters"] = quarterly(facts)
+    return figures
 
 
 def stale(conn: sqlite3.Connection, symbols: Iterable[str],
           max_age_days: int = REFRESH_DAYS) -> list[str]:
-    """The symbols with no row, or a row older than the refresh window, in order."""
+    """The symbols with no row, or a row older than the refresh window, in order.
+
+    A row stored before the quarter-by-quarter figures existed counts as stale
+    too, so the universe picks them up over the nights after they ship
+    without waiting a month for each company to age out.
+    """
     fresh = {row["symbol"] for row in conn.execute(
-        "SELECT symbol FROM fundamentals_xbrl WHERE fetched_at > datetime('now', ?)",
+        "SELECT symbol FROM fundamentals_xbrl WHERE fetched_at > datetime('now', ?)"
+        " AND (payload = 'null' OR payload LIKE '%\"quarters\"%')",
         (f"-{int(max_age_days)} days",))}
     return [s for s in symbols if s not in fresh]
 
 
+def due(conn: sqlite3.Connection, reported: dict[str, list[dt.date]],
+        today: dt.date | None = None) -> list[str]:
+    """Companies that reported in the last DUE_DAYS whose stored figures end a
+    quarter before the report, and that were not already asked today.
+
+    A 10-Q lands within days of the print, so these are asked every night
+    until the quarter it covers is stored, rather than once a month.
+    """
+    today = today or dt.date.today()
+    held = {row["symbol"]: (row["fetched_at"], row["payload"]) for row in conn.execute(
+        "SELECT symbol, fetched_at, payload FROM fundamentals_xbrl")}
+    out = []
+    for symbol, dates in reported.items():
+        recent = [d for d in dates if 0 <= (today - d).days <= DUE_DAYS]
+        if not recent:
+            continue
+        report = max(recent)
+        fetched, payload = held.get(symbol, (None, None))
+        if fetched and str(fetched)[:10] >= today.isoformat():
+            continue
+        try:
+            end = _date((json.loads(payload or "null") or {}).get("period_end"))
+        except (TypeError, ValueError, AttributeError):
+            end = None
+        if fetched and end is None:
+            # Asked before and nothing in US GAAP: a foreign filer does not
+            # start filing 10-Qs because it reported.
+            continue
+        # A report covers the quarter that ended up to about ten weeks before
+        # it; anything older is the quarter before.
+        if end is None or (report - end).days > COVERED_DAYS:
+            out.append(symbol)
+    return out
+
+
 def refresh(conn: sqlite3.Connection, symbols: Iterable[str], budget: int = BUDGET,
-            notice=None) -> dict:
+            notice=None, first: Iterable[str] = ()) -> dict:
     """Fetch and store fundamentals for up to `budget` stale symbols, in the
-    order given (callers pass most traded first). Never raises on one company;
+    order given (callers pass most traded first), after any in `first`: the
+    recent reporters, asked whatever their age. Never raises on one company;
     raises EdgarUnavailable only when SEC cannot be reached at all."""
     if settings.get("data.provider") == "synthetic":
         return {"asked": 0, "stored": 0, "empty": 0, "remaining": 0}
-    wanted = stale(conn, [s.upper() for s in symbols])
+    symbols = [s.upper() for s in symbols]
+    ahead = [s.upper() for s in first if s.upper() in set(symbols)]
+    wanted = list(dict.fromkeys(ahead + stale(conn, symbols)))
     ask = wanted[:budget]
     session = requests.Session()
     cik_map = edgar._ticker_to_cik(session)

@@ -59,6 +59,13 @@ def text(d: Digest, site: str, unsubscribe_url: str) -> str:
                 if row.get("above_200") is not None else "—"
             lines.append(f"  {row['symbol']}  {row['close']}  ({side} its 200-day)")
 
+    if d.radar:
+        lines += ["", "WHERE STRENGTH SITS", f"  {d.radar['label']}: {d.radar['sub']}"]
+        for row in _radar_pairs(d.radar):
+            lines.append(f"  {row}")
+        for row in _radar_groups(d.radar):
+            lines.append(f"  {row}")
+
     if d.setups:
         lines += ["", "SET UP"]
         for s in d.setups:
@@ -86,6 +93,31 @@ def text(d: Digest, site: str, unsubscribe_url: str) -> str:
               f"Open the site: {site}",
               f"Stop these emails: {unsubscribe_url}"]
     return "\n".join(lines)
+
+
+def _pct(v) -> str:
+    return "—" if v is None else f"{v:+.1f}%"
+
+
+def _radar_pairs(r: dict) -> list[str]:
+    """Each key ratio over six months, and where it stood a week before."""
+    return [f"{p['label']}: {_pct(p['rs126'])} over six months"
+            + (f" (from {_pct(p['start126'])})" if p.get("start126") is not None else "")
+            for p in r["pairs"]]
+
+
+def _radar_groups(r: dict) -> list[str]:
+    out = []
+    if r.get("leaders"):
+        out.append("Leading groups: " + ", ".join(r["leaders"]))
+    if r.get("weakest"):
+        out.append("Weakest: " + ", ".join(r["weakest"]))
+    if r.get("front") is not None:
+        line = f"{r['front']} stocks on the front line, ahead of an industry that leads the market"
+        if r.get("front_week_ago") is not None:
+            line += f" ({r['front_week_ago']} a week ago)"
+        out.append(line)
+    return out
 
 
 def _priced_note(record: dict | None) -> str:
@@ -149,6 +181,17 @@ def html(d: Digest, site: str, unsubscribe_url: str) -> str:
             f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
             f'border="0" style="background-color:{RAISED};border-radius:10px;">'
             f'<tr>{cells}</tr></table></td></tr>')
+
+    if d.radar:
+        body = _row(f'<strong>{esc(d.radar["label"])}</strong>', esc(d.radar["sub"]))
+        body += "".join(_row(esc(line)) for line in _radar_pairs(d.radar))
+        body += "".join(
+            f'<p style="margin:0 0 6px 0;font-size:13px;line-height:1.5;color:{MUTED};">'
+            f'{esc(line)}</p>' for line in _radar_groups(d.radar))
+        body += (f'<p style="margin:8px 0 0 0;font-size:12px;line-height:1.5;'
+                 f'color:{DIM};">Price ratios against the S&amp;P 500, and every '
+                 f'stock against its own industry. Measured, not forecast.</p>')
+        parts.append(_section("Where strength sits", body))
 
     if d.setups:
         body = "".join(

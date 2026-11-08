@@ -10,7 +10,7 @@ from typing import Any
 from catalysts import events as ev
 from catalysts import iv as ivmod
 from catalysts import news as newsmod
-from data import classify, settings
+from data import classify, earnings_read, settings
 from data.market import Market
 from patterns import detectors, flags as flagsmod, params as param_module
 from patterns import levels as levels_mod, scan, stages
@@ -19,6 +19,7 @@ from publish import schema
 from rankings import breadth, groups, indexes as index_rows
 from rankings import spark
 from backtest.settings import OPTIONS, BacktestSettings
+from rankings import leadership as leadership_mod, radar as radar_mod
 from rankings import rotation, rs, seasonals, treemap
 
 VERSION = 1
@@ -264,6 +265,17 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "source": "Market Desk",
         }))
 
+    # ---- strength radar and leadership layers --------------------------
+    # Both read the bars already loaded: the radar the group funds against
+    # SPY, the layers every stock against its own industry. Each stock's
+    # layer also rides on its page and on every screen row it appears in.
+    layers = leadership_mod.compute(market)
+    layer_of = layers["stocks"]
+    radar_payload = radar_mod.compute(market)
+    if radar_payload:
+        written.append(_write(out / "market" / "radar.json", radar_payload))
+    written.append(_write(out / "market" / "leadership.json", layers["summary"]))
+
     # ---- screens ------------------------------------------------------
     screen_files: dict[str, dict] = {}
     for key, setups in result.screens.items():
@@ -271,7 +283,12 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # Market cap on every row, so a screen can be sorted by size. Null
         # where the share count is unknown (the heavily traded names kept
         # without one), which sorts last rather than as zero.
-        grouped = {stage: [{**s.to_json(), "market_cap": market.caps.get(s.symbol)}
+        # And the stock's leadership layer, and how many nights running it has
+        # been on this screen.
+        on_screen = result.nights.get(key, {})
+        grouped = {stage: [{**s.to_json(), "market_cap": market.caps.get(s.symbol),
+                            "layer": (layer_of.get(s.symbol) or {}).get("layer"),
+                            "nights": on_screen.get(s.symbol)}
                            for s in setups if s.stage == stage]
                    for stage in stages.ORDER}
         screen_files[key] = {
@@ -426,7 +443,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              priced=(priced_next.get(symbol),
                                                      priced_last.get(symbol)),
                                              fundamentals=(fundamentals or {}).get(symbol),
-                                             fundamentals_known=symbol in (fundamentals or {}))))
+                                             fundamentals_known=symbol in (fundamentals or {}),
+                                             leadership=layer_of.get(symbol))))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -1002,6 +1020,9 @@ def _fundamentals_view(payload: dict | None, cap: float | None) -> dict | None:
     if not payload:
         return None
     view = dict(payload)
+    # The quarters themselves stay in the cache; the page gets the read of
+    # them, which carries the eight quarters it draws.
+    view["quarterly"] = earnings_read.read(view.pop("quarters", None))
     revenue, income, fcf = (payload.get("revenue_ttm"), payload.get("net_income_ttm"),
                             payload.get("fcf_ttm"))
     view["price_to_sales"] = round(cap / revenue, 2) if cap and revenue and revenue > 0 else None
@@ -1025,7 +1046,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    holders_locked: set[str] | None = None,
                    priced: tuple[dict | None, dict | None] = (None, None),
                    fundamentals: dict | None = None,
-                   fundamentals_known: bool = False) -> dict:
+                   fundamentals_known: bool = False,
+                   leadership: dict | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -1064,6 +1086,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # floor for a multi-class company, labelled on the page.
         "market_cap_basis": ("share_class" if symbol in market.class_caps
                              else "company"),
+        # Where it sits against its own industry, and the industry against
+        # the S&P 500. A description, not a call.
+        "leadership": leadership,
         "quadrant": (primary.quadrant if primary else
                      rotation.quadrant_for(bundle.now.get(symbol)
                                            if isinstance(bundle.now.get(symbol), int) else None,

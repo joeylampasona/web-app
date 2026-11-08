@@ -65,10 +65,14 @@ def load(conn: sqlite3.Connection | None = None, include_all: bool = False) -> M
     # they were simply never loaded, because loading is scoped to the universe
     # plus the benchmark and the sector ETFs.
     indexes = list(settings.get("rankings.indexes", []))
+    # The radar's pairs and group funds, from the same stored bars.
+    radar = [str(s) for row in settings.get("rankings.radar_pairs", []) or []
+             for s in row[:2]]
+    radar += [str(row[0]) for row in settings.get("rankings.radar_groups", []) or []]
     universe = store.universe_symbols(conn)
     wanted = list(dict.fromkeys(
         (store.all_symbols_with_bars(conn) if include_all else universe)
-        + [benchmark] + etfs + indexes))
+        + [benchmark] + etfs + indexes + radar))
 
     series = store.load_many(conn, wanted)
     refs: dict[str, TickerRef] = {}
