@@ -13,6 +13,7 @@ import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
 import { LevelsPanel } from "./LevelsPanel";
 import { StockLeadership } from "./Leadership";
+import { StockHero } from "./StockHero";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
@@ -113,6 +114,7 @@ export function StockDetail({ stock, run }: {
             <RsRing rating={stock.rs_rating} />
           </div>
         </div>
+        <StockHero symbol={stock.symbol} bars={stock.bars} range={stock.range_52w} />
         {stock.themes.length > 0 && (
           <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
             {stock.themes.map((slug) => (
@@ -125,7 +127,8 @@ export function StockDetail({ stock, run }: {
 
       {setup ? (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <StockCard setup={setup} bars={chartBars} chartHeight="responsive" />
+          <StockCard setup={setup} bars={chartBars} chartHeight="responsive"
+                     showHeader={false} />
           {/* Drawn only here, never on a card in a list: four lines on a chart
               the size of a business card is noise, and this is the page someone
               reached by looking one company up. */}

@@ -33,7 +33,7 @@ export function GammaBoard({ rows, total }: { rows: GammaBoardRow[]; total: numb
         {total > rows.length && ` · showing the deepest ${rows.length}`}
       </p>
 
-      <div className="scroll-x card" style={{ padding: 0, marginTop: "var(--gap-sm)" }}>
+      <div className="scroll-x scroll-tall card" style={{ padding: 0, marginTop: "var(--gap-sm)" }}>
         <table className="data">
           <thead>
             <tr>

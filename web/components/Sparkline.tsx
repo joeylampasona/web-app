@@ -16,13 +16,27 @@ import { tone } from "@/lib/format";
  * move and a stock with no data look identical as a horizontal stroke, and
  * only one of those is true.
  */
+/** Any series stretched to the 0-100 box this draws, or null with no range. */
+export function normalise(values: (number | null | undefined)[]): number[] | null {
+  const known = values.filter((v): v is number => v != null);
+  if (known.length < 2) return null;
+  const lo = Math.min(...known), hi = Math.max(...known);
+  if (hi === lo) return null;
+  return known.map((v) => ((v - lo) / (hi - lo)) * 100);
+}
+
 export function Sparkline({
-  points, changePct, width = 64, height = 22,
+  points, changePct, width = 64, height = 22, colour, label = "Price shape over the last six weeks",
 }: {
   points: number[] | null | undefined;
   changePct?: number | null;
   width?: number;
   height?: number;
+  /** For a count rather than a price, where up is not "gain": the caller's
+   *  own tone instead of the sign of the change. */
+  colour?: string;
+  /** What the line is, for a screen reader. */
+  label?: string;
 }) {
   if (!points || points.length < 2) {
     return (
@@ -36,7 +50,7 @@ export function Sparkline({
     );
   }
 
-  const stroke = tone(changePct) === "gain" ? "var(--gain)"
+  const stroke = colour ? colour : tone(changePct) === "gain" ? "var(--gain)"
                : tone(changePct) === "loss" ? "var(--loss)"
                : "var(--flat)";
 
@@ -62,8 +76,8 @@ export function Sparkline({
       role="img"
       aria-label={
         changePct === null || changePct === undefined
-          ? "Price shape over the last six weeks"
-          : `Price shape over the last six weeks, ${changePct > 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} per cent`
+          ? label
+          : `${label}, ${changePct > 0 ? "up" : "down"} ${Math.abs(changePct).toFixed(1)} per cent`
       }
       style={{ display: "block", flexShrink: 0, overflow: "visible" }}
     >

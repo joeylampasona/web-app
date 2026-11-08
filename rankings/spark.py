@@ -21,7 +21,7 @@ from collections.abc import Sequence
 POINTS = 30
 
 
-def shape(closes: Sequence[float]) -> list[int] | None:
+def shape(closes: Sequence[float], points: int = POINTS) -> list[int] | None:
     """Normalised 0-100 series, or None when there is nothing to draw.
 
     Returns None rather than a flat line when the window has no range at all.
@@ -29,7 +29,7 @@ def shape(closes: Sequence[float]) -> list[int] | None:
     only one of them is honest: a stock that did not move and a stock we have
     no data for are not the same thing, so the caller can label them apart.
     """
-    window = [c for c in closes[-POINTS:] if c is not None]
+    window = [c for c in closes[-points:] if c is not None]
     if len(window) < 2:
         return None
     lo, hi = min(window), max(window)
@@ -39,9 +39,9 @@ def shape(closes: Sequence[float]) -> list[int] | None:
     return [round((c - lo) / span * 100) for c in window]
 
 
-def change_pct(closes: Sequence[float]) -> float | None:
+def change_pct(closes: Sequence[float], points: int = POINTS) -> float | None:
     """Move across the same window the shape covers, in per cent."""
-    window = [c for c in closes[-POINTS:] if c is not None]
+    window = [c for c in closes[-points:] if c is not None]
     if len(window) < 2 or not window[0]:
         return None
     return round((window[-1] - window[0]) / window[0] * 100, 2)

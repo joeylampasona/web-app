@@ -252,7 +252,7 @@ export function FormingList({ file }: { file: FormingFile }) {
           )}
         </div>
       ) : (
-        <div className="scroll-x card" style={{ padding: 0 }}>
+        <div className="scroll-x scroll-tall card" style={{ padding: 0 }}>
           <table className="data">
             <thead>
               <tr>

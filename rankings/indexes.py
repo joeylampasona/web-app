@@ -22,10 +22,12 @@ from typing import Any
 from data import settings
 from data.market import Market
 from patterns import indicators
+from rankings import spark
 
 # A 200-session average needs 200 sessions. Below that there is no answer, and
 # saying so is the point.
 MIN_HISTORY = 200
+SPARK_POINTS = 63
 
 
 def _row(market: Market, symbol: str) -> dict[str, Any] | None:
@@ -55,6 +57,10 @@ def _row(market: Market, symbol: str) -> dict[str, Any] | None:
         "above_200": above_200,
         "vs_200_pct": None if vs_200_pct is None else round(vs_200_pct, 2),
         "sessions": len(closes),
+        # Three months of closes as a shape for the home page's strip, and the
+        # move across them; the strip prints the number beside the line.
+        "spark": spark.shape(closes, SPARK_POINTS),
+        "spark_change_pct": spark.change_pct(closes, SPARK_POINTS),
     }
 
 

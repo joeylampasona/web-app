@@ -98,7 +98,7 @@ export function HighIVBrowser({
               <div className="eyebrow" style={{ margin: 0 }}>Week of {longDate(key)}</div>
               <span className="caption dim num">{list.length}</span>
             </div>
-            <div className="scroll-x card" style={{ padding: 0 }}>
+            <div className="scroll-x scroll-tall card" style={{ padding: 0 }}>
               <table className="data">
                 <thead>
                   <tr>

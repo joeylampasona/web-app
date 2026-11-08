@@ -7,15 +7,19 @@ import { HomeRead } from "@/components/HomeRead";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
+import { normalise, Sparkline } from "@/components/Sparkline";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
-  getAllScreens, getBreadth, getMarketContext, getDiff, getIndexes, getMeta, getNews, getReleases,
+  getAllScreens, getBreadth, getMarketContext, getDiff, getIndexes, getLeadership, getMeta,
+  getNews, getRadar, getReleases,
   getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
 import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
 import { MarketContext } from "@/components/MarketContext";
+import { RadarRead } from "@/components/Radar";
 import { screenClass } from "@/lib/screenColour";
+import { ScreenGlyph } from "@/components/ScreenGlyph";
 import { SITE_NAME } from "@/lib/copy";
 
 /**
@@ -50,7 +54,17 @@ function StageBreakdown({ stages }: { stages: Record<string, number> }) {
     { key: "fresh_breakout", label: "fresh", value: stages.fresh_breakout ?? 0 },
     { key: "climbing", label: "climbing", value: stages.climbing ?? 0 },
   ];
+  const total = parts.reduce((sum, part) => sum + part.value, 0);
   return (
+    <div className="stack" style={{ gap: 6 }}>
+    {/* The same three counts as a bar, so the grid can be scanned for which
+        screens are mostly forming and which are mostly through. */}
+    <div aria-hidden className="stage-bar">
+      {total > 0 && parts.map((part) => part.value > 0 && (
+        <span key={part.key}
+              style={{ flexGrow: part.value, background: STAGE_COLOURS[part.key] }} />
+      ))}
+    </div>
     <div className="row wrap caption dim" style={{ gap: "var(--gap-sm)" }}>
       {parts.map((part) => (
         <span key={part.key} className="row" style={{ gap: 5, alignItems: "center" }}>
@@ -66,6 +80,7 @@ function StageBreakdown({ stages }: { stages: Record<string, number> }) {
         </span>
       ))}
     </div>
+    </div>
   );
 }
 
@@ -79,22 +94,34 @@ const STAT_TONE: Record<string, string> = {
 };
 
 function Stat({
-  value, label, note, href, tone,
+  value, label, note, href, tone, series,
 }: {
   value: string; label: string; note?: string; href?: string;
   tone?: "gain" | "warn";
+  /** The last twenty sessions of the same count, drawn beside it. */
+  series?: { date: string; value: number }[];
 }) {
+  const shape = series ? normalise(series.map((point) => point.value)) : null;
   const body = (
     <>
       <div className="footnote muted">{label}</div>
-      <div
-        className="num"
-        style={{
-          fontSize: "var(--size-h2)", lineHeight: 1.2,
-          color: tone ? STAT_TONE[tone] : undefined,
-        }}
-      >
-        {value}
+      <div className="between" style={{ alignItems: "flex-end", gap: "var(--gap-sm)" }}>
+        <div
+          className="num"
+          style={{
+            fontSize: "var(--size-h2)", lineHeight: 1.2,
+            color: tone ? STAT_TONE[tone] : undefined,
+          }}
+        >
+          {value}
+        </div>
+        {shape && (
+          <span title={`The last ${series!.length} sessions`}>
+            <Sparkline points={shape} width={110} height={30}
+                       colour={tone ? STAT_TONE[tone] : "var(--text-muted)"}
+                       label={`${label}, the last ${series!.length} sessions`} />
+          </span>
+        )}
       </div>
       {note && <div className="caption dim">{note}</div>}
     </>
@@ -118,6 +145,8 @@ export default function Home() {
   const upcoming = getUpcoming();
   const releases = getReleases();
   const news = getNews();
+  const radar = getRadar();
+  const layers = getLeadership();
 
   const cards = breadth?.cards ?? [];
   const value = (key: string) => cards.find((c) => c.key === key)?.value ?? null;
@@ -201,6 +230,7 @@ export default function Home() {
         <HomeRead read={read} indexes={indexes?.rows ?? []}
                   session={`${shortDate(meta?.as_of)} close`} />
         <MarketContext file={getMarketContext()} compact />
+        {radar && <RadarRead radar={radar} compact front={layers?.counts?.front ?? null} />}
       </div>
 
       <HomeStrongest
@@ -224,6 +254,7 @@ export default function Home() {
             note="Anywhere in the universe"
             href="/market/breakouts"
             tone="gain"
+            series={cards.find((c) => c.key === "breakouts")?.series}
           />
           <Stat
             value={failedPokes === null ? "—" : failedPokes.toFixed(0)}
@@ -231,6 +262,7 @@ export default function Home() {
             note="The cost of being early"
             href="/market/breadth"
             tone="warn"
+            series={cards.find((c) => c.key === "failed_pokes")?.series}
           />
           <Stat
             value={String(freshInScreens)}
@@ -271,7 +303,7 @@ export default function Home() {
 
       <section className="stack" style={{ gap: "var(--gap-md)" }}>
         <h2 style={{ fontSize: "var(--size-h3)", margin: 0 }}>The screens</h2>
-        <div className="grid-auto">
+        <div className="screen-grid">
           {(meta?.screens ?? []).map((screen) => (
             <Link
               key={screen.key}
@@ -282,7 +314,9 @@ export default function Home() {
               <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
                 <span className="row" style={{ gap: "var(--gap-sm)", alignItems: "center",
                                                minWidth: 0 }}>
-                  <span className={`screen-dot ${screenClass(screen.key)}`} aria-hidden />
+                  <span className={`screen-icon ${screenClass(screen.key)}`} aria-hidden>
+                    <ScreenGlyph href={`/screens/${screen.key}`} />
+                  </span>
                   <span style={{ fontWeight: 500 }}>{screen.name}</span>
                 </span>
                 <span className="num footnote">{screen.total}</span>

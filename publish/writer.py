@@ -1011,6 +1011,16 @@ def _with_priced(event: dict, priced: dict[str, dict]) -> dict:
     return event
 
 
+def _range_52w(market: Market, symbol: str) -> dict | None:
+    """Lowest low and highest high over the last 252 sessions, with the close."""
+    bars = [b for b in (market.series.get(symbol) or [])[-252:] if b.close and b.close > 0]
+    if len(bars) < 20:
+        return None
+    return {"low": round(min(b.low or b.close for b in bars), 2),
+            "high": round(max(b.high or b.close for b in bars), 2),
+            "sessions": len(bars)}
+
+
 def _fundamentals_view(payload: dict | None, cap: float | None) -> dict | None:
     """The filed figures plus the multiples a market cap makes of them.
 
@@ -1095,6 +1105,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                                            bundle.change(symbol, "m1"))),
         "bars_format": BAR_FORMAT,
         "bars": _bars_for(market, symbol, bar_limit),
+        # The year's range for the header's bar. From the full history, since
+        # the bars shipped above stop short of a year.
+        "range_52w": _range_52w(market, symbol),
         # Prices tested three or more times in the last 120 sessions, and the
         # nearest either side of the close. Where they sit, not a forecast.
         "levels": levels_mod.summary(market.series.get(symbol) or []),

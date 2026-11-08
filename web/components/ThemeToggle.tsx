@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apply, readChoice, resolve, setChoice, subscribe, type Theme } from "@/lib/theme";
+import { NavIcon } from "./NavIcon";
 
 /**
  * The header's one-tap switch. The stored choice, the resolution of "system"
@@ -31,11 +32,14 @@ export function ThemeToggle() {
     <button
       type="button"
       className="control footnote"
-      style={{ minHeight: 36, padding: "0 var(--pad-sm)" }}
+      style={{ minHeight: 36, width: 36, padding: 0, flexShrink: 0,
+               display: "grid", placeItems: "center" }}
       onClick={toggle}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
     >
-      {theme === "dark" ? "◑" : "◐"}
+      {/* What pressing it gives you: the sun in dark mode, the moon in light. */}
+      <NavIcon name={theme === "dark" ? "sun" : "moon"} size={17} />
     </button>
   );
 }

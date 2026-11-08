@@ -152,6 +152,11 @@ export function SetupChart({
         timeScale: { borderColor: token("--border"), rightOffset: 4, fixLeftEdge: true },
         crosshair: { mode: lw.CrosshairMode.Normal },
         handleScale: { axisPressedMouseMove: false },
+        // Pinned rather than taken from navigator.language. A browser whose
+        // language string Intl rejects (a POSIX locale such as
+        // "en-US@posix" is one) makes the library throw while formatting
+        // the axis, and the chart is left blank.
+        localization: { locale: "en-US" },
       });
 
       const candles = chart.addCandlestickSeries({

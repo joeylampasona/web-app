@@ -224,6 +224,34 @@ button { font: inherit; color: inherit; }
   font-size: var(--size-footnote);
 }
 .metric-row:last-child { border-bottom: none; }
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.metric-tile {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 7px var(--pad-sm);
+  background: var(--surface-1);
+  min-width: 0;
+}
+.metric-tile .label {
+  color: var(--text-muted); font-size: var(--size-caption);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.metric-tile .value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--size-footnote);
+  color: var(--text-primary);
+}
+.metric-tile .value.gain { color: var(--gain); }
+.metric-tile .value.loss { color: var(--loss); }
 .metric-row .label { color: var(--text-secondary); }
 .metric-row .value {
   font-family: var(--font-mono);
@@ -459,4 +487,71 @@ table.data td.text { font-family: var(--font-sans); text-align: left; }
    keyboard, and a large tablet still is not. */
 @media (hover: none), (pointer: coarse) {
   .hide-on-touch { display: none; }
+}
+
+/* ---- the home page's week, one row per day ---------------------------- */
+.cal-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--gap-md);
+  padding: var(--pad-sm) var(--pad-md);
+  align-items: baseline;
+}
+.cal-row + .cal-row { border-top: 0.5px solid var(--border); }
+.cal-day { display: flex; flex-wrap: wrap; gap: var(--gap-xs); align-items: baseline; }
+@media (max-width: 560px) {
+  .cal-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+/* ---- the home page's screens grid ------------------------------------- */
+.stage-bar {
+  display: flex; gap: 2px; height: 4px; border-radius: 2px; overflow: hidden;
+  background: var(--surface-2);
+}
+.stage-bar > span { min-width: 3px; }
+.screen-icon { display: inline-flex; flex-shrink: 0; }
+
+/* ---- the stock page's price and year range ----------------------------- */
+.stock-hero {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--gap-md) var(--gap-xl);
+  margin-bottom: var(--gap-sm);
+}
+.range-bar {
+  position: relative; height: 6px; border-radius: 3px;
+  background: var(--surface-2); border: 0.5px solid var(--border);
+}
+.range-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px;
+  background: var(--brand-muted);
+}
+.range-mark {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--brand); border: 2px solid var(--surface-0);
+  box-shadow: 0 0 0 0.5px var(--border-strong);
+}
+
+/* ---- tables: a row to follow the eye, and a header that stays ----------- */
+table.data tbody tr:hover td { background: var(--surface-2); }
+table.data thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-1);
+}
+/* A long table scrolls inside its own box on a wide screen, so the header
+   above can stay in view. A phone keeps one page scroll: a box that scrolls
+   inside a page that scrolls is a trap for a thumb. */
+@media (min-width: 1024px) {
+  .scroll-tall { max-height: 78vh; overflow-y: auto; }
+}
+
+/* Two across even on a phone: twelve cards one above another was the longest
+   stretch of the home page, for a grid that is read at a glance. */
+.screen-grid {
+  display: grid; gap: var(--gap-md);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+@media (max-width: 560px) {
+  .screen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-sm); }
+  .screen-grid .card { padding: var(--pad-sm) var(--pad-md); }
 }

@@ -9,7 +9,7 @@ import {
 } from "@/lib/format";
 import { EarningsBadge, FlagBadge, NightsBadge, QuadrantBadge, StageBadge } from "./Badges";
 import { CriteriaMeter } from "./CriteriaMeter";
-import { MetricRow } from "./MetricRow";
+import { MetricTile } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
 import { DelayedGap } from "./DelayedGap";
 import { MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
@@ -22,7 +22,7 @@ import { WatchStar } from "./WatchStar";
  * breakouts view; everything else is identical wherever the card appears.
  */
 export function StockCard({
-  setup, bars, variant = "setup", chartHeight = 210,
+  setup, bars, variant = "setup", chartHeight = 210, showHeader = true,
 }: {
   setup: Setup;
   /** Passed only for the handful of cards above the fold. The rest fetch their
@@ -32,6 +32,9 @@ export function StockCard({
   /** Cards in a list keep the fixed height that makes the list scroll evenly.
    *  The one card on a stock's own page sizes itself to the width it has. */
   chartHeight?: number | "responsive";
+  /** Off on a stock's own page, whose header already carries the name and
+   *  the price; printing them again on the card below was a repeat. */
+  showHeader?: boolean;
 }) {
   const ohlc = setup.ohlc;
   const lazy = useLazyBars(setup.symbol, !bars);
@@ -83,6 +86,7 @@ export function StockCard({
           </span>
         </div>
       )}
+      {showHeader && (
       <header className="between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <div className="row">
@@ -100,17 +104,16 @@ export function StockCard({
           <PriceChange value={ohlc?.change_pct} />
         </div>
       </header>
+      )}
 
-      <div className="footnote num dim" style={{ lineHeight: 1.8 }}>
+      {/* One line. The close and the day's change are in the header above,
+          so this carries only the rest of the bar. */}
+      <div className="caption num dim">
         {shortDate(ohlc?.date)}
         {"  "}O {decimal(ohlc?.open)}
         {"  "}H {decimal(ohlc?.high)}
         {"  "}L {decimal(ohlc?.low)}
-        {"  "}C {decimal(ohlc?.close)}{" "}
-        <PriceChange value={ohlc?.change_pct} />
-        <br />
-        Vol {volume(setup.volume)}
-        {"   "}RS {rsText(setup.rs_rating)}
+        {"  "}Vol {volume(setup.volume)}
       </div>
 
       {/* Holds the card's height steady whether or not the chart is mounted, so
@@ -133,9 +136,9 @@ export function StockCard({
         )}
       </div>
 
-      <div>
+      <div className="metric-grid">
         {rows.map((row) => (
-          <MetricRow key={row.label} {...row} />
+          <MetricTile key={row.label} {...row} />
         ))}
       </div>
 
@@ -196,9 +199,9 @@ export function StockCard({
 
 function setupRows(setup: Setup) {
   return [
-    { label: "RS rating", value: rsText(setup.rs_rating), help: copy("metric.rs_rating") },
+    { label: "RS rating", short: "RS", value: rsText(setup.rs_rating), help: copy("metric.rs_rating") },
     {
-      label: "Now vs pivot (%)",
+      label: "Now vs pivot (%)", short: "vs pivot",
       // The one figure on the card that goes stale during the session, and
       // the one the screen is about. Falls back to the published close when
       // there is no quote.
@@ -213,23 +216,23 @@ function setupRows(setup: Setup) {
       tone: tone(setup.now_vs_pivot_pct),
     },
     {
-      label: "Tightening (ATR ratio)",
+      label: "Tightening (ATR ratio)", short: "Tightening",
       value: ratio(setup.tightening_atr_ratio),
       help: copy("metric.tightening"),
     },
     {
-      label: "Volume dry-up",
+      label: "Volume dry-up", short: "Dry-up",
       value: ratio(setup.volume_dryup_ratio),
       help: copy("metric.volume_dryup"),
     },
     {
-      label: "Up/down volume, net",
+      label: "Up/down volume, net", short: "Up/down vol",
       value: decimal(setup.up_down_volume_net),
       help: copy("metric.up_down_volume"),
       tone: tone(setup.up_down_volume_net),
     },
     {
-      label: "From 52-week high",
+      label: "From 52-week high", short: "From high",
       value: setup.from_52w_high_pct === null ? "—" : `${setup.from_52w_high_pct.toFixed(0)}%`,
       help: copy("metric.from_52w_high"),
     },
@@ -240,19 +243,19 @@ function breakoutRows(setup: Setup) {
   const m = setup.breakout_metrics ?? {};
   return [
     {
-      label: "Breakout-day gain",
+      label: "Breakout-day gain", short: "Breakout day",
       value: signed(m.breakout_day_gain_pct ?? null),
       help: copy("metric.breakout_day_gain"),
       tone: tone(m.breakout_day_gain_pct ?? null),
     },
     {
-      label: "1-day gain",
+      label: "1-day gain", short: "1-day",
       value: signed(m.one_day_gain_pct ?? null),
       help: copy("metric.one_day_gain"),
       tone: tone(m.one_day_gain_pct ?? null),
     },
     {
-      label: "Now vs pivot (%)",
+      label: "Now vs pivot (%)", short: "vs pivot",
       // The one figure on the card that goes stale during the session, and
       // the one the screen is about. Falls back to the published close when
       // there is no quote.
@@ -267,18 +270,18 @@ function breakoutRows(setup: Setup) {
       tone: tone(setup.now_vs_pivot_pct),
     },
     {
-      label: "Breakout volume vs normal day",
+      label: "Breakout volume vs normal day", short: "Volume ×",
       value: ratio(m.breakout_volume_multiple ?? null),
       help: copy("metric.breakout_volume"),
     },
     {
-      label: "Breakout close in range",
+      label: "Breakout close in range", short: "Close in range",
       value: decimal(m.close_in_range ?? null),
       help: copy("metric.close_in_range"),
     },
-    { label: "RS rating", value: rsText(setup.rs_rating), help: copy("metric.rs_rating") },
+    { label: "RS rating", short: "RS", value: rsText(setup.rs_rating), help: copy("metric.rs_rating") },
     {
-      label: "Price vs 50-MA",
+      label: "Price vs 50-MA", short: "vs 50-day",
       value: signed(m.price_vs_50ma_pct ?? setup.price_vs_50ma_pct),
       help: copy("metric.price_vs_50ma"),
       tone: tone(m.price_vs_50ma_pct ?? setup.price_vs_50ma_pct),

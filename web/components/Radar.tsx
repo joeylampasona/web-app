@@ -57,13 +57,20 @@ function Cell({ r, w }: { r: RadarReading; w: number }) {
   return <td className="num" style={{ color: toneOf(v) }}>{pct(v)}</td>;
 }
 
-export function RadarRead({ radar, compact = false }: { radar: Radar; compact?: boolean }) {
+export function RadarRead({ radar, compact = false, front = null }: {
+  radar: Radar; compact?: boolean;
+  /** Stocks on the front line tonight, from the leadership layers. */
+  front?: number | null;
+}) {
   const read = radar.read;
   if (compact) {
     return (
       <p className="caption dim" style={{ margin: 0 }}>
-        Strength radar: <Link href="/market/radar">{read.label}</Link>.{" "}
-        {read.full_share}% of groups fully aligned against the S&amp;P 500.
+        Strength radar: <Link href="/market/radar">{read.label}</Link>,{" "}
+        {read.full_share}% of groups fully aligned against the S&amp;P 500
+        {front != null && (
+          <> · <Link href="/market/leadership">{front.toLocaleString("en-US")} stocks on the front line</Link></>
+        )}.
       </p>
     );
   }
@@ -121,7 +128,8 @@ export function RadarPairs({ radar }: { radar: Radar }) {
                 {p.label}
                 <div className="caption dim mono">{p.a} / {p.b}</div>
               </td>
-              <td><Sparkline points={shape(p.spark)} changePct={p.now.rs63} width={88} /></td>
+              <td><Sparkline points={shape(p.spark)} changePct={p.now.rs63} width={88}
+                             label={`${p.a} against ${p.b} over three months`} /></td>
               {radar.windows.map((w) => <Cell key={w} r={p.now} w={w} />)}
               <td className="num dim">{pct(p.start?.rs126)}</td>
               <td className="text"><AlignChip state={p.aligned} /></td>
@@ -200,7 +208,7 @@ export function RadarMap({ radar }: { radar: Radar }) {
 
 export function RadarGroups({ radar }: { radar: Radar }) {
   return (
-    <div className="scroll-x card" style={{ padding: 0 }}>
+    <div className="scroll-x scroll-tall card" style={{ padding: 0 }}>
       <table className="data">
         <thead>
           <tr>

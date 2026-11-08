@@ -18,7 +18,7 @@ import { weekday, longDate } from "@/lib/format";
  */
 
 const DAYS_AHEAD = 7;
-const TICKERS_PER_DAY = 10;
+const TICKERS_PER_DAY = 8;
 
 interface DayGroup {
   date: string;
@@ -129,48 +129,47 @@ export function HomeCalendar({
           A quiet week is a quiet week.
         </p>
       ) : (
-        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+        // One card with a row per day, not a card per day: eight cards were
+        // about 1,800px of a 4,200px home page on a phone, for what is a list.
+        <div className="card cal-rows" style={{ padding: 0 }}>
           {days.map((day) => (
-            <div key={day.date} className="card stack" style={{ gap: "var(--gap-xs)" }}>
-              <div className="row" style={{ gap: "var(--gap-sm)", alignItems: "baseline" }}>
-                {/* weekday() already reads "Wed, Sep 16" -- printing shortDate
-                    beside it repeated the date in a second format. */}
+            <div key={day.date} className="cal-row">
+              <div className="cal-day">
                 <span style={{ fontWeight: 500 }}>{weekday(day.date)}</span>
+                {day.fomc && <span className="badge badge--brand">FOMC</span>}
+              </div>
+              <div className="stack" style={{ gap: 2, minWidth: 0 }}>
                 {day.fomc && (
-                  <span className="badge badge--brand">FOMC</span>
+                  <div className="footnote" style={{ color: "var(--brand-ink)" }}>
+                    {day.fomc.label}
+                  </div>
+                )}
+                {day.earnings.length > 0 && (
+                  <Line label={`Earnings (${day.earnings.length})`}>
+                    <Tickers events={day.earnings} />
+                  </Line>
+                )}
+                {day.dividends.length > 0 && (
+                  <Line label={`Ex-dividend (${day.dividends.length})`}>
+                    <Tickers events={day.dividends} />
+                  </Line>
+                )}
+                {day.splits.length > 0 && (
+                  <Line label={`Splits (${day.splits.length})`}>
+                    <Tickers events={day.splits} />
+                  </Line>
+                )}
+                {day.other.length > 0 && (
+                  <Line label={`${day.other[0].type_label} (${day.other.length})`}>
+                    <Tickers events={day.other} />
+                  </Line>
+                )}
+                {day.releases.length > 0 && (
+                  <Line label="Data">
+                    <span>{day.releases.map((r) => r.name).join(" · ")}</span>
+                  </Line>
                 )}
               </div>
-
-              {day.fomc && (
-                <div className="footnote" style={{ color: "var(--brand-ink)" }}>
-                  {day.fomc.label}
-                </div>
-              )}
-              {day.earnings.length > 0 && (
-                <Line label={`Earnings (${day.earnings.length})`}>
-                  <Tickers events={day.earnings} />
-                </Line>
-              )}
-              {day.dividends.length > 0 && (
-                <Line label={`Ex-dividend (${day.dividends.length})`}>
-                  <Tickers events={day.dividends} />
-                </Line>
-              )}
-              {day.splits.length > 0 && (
-                <Line label={`Splits (${day.splits.length})`}>
-                  <Tickers events={day.splits} />
-                </Line>
-              )}
-              {day.other.length > 0 && (
-                <Line label={`${day.other[0].type_label} (${day.other.length})`}>
-                  <Tickers events={day.other} />
-                </Line>
-              )}
-              {day.releases.length > 0 && (
-                <Line label="Data">
-                  <span>{day.releases.map((r) => r.name).join(" · ")}</span>
-                </Line>
-              )}
             </div>
           ))}
         </div>

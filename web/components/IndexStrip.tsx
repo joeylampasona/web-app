@@ -1,6 +1,7 @@
 "use client";
 
 import { PriceChange } from "@/components/PriceChange";
+import { Sparkline } from "@/components/Sparkline";
 import { price } from "@/lib/format";
 import { useQuote, useQuotesMeta } from "@/lib/useQuotes";
 import type { IndexRow } from "@/lib/types";
@@ -45,8 +46,15 @@ function IndexCell({ row }: { row: IndexRow }) {
         </span>
         <PriceChange value={change} className="caption" />
       </div>
-      <div className="num" style={{ fontSize: "var(--size-lead)", lineHeight: 1.2 }}>
-        {price(shown)}
+      <div className="between" style={{ alignItems: "center", gap: "var(--gap-sm)" }}>
+        <div className="num" style={{ fontSize: "var(--size-lead)", lineHeight: 1.2 }}>
+          {price(shown)}
+        </div>
+        {/* Three months of closes. The line is the nightly's, not the live
+            quote's, so it ends at the last settled session. */}
+        <Sparkline points={row.spark} changePct={row.spark_change_pct}
+                   width={80} height={26}
+                   label={`${row.symbol} over the last three months`} />
       </div>
       <div className="caption" style={{ color: "var(--text-muted)" }}>
         {above === null

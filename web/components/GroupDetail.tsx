@@ -40,7 +40,7 @@ export function GroupDetail({ group }: { group: GroupRow }) {
 
       <section>
         <div className="eyebrow">Members</div>
-        <div className="scroll-x card" style={{ padding: 0 }}>
+        <div className="scroll-x scroll-tall card" style={{ padding: 0 }}>
           <table className="data">
             <thead>
               <tr><th>Ticker</th><th>RS</th><th>Δ 1m</th><th>On a screen</th></tr>

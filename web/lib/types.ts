@@ -402,6 +402,8 @@ export interface StockFile {
   /** Where it sits against its own industry, and the industry against the
    *  S&P 500. Absent on files written before the layers existed. */
   leadership?: LeadershipReading | null;
+  /** Lowest low and highest high over up to 252 sessions. */
+  range_52w?: { low: number; high: number; sessions: number } | null;
   /** This stock has more completed bases than the free sample shows. Flag
    *  false with an empty `base_history` means there is genuinely nothing to
    *  compare the current structure with. */
@@ -444,6 +446,9 @@ export interface IndexRow {
   above_200: boolean | null;
   vs_200_pct: number | null;
   sessions: number;
+  /** Three months of closes, 0-100 across their own range, and the move. */
+  spark?: number[] | null;
+  spark_change_pct?: number | null;
 }
 
 /** Is the benchmark above its 200-day line? `above` is null for "cannot say",

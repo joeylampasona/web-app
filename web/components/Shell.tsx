@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Drawer } from "vaul";
 import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
+import { NavIcon, type NavIconName } from "./NavIcon";
 import { DirectionArrow, ScreenGlyph } from "./ScreenGlyph";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -16,12 +17,12 @@ interface Destination {
 }
 
 const TABS: {
-  key: string; label: string; glyph: string; match: string;
+  key: string; label: string; glyph: NavIconName; match: string;
   href?: string; destinations?: Destination[];
 }[] = [
-  { key: "home", label: "Today", glyph: "◆", match: "/", href: "/" },
+  { key: "home", label: "Today", glyph: "home", match: "/", href: "/" },
   {
-    key: "screens", label: "Screens", glyph: "▦", match: "/screens",
+    key: "screens", label: "Screens", glyph: "screens", match: "/screens",
     destinations: [
       { href: "/screens/forming", title: "Forming (all)", blurb: "Every base forming, across every screen, in one list." },
       { href: "/screens/vcp", title: "VCP", blurb: "A leader pauses and the swings tighten." },
@@ -40,9 +41,9 @@ const TABS: {
       { href: "/screens/custom", title: "Create your own", blurb: "Move every dial yourself." },
     ],
   },
-  { key: "search", label: "Search", glyph: "⌕", match: "/search", href: "/search" },
+  { key: "search", label: "Search", glyph: "search", match: "/search", href: "/search" },
   {
-    key: "market", label: "Market", glyph: "◳", match: "/market",
+    key: "market", label: "Market", glyph: "market", match: "/market",
     destinations: [
       { href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
       { href: "/market/news", title: "In the news", blurb: "Headlines for the names this site follows." },
@@ -63,7 +64,7 @@ const TABS: {
     ],
   },
   {
-    key: "watchlist", label: "Watchlist", glyph: "☆", match: "/watchlist",
+    key: "watchlist", label: "Watchlist", glyph: "watchlist", match: "/watchlist",
     destinations: [
       { href: "/watchlist", title: "Your watchlist", blurb: "Up to 50 tickers, bucketed by stage." },
     ],
@@ -137,12 +138,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               // is not there.
               style={{ minHeight: 36, width: 36, padding: 0, flexShrink: 0 }}
             >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"
-                   strokeLinejoin="round" aria-hidden focusable="false">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
+              <NavIcon name="settings" size={17} />
             </Link>
             <AccountButton />
           </div>
@@ -219,10 +215,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
                         background: "var(--brand)", color: "var(--on-brand)",
                         display: "grid", placeItems: "center", marginTop: -14,
                       }
-                    : { fontSize: 15 }
+                    : { display: "grid", placeItems: "center" }
                 }
               >
-                {tab.glyph}
+                <NavIcon name={tab.glyph} size={isRaised ? 16 : 19} />
               </span>
               <span className="caption">{tab.label}</span>
             </button>
@@ -333,7 +329,7 @@ function SideNav({ tabs, pathname, active }: {
         const isOpen = expanded === tab.key && Boolean(tab.destinations);
         const row = (
           <span className="row" style={{ gap: "var(--gap-sm)" }}>
-            <span aria-hidden style={{ width: 16, display: "inline-block" }}>{tab.glyph}</span>
+            <span aria-hidden style={{ width: 18, display: "inline-flex" }}><NavIcon name={tab.glyph} size={17} /></span>
             <span>{tab.label}</span>
           </span>
         );
@@ -378,7 +374,7 @@ function SideNav({ tabs, pathname, active }: {
         <Link href="/settings" className="sidenav-item"
               aria-current={pathname === "/settings" ? "page" : undefined}>
           <span className="row" style={{ gap: "var(--gap-sm)" }}>
-            <span aria-hidden style={{ width: 16, display: "inline-block" }}>⚙</span>
+            <span aria-hidden style={{ width: 18, display: "inline-flex" }}><NavIcon name="settings" size={17} /></span>
             <span>Settings</span>
           </span>
         </Link>
