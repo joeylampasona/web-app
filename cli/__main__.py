@@ -48,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
                      help="also check subscribers' watchlists against the quotes")
     p_q.add_argument("--send-alerts", dest="send_alerts", action="store_true",
                      help="with --alerts, actually email them (default: dry run)")
+    sub.add_parser("headlines",
+                   help="headlines since the nightly's newest, for the hourly run")
     sub.add_parser("publish", help="write the out/ JSON tree")
     sub.add_parser("gated", help="upload the staged gated/ documents to Supabase")
     sub.add_parser("fundamentals",

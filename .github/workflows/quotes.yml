@@ -74,12 +74,23 @@ jobs:
           SITE_URL: https://thetape.cc
         run: python -m cli quotes --alerts --send-alerts
 
+      # Headlines published since the nightly's newest, so the news on the
+      # site moves during the day too. The nightly is the only other fetch,
+      # and there is none on a Sunday or Monday morning. A failure here
+      # leaves the site on the nightly's headlines; the quotes still publish.
+      - name: Fetch headlines since the nightly
+        continue-on-error: true
+        env:
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+        run: python -m cli headlines
+
       - name: Publish to the quotes branch
         run: |
           # A fresh single-commit repository each time, like the data branch.
           # This file is worth nothing the moment it is superseded, so keeping
           # its history would be paying to store staleness.
           mkdir -p send && cp out/quotes.json send/quotes.json
+          if [ -f out/news_live.json ]; then cp out/news_live.json send/news_live.json; fi
           cd send
           python3 -c "
           import json

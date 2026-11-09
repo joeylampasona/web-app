@@ -17,7 +17,9 @@ own on top.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
+import pathlib
 import sqlite3
 from collections.abc import Iterable
 
@@ -321,3 +323,82 @@ def classify_headline(title: str) -> str:
     if any(marker in lowered for marker in RELEASE_MARKERS):
         return RELEASE
     return ANALYSIS
+
+
+# ---------------------------------------------------------------- live
+
+# Pages the hourly run may spend. A page is up to a thousand articles, which
+# is more than an hour of market-wide coverage, so one is normally enough;
+# three covers the morning after a weekend.
+LIVE_PAGES = 3
+LIVE_LIMIT = 100
+
+
+def live(out: pathlib.Path, adapter=None, now: dt.datetime | None = None) -> dict:
+    """Headlines published since the nightly's newest, for the hourly run.
+
+    Reads the published tree rather than the database: the hourly job has no
+    database, only the nightly's news.json (what the site already shows) and
+    search.json (which tickers it follows). Keeps the nightly's treatment:
+    only tickers the site follows, the same three kinds, newest first, never
+    ranked. A ticker's setting-up or failing state is carried over from the
+    nightly's own articles where it appeared there, and left blank otherwise,
+    because the hourly job does not run the screens.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    stamp = now.isoformat(timespec="seconds")
+    empty = {"fetched_at": stamp, "since": None, "articles": []}
+    try:
+        nightly = json.loads((out / "news.json").read_text())
+        search = json.loads((out / "search.json").read_text())
+    except (OSError, ValueError):
+        return {**empty, "note": "no published tree to read"}
+    followed = {row["symbol"] for row in search.get("rows") or [] if row.get("symbol")}
+    prominent = set(nightly.get("prominent_tickers") or [])
+    seen = {a.get("url") for a in nightly.get("articles") or []}
+    status: dict[str, str | None] = {}
+    for article in nightly.get("articles") or []:
+        for ticker, state in (article.get("status") or {}).items():
+            status.setdefault(ticker, state)
+    newest = max((a.get("published_at") or "" for a in nightly.get("articles") or []),
+                 default="")
+    floor = (now - dt.timedelta(hours=36)).isoformat(timespec="seconds")
+    since = max(newest, floor)
+
+    from data.adapters.polygon import PolygonError, PolygonGroupedAdapter
+    adapter = adapter or PolygonGroupedAdapter()
+    if not getattr(adapter, "api_key", None):
+        return {**empty, "since": since, "note": "no provider key"}
+
+    found: dict[str, dict] = {}
+    path, params = "/v2/reference/news", {
+        "order": "desc", "sort": "published_utc", "limit": str(PAGE_SIZE),
+        "published_utc.gt": since}
+    for _ in range(LIVE_PAGES):
+        try:
+            payload = adapter._get(path, params)
+        except (PolygonError, Exception) as exc:   # noqa: BLE001
+            log.info("live news stopped: %s", exc)
+            break
+        for row in payload.get("results") or []:
+            url = (row.get("article_url") or "").strip()
+            title = (row.get("title") or "").strip()
+            published = (row.get("published_utc") or "").strip()
+            tickers = sorted({str(t).upper() for t in row.get("tickers") or []} & followed)
+            if not (url and title and published and tickers) or url in seen or url in found:
+                continue
+            found[url] = {
+                "published_at": published, "title": title,
+                "publisher": ((row.get("publisher") or {}).get("name") or "Unknown").strip(),
+                "url": url, "tickers": tickers,
+                "kind": classify_headline(title),
+                "status": {t: status.get(t) for t in tickers},
+                "prominent": any(t in prominent for t in tickers),
+            }
+        nxt = payload.get("next_url")
+        if not nxt:
+            break
+        path, params = nxt, None
+
+    articles = sorted(found.values(), key=lambda a: a["published_at"], reverse=True)
+    return {"fetched_at": stamp, "since": since, "articles": articles[:LIVE_LIMIT]}

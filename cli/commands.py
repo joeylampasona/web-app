@@ -571,6 +571,23 @@ def _pipeline(conn, with_followthrough: bool = True):
             news_rows, desk_rows, desk_run)
 
 
+def cmd_headlines(args) -> int:
+    """Headlines published since the nightly's newest, beside the quotes.
+
+    Run by the hourly quotes job. Reads the published tree, asks the news
+    endpoint for anything newer, and writes out/news_live.json for the quotes
+    branch. A failure here leaves the site on the nightly's headlines, which
+    is what it showed before this existed.
+    """
+    from catalysts import news as newsmod
+    out = settings.out_dir()
+    payload = newsmod.live(out)
+    (out / "news_live.json").write_text(json.dumps(payload))
+    print(f"  {len(payload['articles'])} headline(s) since {payload.get('since')}"
+          + (f" ({payload['note']})" if payload.get("note") else ""))
+    return 0
+
+
 def cmd_quotes(args) -> int:
     """Write a delayed price for every name currently on a screen.
 

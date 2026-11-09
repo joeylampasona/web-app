@@ -264,7 +264,7 @@ export function StockDetail({ stock, run }: {
 
       <section>
         <div className="eyebrow">In the news</div>
-        <NewsPanel news={stock.news} />
+        <NewsPanel news={stock.news} symbol={stock.symbol} />
       </section>
 
       <section>

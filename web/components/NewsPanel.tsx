@@ -1,4 +1,7 @@
+"use client";
+
 import type { Headline } from "@/lib/types";
+import { useLiveNews } from "@/lib/useLiveNews";
 
 /**
  * Headlines, linked out, never reproduced.
@@ -9,7 +12,9 @@ import type { Headline } from "@/lib/types";
  * our own laid over the top. The headline is the link; the article belongs to
  * whoever wrote it.
  */
-export function NewsPanel({ news }: { news: Headline[] }) {
+export function NewsPanel({ news: nightly, symbol }: { news: Headline[]; symbol?: string }) {
+  // The nightly's six, with anything filed against this name since on top.
+  const news = useLiveNews(nightly ?? [], symbol).slice(0, 8);
   if (!news?.length) {
     return (
       <p className="muted footnote">

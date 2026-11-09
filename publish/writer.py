@@ -428,6 +428,11 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     written.append(_write(out / "news.json", {
         "as_of": as_of.isoformat(),
         "articles": _news_articles(newsmod.market_wide(news or {}), market, result),
+        # The largest companies by value, which the hourly headline run needs
+        # to mark an article "prominent" the way this one does.
+        "prominent_tickers": sorted(
+            s for s, _ in sorted(market.caps.items(),
+                                 key=lambda kv: -(kv[1] or 0.0))[:NEWS_LARGE_CAP_RANK]),
     }))
 
     # Broad-market indexes and the regime check, for the home page. Both are

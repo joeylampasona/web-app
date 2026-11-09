@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { MarketHeadline } from "@/lib/types";
+import { useLiveNews } from "@/lib/useLiveNews";
 import { TickerLink } from "./StockDrawer";
 
 /**
@@ -31,7 +34,9 @@ function ago(iso: string, now: number): string {
   return new Date(then).toISOString().slice(0, 10);
 }
 
-export function HomeNews({ articles }: { articles: MarketHeadline[] }) {
+export function HomeNews({ articles: nightly }: { articles: MarketHeadline[] }) {
+  // The nightly's headlines, with anything published since on top.
+  const articles = useLiveNews(nightly ?? []) as MarketHeadline[];
   if (!articles?.length) return null;
 
   // One clock for the whole list. Calling Date.now() per row would let two

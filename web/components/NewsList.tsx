@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { MarketHeadline } from "@/lib/types";
+import { useLiveNews } from "@/lib/useLiveNews";
 import { PublisherMark } from "./PublisherMark";
 import { TickerLink } from "./StockDrawer";
 
@@ -60,7 +61,9 @@ function time(iso: string): string {
   });
 }
 
-export function NewsList({ articles }: { articles: MarketHeadline[] }) {
+export function NewsList({ articles: nightly }: { articles: MarketHeadline[] }) {
+  // The nightly's list, with anything the hourly run found since on top.
+  const articles = useLiveNews(nightly) as MarketHeadline[];
   const [filter, setFilter] = useState("");
   const [kind, setKind] = useState<"all" | "analysis" | "release">("all");
   const [limit, setLimit] = useState(PAGE);
