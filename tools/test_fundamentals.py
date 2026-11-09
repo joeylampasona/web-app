@@ -120,20 +120,29 @@ check("parse carries the quarters", len(parsed["quarters"]), 7)
 
 r = er.read(qs)
 g = r["glance"]
-check("revenue on the quarter before", g["revenue_qoq"], -9.1)
-check("revenue on a year ago", g["revenue_yoy"], 25.0)
-check("gross margin move in points", g["gross_margin_move"], 6.0)
-check("share count on a year ago", g["shares_yoy"], 8.0)
-kinds = {x["kind"]: (x["tone"], x["text"]) for x in r["flags"]}
-check("growth flag at 20% or more", kinds["growth"][0], "good")
-check("loss narrowed", kinds["profit"], ("neutral", "Loss narrowed to -$4"))
-check("dilution of 5% or more", kinds["funding"][0], "bad")
-check("net debt", kinds["balance"], ("neutral", "Net debt of $60"))
-check("stock pay at half of cash flow is noted",
-      any(n.startswith("Stock compensation") for n in r["notes"]), True)
-check("debt up a tenth is noted", any(n.startswith("Debt rose 20%") for n in r["notes"]), True)
+check("revenue on the quarter before", g["rev_qoq"], -9.1)
+check("revenue on a year ago", g["rev_yoy"], 25.0)
+check("gross margin move in points", g["gm_pp"], 6.0)
+check("share count on a year ago", g["dilution"], 8.0)
+kinds = {x["key"]: (x["tone"], x["text"]) for x in r["flags"]}
+check("growth of 20% or more is good", kinds["growth"][0], 1)
+check("a net loss narrower than the last", kinds["profit"],
+      (-1, "Net loss $4, narrower than $10 last quarter"))
+check("dilution of 5% or more", kinds["funding"],
+      (-1, "Share count +8.0% in a year: dilution"))
+check("net debt under twice revenue is neutral", kinds["balance"][0], 0)
+notes = {x["key"] for x in r["forensic"]}
+check("stock pay at half of cash flow is noted", "sbc" in notes, True)
+check("debt up a tenth is noted", "debt" in notes, True)
 check("backlog against twelve months' revenue",
-      any("2.0 times" in n for n in r["notes"]), True)
+      any("2.0× trailing revenue" in x["text"] for x in r["forensic"]), True)
+check("final read", (r["verdict"]["growth"], r["verdict"]["proof"]), ("REAL", "PENDING"))
+check("the takeaway follows the flags", r["takeaway"],
+      "Growth with the cash to show for it: the quarter confirms the thesis.")
+check("the test names the first weak flag", r["test"].startswith("The next test is operating profit"), True)
+check("a report two years after the newest quarter gets no card",
+      er.read(qs, "2028-08-01"), None)
+check("a report a month after the quarter covers it", er.read(qs, "2026-07-30")["covers"], True)
 check("one quarter is not enough to read", er.read(qs[:1]), None)
 
 print()

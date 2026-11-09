@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  EarningsFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 
@@ -269,6 +269,12 @@ export function getMarketContext() {
  *  SPY. Null when SPY itself has no bars. */
 export function getRadar() {
   return read<Radar>("market/radar.json");
+}
+
+/** The Earnings tab: Market Desk's priced-against-realised table and a read
+ *  of every recent reporter's filed quarter. */
+export function getEarnings() {
+  return read<EarningsFile>("market/earnings.json");
 }
 
 /** Every stock's leadership layer, counted, with the strongest per layer. */

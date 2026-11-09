@@ -217,11 +217,16 @@ the screen all come from Market Desk's first weeks of November.
   against SPY the way the radar reads its funds, so nearly every stock has a
   group. Smaller industries fall back to SPY, as Market Desk's ungrouped names
   do.
-- **The earnings read has no verdict.** Market Desk ends each card with a
-  takeaway sentence and "growth REAL / proof PENDING". The site keeps the
-  flags and the threshold notes and drops both: every other number here is a
-  measurement, and a verdict on the quarter would be the one place the site
-  tells a reader what to think.
+- **The earnings read now carries Market Desk's verdict (2026-11-09).** It
+  first shipped without the takeaway sentence and "growth REAL / proof
+  PENDING", on the grounds that every other number here is a measurement.
+  The owner asked for the desk's card as it is, on its own Earnings tab, so
+  both are in, on that tab and on the stock pages. They are rule outputs on
+  the filed numbers and the card says so. Two departures from the desk: a
+  backlog under a tenth of a year's revenue is not printed (it read "0.0×"),
+  and a quarter with profit and cash in place but carried by deferred revenue
+  or stock pay asks whether the cash flow holds without them, rather than the
+  desk's fall-through "what turns the cash flow positive?".
 - **The radar is not logged.** Market Desk writes every reading to a table so
   a week can be rebuilt. Every bar is already in this database, so the week
   ago is read again at an offset of five sessions instead.

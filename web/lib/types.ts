@@ -670,28 +670,70 @@ export interface Fundamentals {
   quarterly?: QuarterlyRead | null;
 }
 
-export interface QuarterlyGlance {
-  end: string;
-  revenue: number | null; revenue_qoq: number | null; revenue_yoy: number | null;
-  gross_margin: number | null; gross_margin_move: number | null;
-  op_income: number | null; net_income: number | null;
-  cfo: number | null; fcf: number | null;
-  shares_yoy: number | null;
-  cash: number | null; debt: number | null;
-  runway_quarters: number | null;
-}
-
-export interface QuarterlyFlag {
-  kind: "growth" | "margin" | "profit" | "cash" | "funding" | "balance";
-  tone: "good" | "bad" | "neutral";
+export interface ReadLine {
+  key: string;
+  /** 1 good, -1 bad, 0 neutral. */
+  tone: 1 | 0 | -1;
   text: string;
 }
 
+export interface QuarterlyGlance {
+  end: string;
+  revenue: number | null; rev_qoq: number | null; rev_yoy: number | null;
+  gm: number | null; gm_prev: number | null; gm_pp: number | null;
+  op_income: number | null; op_margin: number | null;
+  net_income: number | null; net_prev: number | null;
+  cfo: number | null; capex: number | null; fcf: number | null; fcf_prev: number | null;
+  dilution: number | null;
+  cash: number | null; debt: number | null; net_cash: number | null;
+  runway_q: number | null;
+}
+
+/** A filed quarter read by Market Desk's rules. */
 export interface QuarterlyRead {
+  /** Set when the read belongs to a recent report; `covers` says whether the
+   *  quarter on file is the one reported or the one before it. */
+  report_date: string | null;
+  covers: boolean | null;
   glance: QuarterlyGlance;
-  flags: QuarterlyFlag[];
-  notes: string[];
+  flags: ReadLine[];
+  forensic: ReadLine[];
+  takeaway: string;
+  verdict: { growth: "REAL" | "WEAK" | "FLAT"; proof: "SHOWN" | "PENDING"; question: string };
+  test: string;
+  desk: {
+    surprise_pct?: number; implied_pct?: number; realised_pct?: number;
+    drift?: string; drift_date?: string;
+  } | null;
   bars: { end: string; revenue: number | null; fcf: number | null; net_income: number | null }[];
+}
+
+export interface EarningsReadRow extends QuarterlyRead {
+  symbol: string;
+  name: string;
+}
+
+export interface PricedRow {
+  ticker: string; report_date: string; hour?: string | null; d?: string;
+  expiry?: string | null; implied_pct: number | null;
+  hist_avg_pct?: number | null; hist_n?: number | null; ratio?: number | null;
+  realised_pct?: number | null; inside?: boolean | null;
+  realised_ratio?: number | null; surprise_pct?: number | null;
+}
+
+export interface EarningsFile {
+  as_of: string;
+  priced: {
+    as_of: string | null;
+    upcoming: PricedRow[];
+    settled: PricedRow[];
+    tally: { n?: number; inside_pct?: number; mean_ratio?: number };
+    rich: number;
+  } | null;
+  reads: EarningsReadRow[];
+  more: { symbol: string; name: string; report_date: string;
+          growth: string; proof: string }[];
+  read_days: number;
 }
 
 export type LeadershipLayer =

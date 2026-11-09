@@ -48,6 +48,7 @@ const TABS: {
       { href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
       { href: "/market/news", title: "In the news", blurb: "Headlines for the names this site follows." },
       { href: "/market/calendar", title: "The calendar", blurb: "Earnings, ex-dividends and splits, day by day." },
+      { href: "/market/earnings", title: "Earnings", blurb: "Priced against realised, and every recent quarter read." },
       { href: "/market/followthrough", title: "Did it work?", blurb: "What happened to the breakouts we showed." },
       { href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
       { href: "/market/rotation", title: "Rotation", blurb: "Strength now against momentum since last month." },

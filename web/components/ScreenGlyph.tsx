@@ -229,6 +229,19 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/earnings": {
+    label: "A quarter against the one before",
+    art: (
+      <>
+        <path d="M3 20 L21 20" opacity={0.6} />
+        <path d="M6 20 L6 14" />
+        <path d="M10 20 L10 11" />
+        <path d="M14 20 L14 12" />
+        <path d="M18 20 L18 7" />
+        <path d="M15.5 4.5 L18 3 L20.5 4.5" opacity={0.6} />
+      </>
+    ),
+  },
   "/market/radar": {
     label: "Ratios against the market",
     art: (

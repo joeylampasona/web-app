@@ -309,6 +309,7 @@ table.data td {
   font-variant-numeric: tabular-nums;
 }
 table.data td.text { font-family: var(--font-sans); text-align: left; }
+table.data th.text { text-align: left; }
 .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 
@@ -554,4 +555,53 @@ table.data thead th {
 @media (max-width: 560px) {
   .screen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-sm); }
   .screen-grid .card { padding: var(--pad-sm) var(--pad-md); }
+}
+
+/* ---- earnings: Market Desk's read card ---------------------------------- */
+.section-head {
+  display: grid; gap: var(--gap-sm) var(--gap-xl);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start;
+}
+.section-head h2 { margin: 0; }
+@media (max-width: 900px) { .section-head { grid-template-columns: minmax(0, 1fr); } }
+.read-grid {
+  display: grid; gap: var(--gap-md);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr));
+}
+.read-good { color: var(--gain); }
+.read-bad { color: var(--loss); }
+.read-warn { color: var(--warn); }
+.read-neutral { color: var(--text-muted); }
+.read-takeaway {
+  border: 1.5px solid currentColor; border-radius: var(--radius);
+  padding: var(--pad-sm) var(--pad-md);
+}
+.read-takeaway > div:last-child { color: var(--text-primary); }
+.read-takeaway > div:first-child { color: var(--text-primary); }
+.read-tiles {
+  display: grid; gap: var(--gap-sm);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 560px) { .read-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.read-tile {
+  background: var(--surface-2); border-radius: var(--radius);
+  padding: var(--pad-sm) var(--pad-md);
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0;
+}
+.read-tile-value { font-size: var(--size-lead); color: var(--text-primary); }
+.read-chip {
+  font-size: var(--size-caption); line-height: 1.35;
+  padding: 2px 6px; border-radius: 6px; background: var(--surface-1);
+}
+.read-chip.read-good { background: var(--gain-muted); }
+.read-chip.read-bad { background: var(--loss-muted); }
+.read-h { font-size: var(--size-footnote); font-weight: 600; margin: 0; }
+.read-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.read-lines li {
+  display: grid; grid-template-columns: 1.2em minmax(0, 1fr); gap: var(--gap-xs);
+  font-size: var(--size-footnote); line-height: 1.45;
+}
+.read-final {
+  border: 0.5px solid var(--border-strong); border-radius: var(--radius);
+  padding: var(--pad-sm) var(--pad-md); display: grid; gap: 4px;
 }

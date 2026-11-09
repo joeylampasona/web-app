@@ -783,6 +783,14 @@ def cmd_publish(args) -> int:
     print(f"  → Earnings moves measured for {len(earnings_moves):,} of "
           f"{len(market.universe):,} names.", flush=True)
 
+    # A read of every recent reporter's filed quarter, for the Earnings tab
+    # and the stock pages.
+    from data import earnings_read
+    earnings_reads = earnings_read.build(
+        filed, reported, market.as_of,
+        settled=(earnings_iv or {}).get("settled"), signals=desk_rows)
+    print(f"  → Earnings reads for {len(earnings_reads):,} recent reporters.", flush=True)
+
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
@@ -796,7 +804,8 @@ def cmd_publish(args) -> int:
                              market_context=market_context,
                              earnings_iv=earnings_iv,
                              holders=holders,
-                             fundamentals=filed)
+                             fundamentals=filed,
+                             earnings_reads=earnings_reads)
 
     out = settings.out_dir()
     _banner(f"Published — {len(written)} files under {out}")

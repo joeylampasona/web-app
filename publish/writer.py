@@ -110,6 +110,12 @@ TRADE_STEPS_PREFACE = ("Risk is decided before entry — about 1.5% of capital o
                        "trade.")
 
 
+# The Earnings page: reads shown in full, and the ratio of priced to usual move
+# that reads "rich" (its inverse reads "cheap"), as Market Desk's dashboard.
+READS_SHOWN = 60
+EARNINGS_RICH = 1.5
+
+
 def _write(path: pathlib.Path, payload: Any) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=False,
@@ -167,6 +173,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             earnings_iv: dict | None = None,
             holders: dict | None = None,
             fundamentals: dict[str, dict] | None = None,
+            earnings_reads: list[dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -264,6 +271,34 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                 if (earnings_iv or {}).get("tally") else None),
             "source": "Market Desk",
         }))
+
+    # ---- earnings: priced against realised, and the reads -------------
+    # The Market page's Earnings tab, in Market Desk's shape: this week's
+    # reporters with the move the chain prices beside their usual move, the
+    # settled prints and the tally, then a read of every recent reporter's
+    # filed quarter. The reads are newest first and the page shows the first
+    # READS_SHOWN in full; the rest are listed by name and open on the
+    # stock's own page, which carries the same card.
+    reads = earnings_reads or []
+    reads_by_symbol = {r["symbol"]: r for r in reads}
+    for r in reads:
+        ref = market.refs.get(r["symbol"])
+        r["name"] = ref.name if ref else r["symbol"]
+    written.append(_write(out / "market" / "earnings.json", {
+        "as_of": as_of.isoformat(),
+        "priced": ({"as_of": earnings_iv.get("as_of"),
+                    "upcoming": earnings_iv.get("upcoming") or [],
+                    "settled": earnings_iv.get("settled") or [],
+                    "tally": earnings_iv.get("tally") or {},
+                    "rich": EARNINGS_RICH}
+                   if earnings_iv else None),
+        "reads": reads[:READS_SHOWN],
+        "more": [{"symbol": r["symbol"], "name": r["name"],
+                  "report_date": r["report_date"],
+                  "growth": r["verdict"]["growth"], "proof": r["verdict"]["proof"]}
+                 for r in reads[READS_SHOWN:]],
+        "read_days": earnings_read.READ_DAYS,
+    }))
 
     # ---- strength radar and leadership layers --------------------------
     # Both read the bars already loaded: the radar the group funds against
@@ -444,7 +479,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                                      priced_last.get(symbol)),
                                              fundamentals=(fundamentals or {}).get(symbol),
                                              fundamentals_known=symbol in (fundamentals or {}),
-                                             leadership=layer_of.get(symbol))))
+                                             leadership=layer_of.get(symbol),
+                                             earnings_read=reads_by_symbol.get(symbol))))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -1021,7 +1057,8 @@ def _range_52w(market: Market, symbol: str) -> dict | None:
             "sessions": len(bars)}
 
 
-def _fundamentals_view(payload: dict | None, cap: float | None) -> dict | None:
+def _fundamentals_view(payload: dict | None, cap: float | None,
+                       latest_read: dict | None = None) -> dict | None:
     """The filed figures plus the multiples a market cap makes of them.
 
     A multiple on a loss is not a number anyone should read, so P/E is null
@@ -1032,7 +1069,11 @@ def _fundamentals_view(payload: dict | None, cap: float | None) -> dict | None:
     view = dict(payload)
     # The quarters themselves stay in the cache; the page gets the read of
     # them, which carries the eight quarters it draws.
-    view["quarterly"] = earnings_read.read(view.pop("quarters", None))
+    # A recent reporter gets the same read as the Earnings page, with its
+    # report date and Market Desk's line; anyone else, a read of the latest
+    # quarter on file.
+    quarters = view.pop("quarters", None)
+    view["quarterly"] = latest_read or earnings_read.read(quarters)
     revenue, income, fcf = (payload.get("revenue_ttm"), payload.get("net_income_ttm"),
                             payload.get("fcf_ttm"))
     view["price_to_sales"] = round(cap / revenue, 2) if cap and revenue and revenue > 0 else None
@@ -1057,7 +1098,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    priced: tuple[dict | None, dict | None] = (None, None),
                    fundamentals: dict | None = None,
                    fundamentals_known: bool = False,
-                   leadership: dict | None = None) -> dict:
+                   leadership: dict | None = None,
+                   earnings_read: dict | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -1165,7 +1207,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
             "holders_gated": symbol in (holders_locked or set())} if holders else {}),
         # Absent until the fundamentals step has asked SEC about the company;
         # null once it has and there was nothing in US GAAP to read.
-        **({"fundamentals": _fundamentals_view(fundamentals, market.caps.get(symbol))}
+        **({"fundamentals": _fundamentals_view(fundamentals, market.caps.get(symbol),
+                                               earnings_read)}
            if fundamentals_known else {}),
         # Only for names on no screen: what is and is not in place. A stock
         # already on one has its own card saying the same thing better.
