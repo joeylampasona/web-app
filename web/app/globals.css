@@ -754,3 +754,25 @@ table.data thead th {
 .home-split { display: flex; flex-wrap: wrap; gap: 32px 48px; }
 .home-split > .wide { flex: 8 1 520px; min-width: 0; }
 .home-split > .narrow { flex: 4 1 300px; min-width: 0; }
+
+/* ---- the stock passport ------------------------------------------------- */
+.passport { border-top: 3px solid var(--rule); padding-top: var(--pad-lg);
+            display: flex; flex-direction: column; gap: var(--pad-lg); }
+.passport-top { display: flex; flex-wrap: wrap; align-items: flex-end;
+                justify-content: space-between; gap: var(--gap-lg) var(--pad-xl); }
+.passport-name { font-size: clamp(34px, 5vw, 64px); line-height: 0.98; letter-spacing: -0.01em; }
+.passport-price { display: flex; align-items: center; gap: var(--gap-lg); flex-wrap: wrap; }
+.passport-figure { font-size: clamp(28px, 3.4vw, 40px); font-weight: 600; line-height: 1; }
+.passport-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
+                 border-top: 1px solid var(--rule); border-left: 1px solid var(--border); }
+@media (max-width: 1280px) { .passport-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .passport-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.passport-cell { padding: 12px 14px 14px; border-right: 1px solid var(--border);
+                 border-bottom: 1px solid var(--border); display: flex; flex-direction: column;
+                 gap: 6px; min-width: 0; scroll-margin-top: 120px; }
+.passport-cell .label-caps a { text-decoration: underline; text-decoration-color: var(--border-strong);
+                               text-underline-offset: 3px; }
+.passport-value { font-size: 24px; font-weight: 600; line-height: 1.05; }
+.passport-verdict { display: flex; flex-direction: column; gap: 2px;
+                    font-family: var(--font-display); font-weight: 600; font-size: 20px; line-height: 1.1; }
+.detail-sections > section, .page section[id] { scroll-margin-top: 120px; }

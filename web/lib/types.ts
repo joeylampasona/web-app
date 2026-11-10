@@ -363,6 +363,8 @@ export interface GammaProfile {
 export interface StockFile {
   symbol: string; name: string; industry: string; themes: string[];
   list_date: string | null; as_of: string;
+  /** The industry's page, when the file carries it. */
+  industry_slug?: string;
   rs_rating: Rating; rs_change_m1: number | null; market_cap: number | null;
   /** "share_class" when the cap is one class's shares times its price: a floor. */
   market_cap_basis?: "company" | "share_class";

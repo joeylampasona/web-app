@@ -13,21 +13,18 @@ import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
 import { LevelsPanel } from "./LevelsPanel";
 import { StockLeadership } from "./Leadership";
-import { StockHero } from "./StockHero";
+import { StockPassport } from "./StockPassport";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
 import { PeerBars } from "./PeerBars";
-import { RsRing } from "./RsRing";
 import { SetupChart } from "./SetupChart";
 import { ShapeReadout } from "./ShapeReadout";
 import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
-import { WatchStar } from "./WatchStar";
-import { QuadrantBadge } from "./Badges";
-import { compactMoney, rsText } from "@/lib/format";
+import { rsText } from "@/lib/format";
 import { planMovingAverages } from "@/lib/movingAverages";
 import type { DeskRun, StockFile } from "@/lib/types";
 
@@ -48,19 +45,6 @@ function plainRead(stock: StockFile): string {
   return `The base has run ${weeks} weeks and fell ${depth}% from its ceiling at its ` +
     `deepest. The pivot is $${setup.pivot.toFixed(2)}, and the stock closed ${where}. ` +
     `Its relative strength rating is ${rank}.`;
-}
-
-/** The chip class for a quadrant, or nothing when the group has none.
- *  These four colours are already computed for every name; they were only ever
- *  shown on one badge. */
-function quadrantChip(quadrant: string | null): string {
-  switch (quadrant) {
-    case "powering": return "chip--powering";
-    case "turning": return "chip--turning";
-    case "cooling": return "chip--cooling";
-    case "falling": return "chip--falling";
-    default: return "";
-  }
 }
 
 export function StockDetail({ stock, run }: {
@@ -90,40 +74,7 @@ export function StockDetail({ stock, run }: {
 
   return (
     <div className="stack" style={{ gap: "var(--pad-xl)" }}>
-      <div>
-        <div className="between" style={{ marginBottom: "var(--gap-sm)" }}>
-          <div>
-            <h1 style={{ fontSize: "var(--size-h2)" }}>{stock.name}</h1>
-            <div className="num dim footnote">
-              {stock.symbol} · {stock.industry} · {compactMoney(stock.market_cap)}
-              {stock.market_cap_basis === "share_class" && stock.market_cap != null && (
-                <span title="Built from one share class's count. Other classes are not included, so the company may be worth more.">
-                  {" "}(one share class)
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="row" style={{ gap: "var(--gap-sm)", alignItems: "center" }}>
-            {/* Always here. It used to be drawn only by the StockCard below,
-                which renders only when the name is on a screen — so any stock
-                that was not could not be added to a watchlist from anywhere. */}
-            <WatchStar symbol={stock.symbol} withLabel />
-            <QuadrantBadge quadrant={stock.quadrant} />
-            {/* The one measure this site's own backtest found an edge in, and
-                it was a grey integer in the metadata line under the name. */}
-            <RsRing rating={stock.rs_rating} />
-          </div>
-        </div>
-        <StockHero symbol={stock.symbol} bars={stock.bars} range={stock.range_52w} />
-        {stock.themes.length > 0 && (
-          <div className="row wrap" style={{ gap: "var(--gap-xs)" }}>
-            {stock.themes.map((slug) => (
-              <Link key={slug} href={`/themes/${slug}`}
-                    className={`badge ${quadrantChip(stock.quadrant)}`}>{slug}</Link>
-            ))}
-          </div>
-        )}
-      </div>
+      <StockPassport stock={stock} />
 
       {setup ? (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
@@ -151,7 +102,7 @@ export function StockDetail({ stock, run }: {
           )}
         </div>
       ) : (
-        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+        <div id="structure" className="stack" style={{ gap: "var(--gap-sm)", scrollMarginTop: 120 }}>
           <StructureCheck rows={stock.structure_check} name={stock.symbol} />
           {chartBars.length > 0 && (
             <div className="card stack" style={{ padding: "var(--pad-md)",
@@ -190,7 +141,7 @@ export function StockDetail({ stock, run }: {
       </section>
 
       {stock.leadership !== undefined && (
-        <section>
+        <section id="industry">
           <div className="eyebrow">Against its industry</div>
           <StockLeadership r={stock.leadership} />
         </section>
@@ -224,7 +175,7 @@ export function StockDetail({ stock, run }: {
         </div>
       </section>
 
-      <section>
+      <section id="roadmap">
         <div className="eyebrow">Catalyst roadmap</div>
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
           <CatalystCountdown events={stock.catalyst_roadmap} />
@@ -243,7 +194,7 @@ export function StockDetail({ stock, run }: {
       </section>
 
       {stock.fundamentals !== undefined && (
-        <section>
+        <section id="business">
           <div className="eyebrow">The business</div>
           <FundamentalsPanel f={stock.fundamentals} />
         </section>
