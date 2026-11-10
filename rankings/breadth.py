@@ -211,3 +211,51 @@ def compute(market: Market) -> dict:
         "universe_size": universe_size,
         "cards": [c.to_json() for c in cards],
     }
+
+
+# ---------------------------------------------------------------- barcode
+
+# One character per stock, strongest first. Four states from two lines:
+#   3  above the 50-day and the 200-day      a healthy trend
+#   2  above the 200-day, under the 50-day   pulling back inside one
+#   1  above the 50-day, under the 200-day   repairing
+#   0  under both
+BARCODE_STATES = {"3": "Above both lines", "2": "Above the 200-day, under the 50-day",
+                  "1": "Above the 50-day, under the 200-day", "0": "Under both lines"}
+
+
+def barcode(market: Market, ratings: dict) -> dict | None:
+    """Every ranked stock as one tick, in order of relative strength.
+
+    The cards above say what share of the market is above each line. This
+    says which part: read left to right it shows how far down the ranking a
+    healthy trend reaches before it gives way, which a single percentage
+    cannot. A stock without 200 sessions has no 200-day line and is left out
+    rather than guessed at.
+    """
+    ranked = sorted(((r, s) for s, r in ratings.items() if isinstance(r, int)),
+                    key=lambda pair: (-pair[0], pair[1]))
+    ticks: list[str] = []
+    for _, symbol in ranked:
+        closes = market.closes(symbol)
+        ma50, ma200 = market.sma(symbol, 50), market.sma(symbol, 200)
+        if not closes or not ma50 or not ma200 or ma50[-1] is None or ma200[-1] is None:
+            continue
+        last = closes[-1]
+        ticks.append(str((2 if last >= ma200[-1] else 0) + (1 if last >= ma50[-1] else 0)))
+    if not ticks:
+        return None
+    # Shares per tenth of the ranking, so the picture has numbers under it.
+    n = len(ticks)
+    tenths = []
+    for i in range(10):
+        part = ticks[i * n // 10:(i + 1) * n // 10]
+        tenths.append(round(100 * sum(1 for t in part if t == "3") / len(part)) if part else None)
+    return {
+        "as_of": market.as_of.isoformat(),
+        "n": n,
+        "ticks": "".join(ticks),
+        "counts": {k: ticks.count(k) for k in BARCODE_STATES},
+        "labels": BARCODE_STATES,
+        "healthy_by_tenth": tenths,
+    }

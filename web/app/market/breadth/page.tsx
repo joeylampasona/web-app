@@ -1,9 +1,10 @@
+import { BreadthBarcode } from "@/components/BreadthBarcode";
 import { BreadthGrid } from "@/components/BreadthGrid";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import { MarketContext } from "@/components/MarketContext";
 import { longDate } from "@/lib/format";
-import { getBreadth, getMarketContext, getMeta, hasData } from "@/lib/data";
+import { getBarcode, getBreadth, getMarketContext, getMeta, hasData } from "@/lib/data";
 
 export default function BreadthPage() {
   if (!hasData()) return <NoData />;
@@ -21,6 +22,9 @@ export default function BreadthPage() {
         part, as of {longDate(breadth.as_of)}. These are counts of what happened, not
         signals about what happens next.
       </p>
+      <div style={{ margin: "var(--pad-lg) 0 var(--pad-xl)" }}>
+        <BreadthBarcode strip={getBarcode()} />
+      </div>
       <BreadthGrid cards={breadth.cards} universe={breadth.universe_size} />
       <MarketContext file={getMarketContext()} />
       <MarketCTA />

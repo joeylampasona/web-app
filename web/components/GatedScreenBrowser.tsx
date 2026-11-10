@@ -21,20 +21,23 @@ import type { Bar, ScreenFile } from "@/lib/types";
 export function GatedScreenBrowser({
   file,
   bars,
+  describe = true,
 }: {
   file: ScreenFile;
   bars: Record<string, Bar[]>;
+  /** Off where the page's own header already carries the description. */
+  describe?: boolean;
 }) {
   const gated = Boolean(file.gated);
   const full = useGated<ScreenFile>(gated ? `screens/${file.screen}.json` : null);
 
-  if (!gated) return <ScreenBrowser file={file} bars={bars} />;
+  if (!gated) return <ScreenBrowser describe={describe} file={file} bars={bars} />;
 
   if (full.state === "ready" && full.data?.setups) {
     // The gated document is the same file, whole. Rendering from it rather
     // than merging the withheld rows into the public head means the list can
     // never be half of one run and half of another.
-    return <ScreenBrowser file={{ ...file, setups: full.data.setups }} bars={bars} />;
+    return <ScreenBrowser describe={describe} file={{ ...file, setups: full.data.setups }} bars={bars} />;
   }
 
   const lockedStages = file.locked_stages ?? [];
@@ -62,7 +65,7 @@ export function GatedScreenBrowser({
   // a sample above it.
   return (
     <>
-      <ScreenBrowser file={file} bars={bars}
+      <ScreenBrowser describe={describe} file={file} bars={bars}
                      lockedStages={lockedStages}
                      lockedPanel={offer} />
       {shown < file.total && (

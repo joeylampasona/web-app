@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type {
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  EarningsFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  BreadthBarcode, EarningsFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 
@@ -277,6 +277,11 @@ export function getEarnings() {
   return read<EarningsFile>("market/earnings.json");
 }
 
+/** One tick per ranked stock, strongest first, by trend state. */
+export function getBarcode() {
+  return read<BreadthBarcode>("market/barcode.json");
+}
+
 /** Every stock's leadership layer, counted, with the strongest per layer. */
 export function getLeadership() {
   return read<LeadershipSummary>("market/leadership.json");
@@ -334,6 +339,9 @@ export interface SearchRow {
    *  missing one look the same to a reader and only one is true. */
   spark?: number[] | null;
   spark_change_pct?: number | null;
+  /** The last close and that session's move. Absent on older files. */
+  close?: number | null;
+  change_pct?: number | null;
 }
 
 export function getSearchIndex(): SearchRow[] {

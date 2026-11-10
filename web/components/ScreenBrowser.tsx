@@ -37,7 +37,7 @@ const LAYERS: { key: LeadershipLayer; label: string }[] = [
 ];
 
 export function ScreenBrowser({
-  file, bars, lockedStages = [], lockedPanel = null,
+  file, bars, lockedStages = [], lockedPanel = null, describe = true,
 }: {
   file: ScreenFile;
   bars: Record<string, Bar[]>;
@@ -47,6 +47,8 @@ export function ScreenBrowser({
    *  "there is nothing here" when there are a hundred and forty-four. */
   lockedStages?: string[];
   lockedPanel?: React.ReactNode;
+  /** Off where the page's own header already carries the description. */
+  describe?: boolean;
 }) {
   const { signedIn, requireSignUp } = useAuth();
   const [stage, setStage] = useState<string | null>(null);
@@ -104,28 +106,20 @@ export function ScreenBrowser({
               type="button"
               aria-pressed={selected}
               onClick={() => setStage(selected ? null : key)}
-              className="card"
-              // Layout lives in .stage-picker: an inline alignItems here beat the
-              // stylesheet, so the four-across variant kept centring its number.
-              style={{
-                minHeight: "var(--h-control)", padding: "var(--pad-md) var(--pad-lg)",
-                textAlign: "left", cursor: "pointer",
-                borderColor: selected ? "var(--brand-ink)" : "var(--border)",
-                background: selected ? "var(--brand-muted)" : "var(--surface-1)",
-              }}
+              className="stage-cell"
+              style={{ borderTopColor: STAGE_COLOURS[key] }}
             >
-              <span className="num" style={{ minWidth: 34, color: STAGE_COLOURS[key] }}>
-                {count}
-              </span>
-              <span className="grow">
-                <span style={{ color: STAGE_COLOURS[key] }}>{file.stage_labels[key]}</span>
+              <span className="num stage-count">{count}</span>
+              <span className="label-caps" style={{ color: STAGE_COLOURS[key] }}>
+                {file.stage_labels[key]}
                 {lockedStages.includes(key) && (
-                  <span className="caption dim" title="Part of a subscription">
+                  <span className="caption dim" title="Part of a subscription"
+                        style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>
                     {" "}·&nbsp;subscribers
                   </span>
-                )}{" "}
-                <span className="footnote dim">{file.stage_help[key]}</span>
+                )}
               </span>
+              <span className="caption dim">{file.stage_help[key]}</span>
             </button>
           );
         })}
@@ -211,7 +205,7 @@ export function ScreenBrowser({
         </button>
       </div>
 
-      <p className="muted footnote">{file.description}</p>
+      {describe && <p className="muted footnote">{file.description}</p>}
 
       {locked ? lockedPanel : setups.length === 0 && (
         <div className="card muted footnote">

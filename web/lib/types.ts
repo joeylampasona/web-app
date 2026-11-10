@@ -899,3 +899,16 @@ export interface TrendAlignment {
   stacked_sessions: number | null;
   cooling: boolean;
 }
+
+/** Every ranked stock as one character, strongest first: 3 above both the
+ *  50 and 200-day lines, 2 above the 200 only, 1 above the 50 only, 0 under
+ *  both. */
+export interface BreadthBarcode {
+  as_of: string;
+  n: number;
+  ticks: string;
+  counts: Record<string, number>;
+  labels: Record<string, string>;
+  /** Share above both lines in each tenth of the ranking, strongest first. */
+  healthy_by_tenth: (number | null)[];
+}

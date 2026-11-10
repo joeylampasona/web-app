@@ -90,7 +90,7 @@ export function StockCard({
       <header className="between" style={{ alignItems: "flex-start" }}>
         <div className="grow">
           <div className="row">
-            <TickerLink symbol={setup.symbol} style={{ fontWeight: 500 }}>
+            <TickerLink symbol={setup.symbol} className="card-name">
               {setup.name}
             </TickerLink>
             <WatchStar symbol={setup.symbol} />
@@ -98,7 +98,7 @@ export function StockCard({
           <div className="num dim footnote">{setup.symbol}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div className="num" style={{ fontSize: "var(--size-lead)" }}>
+          <div className="num" style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.1 }}>
             {price(setup.close)}
           </div>
           <PriceChange value={ohlc?.change_pct} />

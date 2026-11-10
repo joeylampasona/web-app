@@ -404,6 +404,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # ---- market-wide --------------------------------------------------
     breadth_payload = breadth.compute(market)
     written.append(_write(out / "breadth.json", breadth_payload))
+    # Every ranked stock as one tick, strongest first, coloured by trend.
+    strip = breadth.barcode(market, bundle.now)
+    if strip:
+        written.append(_write(out / "market" / "barcode.json", strip))
     written.append(_write(out / "rotation.json",
                           rotation.compute(market, bundle, breakout_symbols)))
     written.append(_write(out / "treemap.json",
@@ -507,6 +511,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             # is too short or dead flat, so the row can say which.
             "spark": spark.shape(market.closes(symbol)),
             "spark_change_pct": spark.change_pct(market.closes(symbol)),
+            # The last close and the session's move, so a list of names (the
+            # tape's watchlist) can show a price without opening each file.
+            **_last_move(market.closes(symbol)),
         } for symbol in market.universe],
     }))
 
@@ -1050,6 +1057,16 @@ def _with_priced(event: dict, priced: dict[str, dict]) -> dict:
             and hit.get("report_date") == event.get("date")):
         return {**event, "priced_move_pct": hit.get("implied_pct")}
     return event
+
+
+def _last_move(closes) -> dict:
+    """{"close", "change_pct"} for the last session; change None on one bar."""
+    if not closes:
+        return {"close": None, "change_pct": None}
+    last = closes[-1]
+    prior = closes[-2] if len(closes) > 1 else None
+    return {"close": round(last, 2),
+            "change_pct": round((last / prior - 1) * 100, 2) if prior else None}
 
 
 def _range_52w(market: Market, symbol: str) -> dict | None:

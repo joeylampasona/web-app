@@ -14,15 +14,19 @@
  */
 const SIZE = 24;
 
-function Frame({ children, label }: { children: React.ReactNode; label: string }) {
+function Frame({ children, label, size = SIZE }: {
+  children: React.ReactNode; label: string; size?: number;
+}) {
   return (
     <svg
-      width={SIZE}
-      height={SIZE}
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.4}
+      // Drawn large at the head of a screen's page, the same 24-unit art
+      // needs a finer line or it reads as a blot.
+      strokeWidth={size > 48 ? 0.9 : 1.4}
       strokeLinecap="round"
       strokeLinejoin="round"
       role="img"
@@ -380,10 +384,15 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
   },
 };
 
-export function ScreenGlyph({ href }: { href: string }) {
+export function ScreenGlyph({ href, size }: { href: string; size?: number }) {
   const glyph = GLYPHS[href];
   if (!glyph) return null;
-  return <Frame label={glyph.label}>{glyph.art}</Frame>;
+  return <Frame label={glyph.label} size={size}>{glyph.art}</Frame>;
+}
+
+/** What a destination's glyph depicts, in words, for a caption under it. */
+export function glyphLabel(href: string): string | null {
+  return GLYPHS[href]?.label ?? null;
 }
 
 /** Whether a destination has a glyph, so callers can keep alignment consistent. */

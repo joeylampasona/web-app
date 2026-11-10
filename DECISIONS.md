@@ -255,3 +255,26 @@ direction from a concept: a printed market page.
   week ahead as a bar per day, and the screens on one shared scale.
 - **Light and dark both.** Dark is the same page in negative; the tape band
   becomes a raised strip with a lime edge.
+- **Screen pages open with the pattern drawn**, beside the description, and
+  the four stages are a ruled row of counts rather than buttons. On a phone
+  the drawing leads the page as a band.
+- **The breadth barcode**: every ranked stock as one tick, strongest on the
+  left, coloured by which of its 50- and 200-day lines it is above. The
+  figures under it are the share above both lines in each tenth of the
+  ranking. It repeats nothing a screen or rating uses.
+- **A signed-in reader's watchlist rides the tape**, first fourteen names,
+  between the indexes and the market's counts. Prices come from the search
+  index (last close) with the delayed quote laid over when there is one.
+
+## Stored bars are adjusted for splits (2026-11-10)
+
+Bars were fetched once and kept, so a split after the fetch left a false
+cliff in the history: ITA read 64% behind the market after its 3-for-1 on
+2026-11-04. `data/splits.py` now runs after each night's backfill. It asks
+for the splits since its last check and, for each, compares the stored
+closes either side of the execution date: a step near the split's ratio
+means the earlier bars were never adjusted, and they are. Ratios under
+3-for-2 are left alone, since a step that small cannot be told from an
+ordinary day. A dry run on 2026-11-10 found 62 symbols to adjust, none of
+them in the ranked universe (funds and sub-$3 reverse splits). The radar's
+own guard, which sets a fund aside after a one-session move over 35%, stays.
