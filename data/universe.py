@@ -655,4 +655,16 @@ def refresh(conn: sqlite3.Connection, adapter: DataAdapter | None = None,
     check_provenance(conn, adapter.name)
     refresh_reference(conn, adapter)
     backfill(conn, adapter, progress=progress, notice=notice)
+    # Bring the stored history up to date with any split since it was fetched,
+    # before anything is measured from it. A failure here leaves the bars as
+    # they were, which is what every night before this did.
+    if adapter.name != "synthetic":
+        from data import splits
+        try:
+            newest = store.last_session(conn)
+            if newest is not None:
+                splits.apply(conn, adapter, newest, notice=notice)
+        except Exception as exc:                       # noqa: BLE001
+            if notice:
+                notice(f"Split adjustment skipped: {exc}")
     return build(conn, adapter, notice=notice)

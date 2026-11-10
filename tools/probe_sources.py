@@ -327,6 +327,7 @@ def main() -> int:
     probe_flag_gates()
     probe_quote_sources(agent)
     probe_universe_trace()
+    probe_splits()
     print()
     print(RULE)
     print("Probe complete. Nothing was written.")
@@ -403,7 +404,7 @@ def probe_universe_trace() -> None:
     print("5. UNIVERSE TRACE — where named tickers drop out")
     print(RULE)
     symbols = [s.strip().upper() for s in
-               (os.environ.get("PROBE_SYMBOLS") or "BEP,GENI,TEM").split(",") if s.strip()]
+               (os.environ.get("PROBE_SYMBOLS") or "CABO,ITA").split(",") if s.strip()]
     try:
         from data import settings, store
         from data.universe import PROVIDER_MISSES_KEY, CLASS_COUNTS_KEY
@@ -456,6 +457,20 @@ def probe_universe_trace() -> None:
         uni = conn.execute("SELECT * FROM universe WHERE symbol=?", (sym,)).fetchone()
         print("     universe row: " + ("none" if uni is None else
               json.dumps({k: uni[k] for k in uni.keys()}, default=str)))
+        # Sessions where the stored close moved more than 35%: a split the
+        # stored history was never adjusted for, or a bad bar.
+        closes = conn.execute("SELECT date, close FROM bars WHERE symbol=? ORDER BY date",
+                              (sym,)).fetchall()
+        jumps = [(closes[i]["date"], round(closes[i - 1]["close"], 2), round(closes[i]["close"], 2))
+                 for i in range(1, len(closes)) if closes[i - 1]["close"]
+                 and abs(closes[i]["close"] / closes[i - 1]["close"] - 1) > 0.35]
+        print(f"     {len(closes)} bars; one-session moves over 35%: {jumps[-6:]}")
+        try:
+            done = conn.execute("SELECT execution_date, factor, outcome FROM splits_applied "
+                                "WHERE symbol=?", (sym,)).fetchall()
+            print(f"     splits handled: {[tuple(r) for r in done]}")
+        except Exception:                             # noqa: BLE001
+            pass
         if key:
             try:
                 resp = requests.get(f"https://api.polygon.io/v3/reference/tickers/{sym}",
@@ -474,3 +489,24 @@ def probe_universe_trace() -> None:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def probe_splits() -> None:
+    """What the split adjustment would do to the stored bars. Changes nothing."""
+    print()
+    print(RULE)
+    print("6. SPLITS — stored history against the splits since it was fetched")
+    print(RULE)
+    try:
+        from data import splits, store
+        from data.adapters.polygon import PolygonGroupedAdapter
+        conn = store.open_db()
+        last = store.last_session(conn)
+        out = splits.apply(conn, PolygonGroupedAdapter(), last, dry_run=True,
+                           notice=lambda m: print(f"   {m}"))
+        universe = {r[0] for r in conn.execute("SELECT symbol FROM universe WHERE passed=1")}
+        hit = [a["symbol"] for a in out["adjusted"] if a["symbol"] in universe]
+        print(f"   {len(out['adjusted'])} to adjust in all; {len(hit)} are in the universe: "
+              + ", ".join(hit[:60]))
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   could not run: {type(exc).__name__}: {exc}")
