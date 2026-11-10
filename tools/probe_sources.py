@@ -487,9 +487,6 @@ def probe_universe_trace() -> None:
             print("     polygon: POLYGON_API_KEY not set for the probe")
 
 
-if __name__ == "__main__":
-    sys.exit(main())
-
 
 def probe_splits() -> None:
     """What the split adjustment would do to the stored bars. Changes nothing."""
@@ -510,3 +507,7 @@ def probe_splits() -> None:
               + ", ".join(hit[:60]))
     except Exception as exc:                          # noqa: BLE001
         print(f"   could not run: {type(exc).__name__}: {exc}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
