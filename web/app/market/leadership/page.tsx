@@ -1,7 +1,7 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import {
-  LayerCountsGrid, LayerIndustries, LayerLists, LayerPath,
+  LayerBar, LayerCountsGrid, LayerIndustries, LayerLists, LayerPath,
 } from "@/components/Leadership";
 import { getLeadership, getMeta, hasData } from "@/lib/data";
 import Link from "next/link";
@@ -28,7 +28,12 @@ export default function LeadershipPage() {
         months. A layer is where a stock sits, not a call on it.
       </p>
 
-      <LayerCountsGrid s={s} />
+      <LayerBar s={s} names={0} />
+
+      <section className="stack" style={{ marginTop: "var(--pad-xl)" }}>
+        <h2>What each layer means</h2>
+        <LayerCountsGrid s={s} />
+      </section>
 
       <section className="stack" style={{ marginTop: "var(--pad-xl)" }}>
         <h2>The strongest in each layer</h2>

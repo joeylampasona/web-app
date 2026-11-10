@@ -200,3 +200,61 @@ export function LayerIndustries({ s }: { s: LeadershipSummary }) {
     </div>
   );
 }
+
+/**
+ * Every stock as one proportional bar, a segment per layer.
+ *
+ * The cards of counts could not show the one thing that matters about them:
+ * how small the front line is against the whole. One bar can, and the key
+ * under it carries each count and its change since a week ago.
+ */
+export function LayerBar({ s, names = 6 }: { s: LeadershipSummary; names?: number }) {
+  const now = s.counts;
+  if (!now) return null;
+  const front = (s.top.front ?? []).slice(0, names);
+  return (
+    <div className="stack" style={{ gap: "var(--gap-md)" }}>
+      <div className="layerbar" role="img"
+           aria-label={`Leadership layers as shares of ${now.n.toLocaleString("en-US")} stocks: `
+             + s.order.map((k) => `${s.labels[k]} ${now[k]}`).join(", ")}>
+        {s.order.map((k) => now[k] > 0 && (
+          <span key={k} className={`layer--${k}`} style={{ flex: `${now[k]} 1 0` }}
+                title={`${s.labels[k]}: ${now[k].toLocaleString("en-US")}`} />
+        ))}
+      </div>
+      <div className="layer-key">
+        {s.order.map((k) => {
+          const week = delta(now[k], s.week_ago?.[k]);
+          return (
+            <div key={k} className="row" style={{ gap: "var(--gap-sm)", alignItems: "flex-start" }}
+                 title={LAYER_HELP[k]}>
+              <span aria-hidden className={`sw layer--${k}`} />
+              <div className="stack" style={{ gap: 0 }}>
+                <span className="label-caps" style={{ textTransform: "none" }}>{s.labels[k]}</span>
+                <span className="num">
+                  <span style={{ fontWeight: 600 }}>{now[k].toLocaleString("en-US")}</span>
+                  {week && <span className="caption dim"> ({week})</span>}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {front.length > 0 && (
+        <div className="row wrap footnote" style={{ gap: "4px var(--gap-lg)" }}>
+          <span className="label-caps hl" style={{ padding: "2px 8px" }}>Front line, strongest first</span>
+          {front.map((r) => (
+            <Link key={r.symbol} href={`/stocks/${r.symbol}`} className="mono"
+                  style={{ fontWeight: 600, display: "inline-flex", alignItems: "center",
+                           minHeight: "var(--h-control)" }}>
+              {r.symbol}
+            </Link>
+          ))}
+          <Link href="/market/leadership" style={{ textDecoration: "underline" }}>
+            all {now.front}
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}

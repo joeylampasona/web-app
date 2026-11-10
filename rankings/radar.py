@@ -122,6 +122,19 @@ def spark(a: dict, b: dict, n: int = SPARK) -> list[float]:
     return [round(100 * (a[d] / b[d]) / base, 2) for d in dates]
 
 
+# A fund does not move this much in one session. A bar that says it did is an
+# unadjusted split or a bad print, and every reading across it would be wrong
+# by that much: ITA read 64% behind the market at every window in 2026-11.
+SUSPECT_MOVE = 0.35
+SUSPECT_LOOKBACK = 300
+
+
+def suspect(closes: dict) -> bool:
+    """True when the fund's recent history holds a one-session move no fund makes."""
+    values = [closes[d] for d in sorted(closes)][-SUSPECT_LOOKBACK:]
+    return any(a > 0 and abs(b / a - 1) > SUSPECT_MOVE for a, b in zip(values, values[1:]))
+
+
 def _chg(now: dict, then: dict | None, key: str) -> float | None:
     if not then or now.get(key) is None or then.get(key) is None:
         return None
@@ -148,9 +161,14 @@ def compute(market: Market) -> dict | None:
                           "aligned": aligned(now), "spark": spark(A, B)})
 
     rows = []
+    unreadable = []
     for symbol, label, kind in groups():
         A = _closes(market.series.get(symbol) or [])
         if len(A) < 30:
+            continue
+        if suspect(A):
+            # Left out and named, rather than shown with a wrong number.
+            unreadable.append({"symbol": symbol, "label": label})
             continue
         r = readings(A, spy, offsets)
         if 0 not in r:
@@ -211,6 +229,7 @@ def compute(market: Market) -> dict | None:
                 "improving": [ref(g) for g in improving[:4]],
                 "weakest": [ref(g) for g in weakest[:4]],
                 "fell": [ref(g) for g in fell[:4]]},
+        "unreadable": unreadable,
         "spy_week": spy_week,
         "read": classify(by_pair, b_then, b_now, spy_week),
         "watch": watch(by_pair, b_now, rows),

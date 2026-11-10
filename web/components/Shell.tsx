@@ -8,7 +8,9 @@ import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
 import { NavIcon, type NavIconName } from "./NavIcon";
 import { DirectionArrow, ScreenGlyph } from "./ScreenGlyph";
+import { Tape } from "./Tape";
 import { ThemeToggle } from "./ThemeToggle";
+import type { TapeData } from "@/lib/tape";
 
 interface Destination {
   href: string;
@@ -72,7 +74,18 @@ const TABS: {
   },
 ];
 
-export function Shell({ children }: { children: React.ReactNode }) {
+function dateline(tape: TapeData | null): string | null {
+  if (!tape?.asOf) return null;
+  const day = new Date(`${tape.asOf}T12:00:00Z`);
+  const parts = [
+    `${day.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })} close`,
+    day.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }),
+  ];
+  if (tape.universe) parts.push(`${tape.universe.toLocaleString("en-US")} liquid US names`);
+  return parts.join(" · ");
+}
+
+export function Shell({ children, tape }: { children: React.ReactNode; tape: TapeData | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const [openTab, setOpenTab] = useState<string | null>(null);
@@ -92,7 +105,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         style={{
           position: "sticky", top: 0, zIndex: 30,
           background: "var(--surface-0)",
-          borderBottom: "0.5px solid var(--border)",
+          borderBottom: "3px solid var(--rule)",
           // The viewport is viewportFit: "cover", so the page runs underneath
           // the status bar and the Dynamic Island. Without this the header sits
           // under them and its buttons cannot be tapped at all. The bottom nav
@@ -107,19 +120,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {/* The masthead goes home, which is what every reader already expects
               it to do. It pointed at the screens list back when that was the
               landing page. */}
-          <Link href="/" className="grow">
-            <div className="row" style={{ gap: "var(--gap-sm)" }}>
-              <span
-                aria-hidden
-                style={{
-                  width: 10, height: 10, borderRadius: 2,
-                  background: "var(--brand)", display: "inline-block",
-                }}
-              />
-              <strong style={{ fontWeight: 500 }}>{SITE_NAME}</strong>
-            </div>
-            <div className="caption dim">{TAGLINE}</div>
+          <Link href="/" className="row" style={{ gap: "var(--gap-sm)" }} aria-label={`${SITE_NAME}, home`}>
+            <span aria-hidden className="wordmark-mark" />
+            <span className="wordmark">{SITE_NAME.toUpperCase()}</span>
           </Link>
+          <div className="dateline masthead-dateline grow" style={{ textAlign: "center" }}>
+            {dateline(tape) ?? TAGLINE}
+          </div>
           <div className="row" style={{ gap: "var(--gap-sm)" }}>
             <ThemeToggle />
             {/* Hidden on desktop, where the sidebar footer carries it.
@@ -145,6 +152,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      {tape && <Tape data={tape} />}
 
       <main>{children}</main>
 

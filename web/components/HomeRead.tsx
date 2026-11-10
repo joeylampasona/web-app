@@ -1,107 +1,145 @@
 import Link from "next/link";
-import { IndexStrip } from "./IndexStrip";
 import { TOTAL_TESTS, type MarketRead } from "@/lib/marketRead";
-import type { IndexRow } from "@/lib/types";
-import { PriceChange } from "./PriceChange";
-import { price } from "@/lib/format";
+import type { Radar } from "@/lib/types";
 
 /**
- * The hero: the market read, with its arithmetic shown, on a dark slab.
+ * The lead: the market read as a headline, with its arithmetic beside it.
  *
- * The slab is near-black in both themes. That is the one structural idea taken
- * from the reference designs -- a dark card at the top of a pale page -- and it
- * earns its place here for a reason beyond looks: the verdict is the largest
- * claim this site makes, and putting it on its own surface stops it being read
- * as just another statistic in the stack below.
+ * Set like the front of a market page rather than boxed in a card. The claim
+ * is the largest type on the site, the phrase that carries it is marked with
+ * the highlighter, and the four checks that produced it sit directly under
+ * it as a meter: one cell per check, lit when it is in gear, each with its
+ * own reading and the last twenty sessions of the number it reads. The
+ * evidence stays attached to the claim so a reader can disagree with it.
  *
- * The three tests underneath are the point. They let a reader disagree. A
- * one-word call with nothing behind it is a horoscope, and the failure mode of
- * a big confident hero card is exactly that, so the evidence stays attached to
- * it rather than being tidied away onto another page.
+ * Beside it, where strength sits: the radar's label for the week and its four
+ * key ratios as bars from a centre line, right for ahead, left for behind.
  *
- * Colour never carries the verdict alone. "In gear" and "against" are words
- * first; the chip and the tint are a second channel, and the gain/loss greens
- * and reds stay out of it because this is not price data.
+ * Colour never carries the verdict alone. Each cell prints its reading and
+ * says in words whether it is in gear.
  */
+const STATE: Record<string, string> = { "1": "In gear", "0": "Neither", "-1": "Against" };
+/** One ratio's bar runs out to this many percent either side of the centre. */
+const RATIO_SCALE = 8;
 
-/* The chip carries the session, not the verdict.
- *
- * It said the verdict first, which put "MIXED" in a pill directly above a
- * headline reading "Mixed" -- the same word twice, one of them shouting. The
- * date is the thing a reader actually wants pinned to a claim like this and it
- * can never repeat the headline, which is how the reference designs use that
- * slot too. */
+function Headline({ text }: { text: string }) {
+  // "The tape is in gear" marks "in gear"; a headline with no such lead-in is
+  // marked whole.
+  const lead = "The tape is ";
+  if (text.startsWith(lead)) {
+    return <>{lead}<span className="hl">{text.slice(lead.length)}.</span></>;
+  }
+  // "Mixed, under a falling benchmark" marks "Mixed".
+  const comma = text.indexOf(",");
+  if (comma > 0) return <><span className="hl">{text.slice(0, comma)}</span>{text.slice(comma)}.</>;
+  return <span className="hl">{text}.</span>;
+}
 
-function Mark({ score }: { score: -1 | 0 | 1 }) {
-  // A glyph as well as a word, so the column scans without relying on colour.
-  const face = score === 1 ? "+" : score === -1 ? "−" : "·";
-  const tone = score === 1 ? "var(--brand-ink)"
-             : score === -1 ? "var(--warn)"
-             : "var(--text-muted)";
-  return (
-    <span
-      className="mono" aria-hidden
-      style={{
-        color: tone, width: "1.1em", flexShrink: 0,
-        fontSize: "var(--size-lead)", lineHeight: 1.2, textAlign: "center",
-      }}
-    >
-      {face}
-    </span>
-  );
+function signed(v: number): string {
+  return `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)}%`;
 }
 
 export function HomeRead({
-  read, indexes, session,
+  read, session, series, radar,
 }: {
   read: MarketRead;
-  indexes: IndexRow[];
   session: string;
+  /** The last twenty sessions of each check's own number, by check key. */
+  series: Record<string, number[]>;
+  radar: Radar | null;
 }) {
+  const inGear = read.tests.filter((t) => t.score === 1).length;
   return (
-    <section className="hero stack" style={{ gap: "var(--gap-lg)" }}>
-      <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-        <div className="between" style={{ alignItems: "center", gap: "var(--gap-sm)" }}>
-          <span className="eyebrow" style={{ color: "var(--text-muted)" }}>The read</span>
-          <span className="hero-chip">{session}</span>
+    <section className="read-split">
+      <div className="lead stack" style={{ gap: "var(--gap-lg)" }}>
+        <div className="kicker">
+          The read · {session}
+          {read.tests.length > 0 && <> · {inGear} of {read.tests.length} checks in gear</>}
         </div>
-        <h2 style={{ fontSize: "var(--size-h1)", lineHeight: 1.15, margin: 0 }}>
-          {read.headline}
-        </h2>
-        <p className="footnote" style={{ margin: 0, maxWidth: "58ch",
-                                         color: "var(--text-secondary)" }}>
+        <h1 className="read-headline"><Headline text={read.headline} /></h1>
+        <p style={{ margin: 0, maxWidth: "58ch", fontSize: "var(--size-lead)",
+                    color: "var(--text-secondary)" }}>
           {read.blurb}
+        </p>
+
+        {read.tests.length > 0 && (
+          <div className="meter">
+            {read.tests.map((test) => {
+              const points = series[test.key] ?? [];
+              const max = Math.max(...points, 0);
+              return (
+                <div key={test.key} className="meter-cell"
+                     data-lit={test.score === 1 ? "true" : test.score === -1 ? "against" : "false"}>
+                  <div className="label-caps" style={{ color: "var(--text-muted)" }}>{test.label}</div>
+                  <div className="meter-value">{test.value}</div>
+                  <div className="caption" style={{ color: "var(--text-secondary)" }}>
+                    {STATE[String(test.score)]}
+                  </div>
+                  {points.length > 1 && max > 0 && (
+                    <div className="minibars" role="img"
+                         aria-label={`${test.label}, last ${points.length} sessions`}>
+                      {points.map((v, i) => (
+                        <span key={i} style={{ height: `${Math.max(6, (v / max) * 100)}%` }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="caption" style={{ margin: 0, color: "var(--text-muted)" }}>
+          {read.measured === TOTAL_TESTS
+            ? "Four checks on the published numbers, nothing else. Bars are the last twenty sessions."
+            : `${read.measured} of ${TOTAL_TESTS} checks had data in the last run.`}{" "}
+          <Link href="/market/breadth" style={{ textDecoration: "underline" }}>
+            What each one counts
+          </Link>
         </p>
       </div>
 
-      {read.tests.length > 0 && (
-        <ul className="stack"
-            style={{ gap: "var(--gap-xs)", listStyle: "none", margin: 0, padding: 0 }}>
-          {read.tests.map((test) => (
-            <li key={test.label} className="row"
-                style={{ gap: "var(--gap-sm)", alignItems: "baseline" }}>
-              <Mark score={test.score} />
-              <span className="footnote" style={{ minWidth: 0 }}>
-                <span style={{ color: "var(--text-primary)" }}>{test.label}.</span>{" "}
-                <span style={{ color: "var(--text-secondary)" }}>{test.detail}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
+      {radar && (
+        <aside className="side stack" style={{ gap: "var(--gap-md)" }}>
+          <div className="kicker">Where strength sits · six months</div>
+          <h2 style={{ fontSize: "clamp(30px, 3.4vw, 42px)" }}>
+            <Link href="/market/radar">{radar.read.label}</Link>
+          </h2>
+          <p className="footnote" style={{ margin: 0, color: "var(--text-secondary)" }}>
+            {radar.read.sub} {radar.read.full_share}% of groups fully aligned.
+          </p>
+          <div className="stack" style={{ gap: "var(--gap-md)", marginTop: "var(--gap-xs)" }}>
+            {radar.pairs.map((p) => {
+              const v = p.now.rs126;
+              if (v == null) return null;
+              const width = Math.min(50, (Math.abs(v) / RATIO_SCALE) * 50);
+              const tone = v >= 0 ? "var(--gain)" : "var(--loss)";
+              return (
+                <div key={`${p.a}/${p.b}`} className="stack" style={{ gap: 5 }}>
+                  <div className="between footnote" style={{ alignItems: "baseline" }}>
+                    <span>
+                      <span style={{ fontWeight: 500 }}>{p.label}</span>{" "}
+                      <span className="mono caption dim">{p.a} / {p.b}</span>
+                    </span>
+                    <span className="num" style={{ fontWeight: 600, color: tone }}>{signed(v)}</span>
+                  </div>
+                  <div className="diverge" aria-hidden>
+                    <span className="bar" style={{
+                      background: tone, width: `${width}%`,
+                      left: v >= 0 ? "50%" : `${50 - width}%`,
+                    }} />
+                    <span className="mid" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="caption dim" style={{ margin: 0 }}>
+            Bars run from the centre line: right is ahead, left is behind, out
+            to ±{RATIO_SCALE}%.
+          </p>
+        </aside>
       )}
-
-      <IndexStrip rows={indexes} />
-
-      <p className="caption" style={{ margin: 0, color: "var(--text-muted)" }}>
-        {read.measured === TOTAL_TESTS
-          ? "Four checks on the published numbers, nothing else."
-          : `${read.measured} of ${TOTAL_TESTS} checks had data in the last run.`}{" "}
-        <Link href="/market/breadth"
-              style={{ textDecoration: "underline", color: "var(--text-secondary)" }}>
-          See the breadth page
-        </Link>{" "}
-        for what each one is counting.
-      </p>
     </section>
   );
 }

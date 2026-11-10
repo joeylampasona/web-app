@@ -1,13 +1,10 @@
 import Link from "next/link";
-import { STAGE_COLOURS } from "@/components/Badges";
 import { DataBanner, NoData } from "@/components/DataBanner";
-import { HomeCalendar } from "@/components/HomeCalendar";
 import { HomeNews } from "@/components/HomeNews";
 import { HomeRead } from "@/components/HomeRead";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
-import { normalise, Sparkline } from "@/components/Sparkline";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
   getAllScreens, getBreadth, getMarketContext, getDiff, getIndexes, getLeadership, getMeta,
@@ -17,9 +14,10 @@ import {
 import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
 import { MarketContext } from "@/components/MarketContext";
-import { RadarRead } from "@/components/Radar";
-import { screenClass } from "@/lib/screenColour";
-import { ScreenGlyph } from "@/components/ScreenGlyph";
+import { LayerBar } from "@/components/Leadership";
+import { ScreensScale } from "@/components/ScreensScale";
+import { StrengthMatrix } from "@/components/StrengthMatrix";
+import { WeekAhead } from "@/components/WeekAhead";
 import { SITE_NAME } from "@/lib/copy";
 
 /**
@@ -28,8 +26,8 @@ import { SITE_NAME } from "@/lib/copy";
  * This used to redirect to the VCP screen, which answered a question nobody
  * arriving had yet. The question a daily reader actually has is "should I be
  * doing anything today, and what?", so the page is ordered by how directly
- * each part answers it: the market's condition, what moved, what is dated, then
- * the screens.
+ * each part answers it: the market's condition, where strength sits, what is
+ * dated, then the screens.
  *
  * Every number here is read from files the nightly run already writes. Nothing
  * on this page asked the pipeline for anything new.
@@ -40,99 +38,6 @@ export const metadata = {
   description:
     "Whether the tape is paying for breakouts, what cleared a pivot, and what is dated in the week ahead.",
 };
-
-/** The three live stages of a screen, each with its own dot.
- *
- * It was one grey line — "47 forming · 5 fresh · 28 climbing" — which has to be
- * read left to right to learn anything. The dots reuse the same colours the
- * stage picker and the stage badges already use, so the same idea keeps the
- * same colour everywhere rather than gaining a third encoding here.
- */
-function StageBreakdown({ stages }: { stages: Record<string, number> }) {
-  const parts: { key: string; label: string; value: number }[] = [
-    { key: "forming", label: "forming", value: stages.forming ?? 0 },
-    { key: "fresh_breakout", label: "fresh", value: stages.fresh_breakout ?? 0 },
-    { key: "climbing", label: "climbing", value: stages.climbing ?? 0 },
-  ];
-  const total = parts.reduce((sum, part) => sum + part.value, 0);
-  return (
-    <div className="stack" style={{ gap: 6 }}>
-    {/* The same three counts as a bar, so the grid can be scanned for which
-        screens are mostly forming and which are mostly through. */}
-    <div aria-hidden className="stage-bar">
-      {total > 0 && parts.map((part) => part.value > 0 && (
-        <span key={part.key}
-              style={{ flexGrow: part.value, background: STAGE_COLOURS[part.key] }} />
-      ))}
-    </div>
-    <div className="row wrap caption dim" style={{ gap: "var(--gap-sm)" }}>
-      {parts.map((part) => (
-        <span key={part.key} className="row" style={{ gap: 5, alignItems: "center" }}>
-          <span
-            aria-hidden
-            style={{
-              width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-              background: STAGE_COLOURS[part.key],
-            }}
-          />
-          <span className="num" style={{ color: "var(--text-secondary)" }}>{part.value}</span>
-          <span>{part.label}</span>
-        </span>
-      ))}
-    </div>
-    </div>
-  );
-}
-
-/** What the number means, not what it is. Only the two that have a direction
- *  take one: "cleared a pivot" is structural progress, "tested one and fell
- *  back" is resistance. A count with no direction stays plain, because
- *  colouring everything is the same as colouring nothing. */
-const STAT_TONE: Record<string, string> = {
-  gain: "var(--gain)",
-  warn: "var(--warn)",
-};
-
-function Stat({
-  value, label, note, href, tone, series,
-}: {
-  value: string; label: string; note?: string; href?: string;
-  tone?: "gain" | "warn";
-  /** The last twenty sessions of the same count, drawn beside it. */
-  series?: { date: string; value: number }[];
-}) {
-  const shape = series ? normalise(series.map((point) => point.value)) : null;
-  const body = (
-    <>
-      <div className="footnote muted">{label}</div>
-      <div className="between" style={{ alignItems: "flex-end", gap: "var(--gap-sm)" }}>
-        <div
-          className="num"
-          style={{
-            fontSize: "var(--size-h2)", lineHeight: 1.2,
-            color: tone ? STAT_TONE[tone] : undefined,
-          }}
-        >
-          {value}
-        </div>
-        {shape && (
-          <span title={`The last ${series!.length} sessions`}>
-            <Sparkline points={shape} width={110} height={30}
-                       colour={tone ? STAT_TONE[tone] : "var(--text-muted)"}
-                       label={`${label}, the last ${series!.length} sessions`} />
-          </span>
-        )}
-      </div>
-      {note && <div className="caption dim">{note}</div>}
-    </>
-  );
-  if (!href) return <div className="card stack" style={{ gap: "var(--gap-xs)" }}>{body}</div>;
-  return (
-    <Link href={href} className="card stack" style={{ gap: "var(--gap-xs)", textDecoration: "none" }}>
-      {body}
-    </Link>
-  );
-}
 
 export default function Home() {
   if (!hasData()) return <NoData />;
@@ -147,11 +52,9 @@ export default function Home() {
   const news = getNews();
   const radar = getRadar();
   const layers = getLeadership();
+  const context = getMarketContext();
 
   const cards = breadth?.cards ?? [];
-  const value = (key: string) => cards.find((c) => c.key === key)?.value ?? null;
-  const brokeOut = value("breakouts");
-  const failedPokes = value("failed_pokes");
 
   // Names that entered a screen's breakout stage on this run, across all six.
   // Deliberately separate from the market-wide count above it: the market can
@@ -211,72 +114,79 @@ export default function Home() {
         stage: stages.get(best.symbol)?.stage ?? null }
     : null;
 
+  // The last twenty sessions of each check's own number, for the meter.
+  const seriesOf = (key: string) =>
+    (cards.find((c) => c.key === key)?.series ?? []).map((point) => point.value);
+  const series: Record<string, number[]> = {
+    breakouts: seriesOf("breakouts"),
+    above_50ma: seriesOf("above_50ma"),
+    confirmed_uptrend: seriesOf("confirmed_uptrend"),
+  };
+  const priced = context?.earnings_priced;
+
   return (
-    <div className="page stack" style={{ gap: "var(--gap-xl)" }}>
+    <div className="page stack" style={{ gap: "var(--pad-xl)" }}>
       <DataBanner meta={meta} />
 
-      <div>
-        {/* The session used to be an eyebrow here. The hero chip carries it
-            now, and printing the same date twice, eight pixels apart, reads
-            as a mistake rather than as emphasis. */}
-        <h1 style={{ marginBottom: "var(--gap-xs)" }}>Today</h1>
-        <p className="muted footnote" style={{ margin: 0, maxWidth: "62ch" }}>
-          Everything below is measured at the last settled session, across{" "}
-          {meta?.universe_count ?? "—"} liquid US names.
-        </p>
+      <div className="stack" style={{ gap: "var(--gap-sm)", paddingTop: "var(--pad-md)" }}>
+        <HomeRead read={read} session={`${shortDate(meta?.as_of)} close`}
+                  series={series} radar={radar} />
+        <MarketContext file={context} compact />
       </div>
 
-      <div className="stack" style={{ gap: "var(--gap-xs)" }}>
-        <HomeRead read={read} indexes={indexes?.rows ?? []}
-                  session={`${shortDate(meta?.as_of)} close`} />
-        <MarketContext file={getMarketContext()} compact />
-        {radar && <RadarRead radar={radar} compact front={layers?.counts?.front ?? null} />}
-      </div>
+      {layers?.counts && (
+        <section className="home-section stack" style={{ gap: "var(--gap-lg)" }}>
+          <div className="ruled-head">
+            <h2>{layers.n.toLocaleString("en-US")} stocks, each against its own industry</h2>
+            <span className="kicker">Change on the week in brackets</span>
+          </div>
+          <LayerBar s={layers} />
+        </section>
+      )}
 
-      <HomeStrongest
-        industry={sectors?.strongest?.[0] ?? null}
-        theme={sectors?.themes_strongest?.[0] ?? null}
-        stock={strongestStock}
-      />
+      <section className="home-section home-split">
+        {radar && (
+          <div className="wide stack" style={{ gap: "var(--gap-lg)" }}>
+            <div className="ruled-head">
+              <h2>The strength matrix</h2>
+              <span className="kicker">Groups against the S&amp;P 500</span>
+            </div>
+            <StrengthMatrix radar={radar} edges={10} />
+          </div>
+        )}
+        {upcoming && (
+          <div className="narrow stack" style={{ gap: "var(--gap-lg)" }}>
+            <div className="ruled-head">
+              <h2>The week ahead</h2>
+              <span className="kicker">Reports per day</span>
+            </div>
+            <WeekAhead
+              events={upcoming.events}
+              releases={releases?.releases ?? []}
+              fomc={releases?.fomc?.meetings ?? []}
+              pricedHeld={priced?.n && priced.inside_pct != null
+                ? { n: priced.n, inside_pct: priced.inside_pct } : null}
+            />
+          </div>
+        )}
+      </section>
 
-      <section className="stack" style={{ gap: "var(--gap-md)" }}>
-        <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-          <h2 style={{ fontSize: "var(--size-h3)", margin: 0 }}>What moved</h2>
+      <section className="home-section stack" style={{ gap: "var(--gap-lg)" }}>
+        <div className="ruled-head">
+          <h2>The screens, on one scale</h2>
           <Link href="/market/breakouts" className="footnote"
                 style={{ textDecoration: "underline", whiteSpace: "nowrap" }}>
             Every breakout
           </Link>
         </div>
-        <div className="grid-auto">
-          <Stat
-            value={brokeOut === null ? "—" : brokeOut.toFixed(0)}
-            label="Cleared a pivot"
-            note="Anywhere in the universe"
-            href="/market/breakouts"
-            tone="gain"
-            series={cards.find((c) => c.key === "breakouts")?.series}
-          />
-          <Stat
-            value={failedPokes === null ? "—" : failedPokes.toFixed(0)}
-            label="Tested one and fell back"
-            note="The cost of being early"
-            href="/market/breadth"
-            tone="warn"
-            series={cards.find((c) => c.key === "failed_pokes")?.series}
-          />
-          <Stat
-            value={String(freshInScreens)}
-            label="Fresh breakouts in the screens"
-            note="Still inside the buy window"
-            href="/screens"
-          />
-        </div>
+        <ScreensScale screens={meta?.screens ?? []} />
         <p className="footnote muted" style={{ margin: 0 }}>
+          {freshInScreens} fresh breakouts are still inside the buy window.{" "}
           {screenBreakouts.length === 0 ? (
-            <>Nothing new broke out of these six screens on this run.</>
+            <>Nothing new broke out of the screens on this run.</>
           ) : (
             <>
-              New out of the screens:{" "}
+              New on this run:{" "}
               {screenBreakouts.map((symbol, index) => (
                 <span key={symbol}>
                   <TickerLink symbol={symbol} className="mono">{symbol}</TickerLink>
@@ -288,44 +198,19 @@ export default function Home() {
         </p>
       </section>
 
+      <div className="home-section">
+        <HomeStrongest
+          industry={sectors?.strongest?.[0] ?? null}
+          theme={sectors?.themes_strongest?.[0] ?? null}
+          stock={strongestStock}
+        />
+      </div>
+
       <HomeWatchlist rows={watchRows} />
 
-      <HomeNews articles={news?.articles ?? []} />
-
-      {upcoming && (
-        <HomeCalendar
-          events={upcoming.events}
-          releases={releases?.releases ?? []}
-          fomc={releases?.fomc?.meetings ?? []}
-          asOf={meta?.as_of ?? null}
-        />
-      )}
-
-      <section className="stack" style={{ gap: "var(--gap-md)" }}>
-        <h2 style={{ fontSize: "var(--size-h3)", margin: 0 }}>The screens</h2>
-        <div className="screen-grid">
-          {(meta?.screens ?? []).map((screen) => (
-            <Link
-              key={screen.key}
-              href={`/screens/${screen.key}`}
-              className="card stack"
-              style={{ gap: "var(--gap-xs)", textDecoration: "none" }}
-            >
-              <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-                <span className="row" style={{ gap: "var(--gap-sm)", alignItems: "center",
-                                               minWidth: 0 }}>
-                  <span className={`screen-icon ${screenClass(screen.key)}`} aria-hidden>
-                    <ScreenGlyph href={`/screens/${screen.key}`} />
-                  </span>
-                  <span style={{ fontWeight: 500 }}>{screen.name}</span>
-                </span>
-                <span className="num footnote">{screen.total}</span>
-              </div>
-              <StageBreakdown stages={screen.stages} />
-            </Link>
-          ))}
-        </div>
-      </section>
+      <div className="home-section">
+        <HomeNews articles={news?.articles ?? []} />
+      </div>
 
       <HomeDisclaimer />
     </div>

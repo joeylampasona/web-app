@@ -49,8 +49,12 @@ const BLESS_AT = 3;
 const WARN_AT = 2;
 
 export interface ReadTest {
+  /** Which check this is, so a page can attach that check's history to it. */
+  key: "regime" | "breakouts" | "above_50ma" | "confirmed_uptrend";
   label: string;
   detail: string;
+  /** The reading itself, short enough to set large. */
+  value: string;
   score: -1 | 0 | 1;
 }
 
@@ -82,6 +86,9 @@ export function readMarket(
   // same as false. An unknown regime is skipped, never scored as a negative.
   if (regime && regime.above !== null) {
     tests.push({
+      key: "regime",
+      value: regime.vs_200_pct == null ? (regime.above ? "Above" : "Below")
+        : `${regime.vs_200_pct > 0 ? "+" : "−"}${Math.abs(regime.vs_200_pct).toFixed(1)}%`,
       label: `${regime.symbol} against its 200-day line`,
       detail: regime.note,
       score: regime.above ? 1 : -1,
@@ -103,6 +110,8 @@ export function readMarket(
     // them tells you nothing.
     const score: -1 | 0 | 1 = f >= b * 1.5 ? -1 : b >= f ? 1 : 0;
     tests.push({
+      key: "breakouts",
+      value: `${b.toFixed(0)} : ${f.toFixed(0)}`,
       label: "Breakouts against failed pokes",
       detail: `${b.toFixed(0)} cleared a pivot, ${f.toFixed(0)} tested one and fell back.`,
       score,
@@ -114,6 +123,8 @@ export function readMarket(
     const v = above50.value;
     const score: -1 | 0 | 1 = v >= 55 ? 1 : v <= 40 ? -1 : 0;
     tests.push({
+      key: "above_50ma",
+      value: pct(v),
       label: "Above the 50-day line",
       detail: `${pct(v)} of the universe.`,
       score,
@@ -125,6 +136,8 @@ export function readMarket(
     const v = uptrend.value;
     const score: -1 | 0 | 1 = v >= 40 ? 1 : v <= 25 ? -1 : 0;
     tests.push({
+      key: "confirmed_uptrend",
+      value: pct(v),
       label: "In a confirmed uptrend",
       detail: `${pct(v)} of the universe.`,
       score,

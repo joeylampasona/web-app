@@ -6,15 +6,18 @@ import { StockDrawerProvider } from "@/components/StockDrawer";
 import { BarsProvider } from "@/lib/useBars";
 import { QuotesProvider } from "@/lib/useQuotes";
 import { WatchlistProvider } from "@/lib/useWatchlist";
+import type { TapeData } from "@/lib/tape";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, tape }: {
+  children: React.ReactNode; tape: TapeData | null;
+}) {
   return (
     <AuthProvider>
       <WatchlistProvider>
         <BarsProvider>
           <QuotesProvider>
             <StockDrawerProvider>
-              <Shell>{children}</Shell>
+              <Shell tape={tape}>{children}</Shell>
             </StockDrawerProvider>
           </QuotesProvider>
         </BarsProvider>

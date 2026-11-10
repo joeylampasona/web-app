@@ -40,6 +40,12 @@ check("too short for 126 sessions reads as missing, not zero",
       radar.readings(short, flat, (0,))[0]["rs126"], None)
 check("and its trend cannot be called", radar.aligned(radar.readings(short, flat, (0,))[0]), None)
 
+split = dict(rising)
+for d in days[150:]:
+    split[d] = rising[d] / 3
+check("a one-session move no fund makes marks it suspect", radar.suspect(split), True)
+check("an ordinary fund is not suspect", radar.suspect(rising), False)
+
 pairs = {"QQQ/SPY": {"now": {"rs126": 5.0, "rs21": 1.0}, "start": {"rs126": 4.0}},
          "RSP/SPY": {"now": {"rs126": -2.0, "rs21": -1.0}, "start": {"rs126": -2.0}},
          "IWM/QQQ": {"now": {"rs126": -6.0}, "start": {"rs126": -5.0}},

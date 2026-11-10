@@ -1,7 +1,8 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import { RadarBreadth, RadarGroups, RadarMap, RadarPairs, RadarRead } from "@/components/Radar";
-import { LayerCountsGrid } from "@/components/Leadership";
+import { LayerBar } from "@/components/Leadership";
+import { StrengthMatrix } from "@/components/StrengthMatrix";
 import { getLeadership, getMeta, getRadar, hasData } from "@/lib/data";
 import Link from "next/link";
 
@@ -33,6 +34,11 @@ export default function RadarPage() {
       </section>
 
       <section className="stack" style={{ marginTop: "var(--pad-xl)" }}>
+        <h2>The strength matrix</h2>
+        <StrengthMatrix radar={radar} />
+      </section>
+
+      <section className="stack" style={{ marginTop: "var(--pad-xl)" }}>
         <h2>The map</h2>
         <RadarMap radar={radar} />
       </section>
@@ -54,12 +60,12 @@ export default function RadarPage() {
             industry. The names in each layer are on{" "}
             <Link href="/market/leadership">leadership layers</Link>.
           </p>
-          <LayerCountsGrid s={layers} />
+          <LayerBar s={layers} />
         </section>
       )}
 
       <section className="stack" style={{ marginTop: "var(--pad-xl)" }}>
-        <h2>Every group</h2>
+        <h2>Every group, with the week's change</h2>
         <RadarGroups radar={radar} />
       </section>
       <MarketCTA />

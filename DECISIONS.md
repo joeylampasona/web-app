@@ -230,3 +230,28 @@ the screen all come from Market Desk's first weeks of November.
 - **The radar is not logged.** Market Desk writes every reading to a table so
   a week can be rebuilt. Every bar is already in this database, so the week
   ago is read again at an offset of five sessions instead.
+
+
+## The printed market page (2026-11-10)
+
+The site was redesigned away from "Ink & Amber" (cream cards, a dark hero
+slab, Inter) because it read as a generic dashboard. The owner picked the
+direction from a concept: a printed market page.
+
+- **Rules, not boxes.** Square corners everywhere, sections divided by an ink
+  rule, cards kept only where a thing is genuinely a card.
+- **IBM Plex in three widths.** Sans for reading, Condensed for headlines and
+  labels, Mono for every figure. Loaded from a `<link>` in the layout: the
+  old `@import` sat after the token rules, where browsers ignore it, so Inter
+  and JetBrains Mono had never loaded and the site had been in system fonts.
+- **The lime is a highlighter.** It marks the phrase that carries the read,
+  the active nav item, fresh breakouts and fully aligned groups. In light mode
+  the brand "ink" is now ink itself, not gold.
+- **A tape strip under the masthead** on every page: the indexes (delayed
+  quote when there is one) and the day's counts.
+- **Home page instruments** replace prose and uniform cards: the read as a
+  headline with a four-cell meter, key ratios as bars from a centre line,
+  the leadership layers as one proportional bar, the strength matrix, the
+  week ahead as a bar per day, and the screens on one shared scale.
+- **Light and dark both.** Dark is the same page in negative; the tape band
+  becomes a raised strip with a lime edge.

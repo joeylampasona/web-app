@@ -1,4 +1,7 @@
-/* Ink & Amber — the design system. Generated from DESIGN_SYSTEM_ink_amber.md.
+/* The printed market page — the design system (2026-11). It replaced Ink &
+ * Amber: cool paper and ink, square corners, rules instead of boxes, IBM Plex
+ * in three widths, and the lime as a highlighter. The three rules below are
+ * unchanged.
  *
  * Three rules this file exists to enforce:
  *   1. Brand amber never appears in price data. Green and red never appear in
@@ -14,21 +17,21 @@
 
 :root {
   /* Surfaces — dark (default) */
-  --surface-0:        #0C0D12;  /* page canvas */
-  --surface-1:        #12131A;  /* card */
-  --surface-2:        #1A1C25;  /* raised card, sheet */
-  --surface-3:        #232530;  /* popover, dropdown */
+  --surface-0:        #0D100F;  /* page canvas */
+  --surface-1:        #131716;  /* card */
+  --surface-2:        #1B201E;  /* raised card, sheet */
+  --surface-3:        #232927;  /* popover, dropdown */
 
   /* Text */
-  --text-primary:     #FAF9F6;
-  --text-secondary:   #A8AAB8;
-  --text-muted:       #6E7180;
-  --text-disabled:    #4A4D59;
+  --text-primary:     #EEF1EF;
+  --text-secondary:   #A9B3AE;
+  --text-muted:       #7F8A85;
+  --text-disabled:    #4C5551;
 
   /* Borders */
-  --border:           #24262F;
-  --border-strong:    #2E3039;
-  --border-stronger:  #3A3D48;
+  --border:           #262C29;
+  --border-strong:    #343B38;
+  --border-stronger:  #4A534F;
 
   /* Brand */
   /* Lime splits into a fill and an ink, which amber never needed.
@@ -42,12 +45,12 @@
      The lime is #DAFC4F rather than #D4F94A, a drift of dE 0.9 that no eye
      will catch: the original sat at dE 29.97 from gain green, just under the
      30 this palette holds everything to, and a rule waived once is not a rule. */
-  --brand:            #DAFC4F;   /* FILL — both themes */
-  --brand-ink:        #DAFC4F;   /* TEXT and borders — overridden on light */
-  --brand-hover:      #E6FD7C;
-  --brand-muted:      rgba(218,252,79,0.16);
+  --brand:            #D8F23A;   /* FILL — both themes */
+  --brand-ink:        #D8F23A;   /* TEXT and borders — overridden on light */
+  --brand-hover:      #E4F86E;
+  --brand-muted:      rgba(216,242,58,0.16);
   --brand-border:     #5A6B12;
-  --on-brand:         #14200A;   /* text on a solid lime fill — always dark */
+  --on-brand:         #101412;   /* text on a solid lime fill — always dark */
 
   /* The hero slab: near-black in BOTH themes.
      The reference designs put a dark card at the top of a pale page, and that
@@ -61,23 +64,23 @@
      the hero on a light page would have been a red nobody could see. The
      .hero class in globals.css maps the theme variables onto these, which
      means existing components work inside it untouched. */
-  --on-dark-bg:       #101119;
-  --on-dark-raised:   #1B1D27;
-  --on-dark-ink:      #FAF9F6;
-  --on-dark-muted:    #A8AAB8;
-  --on-dark-dim:      #74778A;
-  --on-dark-border:   #272A36;
-  --on-dark-brand:    #DAFC4F;
-  --on-dark-brand-muted: rgba(218,252,79,0.18);
+  --on-dark-bg:       #101412;
+  --on-dark-raised:   #1B201E;
+  --on-dark-ink:      #F2F4F3;
+  --on-dark-muted:    #AEB8B2;
+  --on-dark-dim:      #7F8A85;
+  --on-dark-border:   #2A302D;
+  --on-dark-brand:    #D8F23A;
+  --on-dark-brand-muted: rgba(216,242,58,0.18);
   /* Ink for text sitting on a solid brand fill, wherever that fill appears.
      The hero maps --on-brand onto this: inside the slab the brand is lime
      even on a pale page, and the light theme's --on-brand is white, which on
      lime is unreadable. */
-  --on-dark-on-brand: #14200A;
-  --on-dark-gain:     #16A34A;
-  --on-dark-loss:     #DC2626;
+  --on-dark-on-brand: #101412;
+  --on-dark-gain:     #2DB56B;
+  --on-dark-loss:     #EA5A45;
   --on-dark-warn:     #EAB308;
-  --radius-hero:      16px;
+  --radius-hero:      0px;
 
   /* Interactive: a ticker you can tap.
      Measured, not chosen. Every hue was swept against the nine colours already
@@ -121,17 +124,17 @@
      of them are nearly black, and every green that does fit sits closer to the
      brand than green itself does. Nudging the lime instead costs dE 0.9 of
      lime and keeps the convention every trader reads by reflex. */
-  --gain:             #16A34A;
-  --gain-muted:       rgba(22,163,74,0.12);
-  --loss:             #DC2626;
-  --loss-muted:       rgba(220,38,38,0.12);
-  --flat:             #6E7180;
+  --gain:             #2DB56B;
+  --gain-muted:       rgba(45,181,107,0.14);
+  --loss:             #EA5A45;
+  --loss-muted:       rgba(234,90,69,0.14);
+  --flat:             #7F8A85;
 
   /* Chart semantics — constant across every chart on the site */
-  --chart-pivot:      #DAFC4F;  /* dashed */
-  --chart-base-fill:  rgba(218,252,79,0.16);
-  --chart-base-line:  #DAFC4F;
-  --chart-prior-base: #4A4D59;  /* dashed, prior contractions */
+  --chart-pivot:      #D8F23A;  /* dashed */
+  --chart-base-fill:  rgba(216,242,58,0.16);
+  --chart-base-line:  #D8F23A;
+  --chart-prior-base: #4C5551;  /* dashed, prior contractions */
   /* Four lines, drawn at two widths: the 9 and 21 thin, the 50 and 200 thick.
      A pair sharing a width has nothing but colour to separate it, so those two
      pairs are the ones held furthest apart — measured as CIEDE2000, not judged
@@ -148,10 +151,10 @@
   --chart-ma-21:      #C084FC;  /* purple */
   --chart-ma-50:      #60A5FA;  /* blue   */
   --chart-ma-200:     #F472B6;  /* pink   */
-  --chart-vol-up:     rgba(22,163,74,0.55);
-  --chart-vol-down:   rgba(220,38,38,0.45);
-  --chart-grid:       #1E202A;
-  --chart-axis:       #6E7180;
+  --chart-vol-up:     rgba(45,181,107,0.55);
+  --chart-vol-down:   rgba(234,90,69,0.45);
+  --chart-grid:       #1D2220;
+  --chart-axis:       #7F8A85;
 
   /* Status — chrome, never price */
   --warn:             #EAB308;  /* earnings proximity, squat, failed poke */
@@ -161,37 +164,56 @@
   --provisional:      #EAB308;
 
   /* Stage colours — Screens page buckets */
-  --stage-forming:    #A8AAB8;
-  --stage-breakout:   #16A34A;
+  --stage-forming:    #A9B3AE;
+  --stage-breakout:   #2DB56B;
   --stage-climbing:   #38BDF8;
-  --stage-playedout:  #6E7180;
+  --stage-playedout:  #7F8A85;
 
   /* Quadrant colours — rotation scatter */
-  --q-powering:       #16A34A;
+  --q-powering:       #2DB56B;
   --q-turning:        #38BDF8;
-  --q-cooling:        #DAFC4F;
-  --q-falling:        #DC2626;
+  --q-cooling:        #D8F23A;
+  --q-falling:        #EA5A45;
 
   /* Typography */
-  --font-sans:        'Inter', system-ui, sans-serif;
-  --font-mono:        'JetBrains Mono', ui-monospace, monospace;
+  --font-sans:        'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:        'IBM Plex Mono', ui-monospace, monospace;
+  /* Headlines, labels and the wordmark: a condensed grotesque, the face of a
+     stock table. Body text stays in the regular width. */
+  --font-display:     'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+
+  /* The printed page: sections are divided by an ink rule, not boxed. */
+  --rule:             #EEF1EF;
+  /* The tape strip under the masthead. Ink on paper by day; by night a raised
+     band with a lime edge, since an ink band on an ink page is no band. */
+  --tape-bg:          #1B201E;
+  --tape-ink:         #EEF1EF;
+  --tape-muted:       #A9B3AE;
+  --tape-edge:        #D8F23A;
+  --tape-up:          #7FE0A8;
+  --tape-down:        #FFA98F;
+  /* The strength matrix: ahead and behind, as rgb triplets so a cell can set
+     its own strength. */
+  --heat-up:          45,181,107;
+  --heat-down:        234,90,69;
+  --gain-rgb:         45,181,107;
 
   --size-caption:     11px;
   --size-footnote:    12px;
   --size-body:        14px;
   --size-lead:        16px;
-  --size-h3:          18px;
-  --size-h2:          22px;
-  --size-h1:          28px;
+  --size-h3:          20px;
+  --size-h2:          26px;
+  --size-h1:          38px;
   --size-hero:        40px;  /* backtest end-capital only */
 
   --weight-regular:   400;
   --weight-medium:    500;
 
   /* Layout */
-  --radius:           8px;
-  --radius-card:      12px;
-  --radius-pill:      999px;
+  --radius:           0px;
+  --radius-card:      0px;
+  --radius-pill:      0px;
 
   --pad-sm:           8px;
   --pad-md:           12px;
@@ -208,19 +230,19 @@
 }
 
 [data-theme="light"] {
-  --surface-0:        #F5F4F0;
-  --surface-1:        #FAF9F6;
+  --surface-0:        #F2F4F3;
+  --surface-1:        #F8F9F8;
   --surface-2:        #FFFFFF;
   --surface-3:        #FFFFFF;
 
-  --text-primary:     #14151A;
-  --text-secondary:   #55585F;
-  --text-muted:       #82858E;
-  --text-disabled:    #B0B2B8;
+  --text-primary:     #101412;
+  --text-secondary:   #3A433F;
+  --text-muted:       #5A645F;
+  --text-disabled:    #A7B0AB;
 
-  --border:           #E2E0DA;
-  --border-strong:    #D0CEC7;
-  --border-stronger:  #B8B6AE;
+  --border:           #C5CCC8;
+  --border-strong:    #9AA5A0;
+  --border-stronger:  #6B7570;
 
   /* The fill stays lime here. Only the ink changes, and it cannot be a darker
      lime: every colour in lime's hue band that is readable on a pale card
@@ -228,12 +250,12 @@
      is a green. The nearest hue that clears is 51, a gold, 23 degrees off.
      That gold appears only as small text and thin borders; every lime surface
      on this theme is still lime. */
-  --brand:            #DAFC4F;   /* FILL — unchanged from dark */
-  --brand-ink:        #A88F00;   /* gold: dE 30.5 from gain, 3.02:1 on a card */
-  --brand-hover:      #E6FD7C;
-  --brand-muted:      rgba(218,252,79,0.42);
-  --brand-border:     #B9D94A;
-  --on-brand:         #14200A;   /* dark ink on the lime fill */
+  --brand:            #D8F23A;   /* FILL — unchanged from dark */
+  --brand-ink:        #101412;   /* gold: dE 30.5 from gain, 3.02:1 on a card */
+  --brand-hover:      #E4F86E;
+  --brand-muted:      rgba(216,242,58,0.45);
+  --brand-border:     #101412;
+  --on-brand:         #101412;   /* dark ink on the lime fill */
 
   --link:             #146BB8;
   --link-muted:       rgba(20,107,184,0.14);
@@ -253,14 +275,27 @@
   --screen-triangle:    #4F46E5;
   --screen-squeeze:     #78716C;
 
-  --gain:             #15803D;
-  --loss:             #B91C1C;
+  --gain:             #0B6B3A;
+  --loss:             #B3261E;
+  --gain-muted:       rgba(11,107,58,0.12);
+  --loss-muted:       rgba(179,38,30,0.10);
+  --flat:             #5A645F;
+  --chart-axis:       #5A645F;
+  --stage-playedout:  #5A645F;
 
-  --chart-pivot:      #A88F00;
-  --chart-base-fill:  rgba(218,252,79,0.34);
-  --chart-base-line:  #A88F00;
-  --chart-prior-base: #B0B2B8;
-  --chart-grid:       #E8E6E0;
+  --rule:             #101412;
+  --tape-bg:          #101412;
+  --tape-ink:         #F2F4F3;
+  --tape-muted:       #AEB8B2;
+  --tape-edge:        #101412;
+  --heat-up:          20,122,72;
+  --heat-down:        205,84,40;
+
+  --chart-pivot:      #7A8A00;
+  --chart-base-fill:  rgba(216,242,58,0.34);
+  --chart-base-line:  #7A8A00;
+  --chart-prior-base: #A7B0AB;
+  --chart-grid:       #E1E5E2;
   /* The same four, darkened for a light card. Held to the same measured
      separation: 9 vs 21 dE 34, 50 vs 200 dE 36, and the cyan moved off teal so
      the 9-day is not mistakable for gain green on a light background. */
@@ -273,10 +308,10 @@
   --warn-bg:          rgba(161,98,7,0.10);
   --warn-border:      #E0C48A;
 
-  --stage-forming:    #55585F;
-  --stage-breakout:   #15803D;
+  --stage-forming:    #5A645F;
+  --stage-breakout:   #0B6B3A;
   --stage-climbing:   #0284C7;
-  --q-powering:       #15803D;
+  --q-powering:       #0B6B3A;
   --q-turning:        #0284C7;
-  --q-cooling:        #A88F00;
+  --q-cooling:        #7A8A00;
 }

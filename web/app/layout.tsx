@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SITE_NAME, TAGLINE } from "@/lib/copy";
+import { hasData } from "@/lib/data";
+import { buildTape } from "@/lib/tape";
 
 /**
  * The address the site is served from, so relative preview-image URLs resolve.
@@ -45,7 +47,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   // The page canvas, --surface-0. Browser chrome cannot read a CSS variable.
-  themeColor: "#0C0D12",
+  themeColor: "#0D100F",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -53,8 +55,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // prefers-color-scheme on first load only.
   return (
     <html lang="en" data-theme="dark">
+      <head>
+        {/* One family in three widths: Plex Sans for reading, Plex Sans
+            Condensed for headlines and labels, Plex Mono for every figure. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap"
+        />
+      </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers tape={hasData() ? buildTape() : null}>{children}</Providers>
       </body>
     </html>
   );

@@ -818,6 +818,8 @@ export interface Radar {
   breadth: RadarBreadth[];
   map: { leaders: string[]; cooling: string[]; improving: string[];
          weakest: string[]; fell: string[] };
+  /** Funds left out because their price history holds a bad bar. */
+  unreadable?: { symbol: string; label: string }[];
   spy_week: number | null;
   read: { label: string; sub: string; reasons: string[];
           full_share: number; pos126_share: number };

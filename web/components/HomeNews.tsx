@@ -42,48 +42,51 @@ export function HomeNews({ articles: nightly }: { articles: MarketHeadline[] }) 
   // One clock for the whole list. Calling Date.now() per row would let two
   // rows published in the same minute disagree about how long ago that was.
   const now = Date.now();
-  const shown = articles.slice(0, MAX);
+  // Reporting first. The feed is mostly wire releases and law-firm notices,
+  // and six of those at the top of the home page read as spam. They stay one
+  // tap away on the news page; this is a filter by kind, not a ranking.
+  const written = articles.filter((a) => !a.kind || a.kind === "analysis");
+  const shown = (written.length >= 3 ? written : articles).slice(0, MAX);
 
   return (
-    <section className="stack" style={{ gap: "var(--gap-sm)" }}>
-      <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-        <div className="eyebrow">In the news</div>
+    <section className="stack" style={{ gap: "var(--gap-md)" }}>
+      <div className="ruled-head">
+        <h2>In the news</h2>
         <Link href="/market/news" className="footnote"
               style={{ textDecoration: "underline", whiteSpace: "nowrap" }}>
           All headlines
         </Link>
       </div>
 
-      <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+      <div className="ruled-list">
         {shown.map((article) => (
-          <article key={article.url} className="card stack" style={{ gap: "var(--gap-xs)" }}>
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer nofollow"
-              className="footnote"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {article.title}
-            </a>
-            <div className="row wrap" style={{ gap: "var(--gap-xs)", alignItems: "baseline" }}>
-              {article.tickers.slice(0, 4).map((ticker) => (
-                <TickerLink key={ticker} symbol={ticker} className="badge badge--ticker">
-                  {ticker}
-                </TickerLink>
-              ))}
-              {article.tickers.length > 4 && (
-                <span className="caption dim">+{article.tickers.length - 4}</span>
-              )}
-            </div>
-            <div className="caption dim">
-              {article.publisher} · {ago(article.published_at, now)}
+          <article key={article.url} className="news-row">
+            <span className="mono caption dim">{ago(article.published_at, now)}</span>
+            <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                style={{ fontWeight: 500 }}
+              >
+                {article.title}
+              </a>
+              <div className="row wrap caption dim" style={{ gap: "var(--gap-xs)", alignItems: "baseline" }}>
+                <span>{article.publisher}</span>
+                {article.tickers.slice(0, 4).map((ticker) => (
+                  <TickerLink key={ticker} symbol={ticker} className="badge badge--ticker">
+                    {ticker}
+                  </TickerLink>
+                ))}
+                {article.tickers.length > 4 && <span>+{article.tickers.length - 4}</span>}
+              </div>
             </div>
           </article>
         ))}
       </div>
 
       <p className="caption dim" style={{ margin: 0 }}>
+        Reporting only here; releases and legal notices are on the news page.
         Links go to the publisher. We do not host, summarise or rank these, and a
         headline appearing here is not a view about the company.{" "}
         <Link href="/legal" style={{ textDecoration: "underline" }}>Disclaimer</Link>.
