@@ -51,17 +51,27 @@ function Side({ label, level, close, tone }: {
   );
 }
 
-export function LevelsPanel({ summary, bars, symbol }: {
-  summary: LevelsSummary | null | undefined;
-  bars: Bar[];
-  symbol: string;
-}) {
-  const lines = useMemo<ChartLevel[]>(() => (summary?.levels ?? []).map((level) => ({
+/** The levels as the chart draws them: nearest support and resistance told
+ *  apart from the rest. */
+export function levelLines(summary: LevelsSummary | null | undefined): ChartLevel[] {
+  return (summary?.levels ?? []).map((level) => ({
     price: level.price,
     touches: level.touches,
     side: level.price === summary?.support?.price ? "support"
       : level.price === summary?.resistance?.price ? "resistance" : "other",
-  })), [summary]);
+  }));
+}
+
+export function LevelsPanel({ summary, bars, symbol, onShow }: {
+  summary: LevelsSummary | null | undefined;
+  /** Left out on the stock page, where the levels are a layer on the one
+   *  chart at the top rather than a second chart of the same prices. */
+  bars?: Bar[];
+  symbol: string;
+  /** Switches the levels on in that chart and takes the reader to it. */
+  onShow?: () => void;
+}) {
+  const lines = useMemo<ChartLevel[]>(() => levelLines(summary), [summary]);
 
   if (!summary) return null;
   if (!summary.levels.length) {
@@ -80,7 +90,7 @@ export function LevelsPanel({ summary, bars, symbol }: {
         <Side label="Resistance above" level={summary.resistance} close={summary.close}
               tone="var(--loss)" />
       </div>
-      {bars.length > 0 && (
+      {bars && bars.length > 0 && (
         <div className="card" style={{ padding: "var(--pad-md)" }}>
           <SetupChart bars={bars} pivot={null} contractions={[]} breakoutDate={null}
                       flags={[]} symbol={`${symbol}-levels`} height="responsive"
@@ -91,6 +101,16 @@ export function LevelsPanel({ summary, bars, symbol }: {
         Prices this stock has turned at three or more times in the last
         120 sessions, with how many times. Where buyers and sellers showed up
         before, not a forecast, an entry or a stop.
+        {onShow && (
+          <>
+            {" "}
+            <button type="button" onClick={onShow}
+                    style={{ background: "none", border: 0, padding: 0, cursor: "pointer",
+                             color: "inherit", font: "inherit", textDecoration: "underline" }}>
+              Draw all {summary.levels.length} on the chart
+            </button>
+          </>
+        )}
       </p>
     </div>
   );

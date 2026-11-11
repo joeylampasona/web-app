@@ -50,8 +50,8 @@ export async function renderShareImage(payload: SharePayload): Promise<Blob | nu
     /* fonts API unavailable; system fallbacks are fine */
   }
 
-  const sans = "'Inter', system-ui, sans-serif";
-  const mono = "'JetBrains Mono', ui-monospace, monospace";
+  const sans = "'IBM Plex Sans', system-ui, sans-serif";
+  const mono = "'IBM Plex Mono', ui-monospace, monospace";
 
   const chartHeight = payload.chart
     ? Math.round(((W - PAD * 2) / payload.chart.width) * payload.chart.height)

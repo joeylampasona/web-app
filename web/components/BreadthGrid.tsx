@@ -2,46 +2,57 @@
 
 import { useState } from "react";
 import { copy } from "@/lib/copy";
-import { decimal, longDate, signed } from "@/lib/format";
+import { decimal, longDate } from "@/lib/format";
 import type { BreadthCard } from "@/lib/types";
 import { Tooltip } from "./Tooltip";
 import { PriceChange } from "./PriceChange";
 
+/**
+ * The breadth figures, each with the line it sits on the end of.
+ *
+ * These were uniform cards: a number, a thin gauge, and a button that opened
+ * the history. But a breadth reading means little without its direction, and
+ * "36% in a confirmed uptrend" is a different fact on the way up from on the
+ * way down. So the history is drawn on every figure, and the day-by-day table
+ * is what the button opens.
+ */
 export function BreadthGrid({ cards, universe }: { cards: BreadthCard[]; universe: number }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <>
-      <div className="grid-2">
-        {cards.map((card) => (
-          <div key={card.key} className="card stack" style={{ gap: "var(--gap-sm)" }}>
+    <div className="breadth-grid">
+      {cards.map((card) => {
+        const percent = card.unit === "percent";
+        const delta = card.wow_delta ?? 0;
+        const good = INVERTED.has(card.key) ? delta <= 0 : delta >= 0;
+        return (
+          <div key={card.key} className="breadth-cell">
             <div className="row" style={{ gap: "var(--gap-xs)" }}>
-              <span className="footnote muted grow">{card.label}</span>
+              <span className="label-caps grow" style={{ color: "var(--text-muted)" }}>{card.label}</span>
               <Tooltip label={card.label} text={copy(`breadth.${card.key}`) || card.note} />
             </div>
-            <div className="num" style={{ fontSize: "var(--size-h2)" }}>
-              {card.unit === "percent" ? `${decimal(card.value, 1)}%` : card.value}
+            <div className="between" style={{ alignItems: "flex-end", gap: "var(--gap-md)" }}>
+              <div className="num breadth-figure">
+                {percent ? <>{decimal(card.value, 1)}<span className="breadth-unit">%</span></> : card.value}
+              </div>
+              <div className="caption" style={{ textAlign: "right", paddingBottom: 4 }}>
+                <PriceChange value={card.wow_delta} digits={percent ? 1 : 0} unit={percent ? "pts" : ""} />
+                <div className="dim">on the week</div>
+              </div>
             </div>
-            <BreadthBar card={card} />
-            <div className="caption dim">{supporting(card, universe)}</div>
-            <div className="caption">
-              <span className="dim">week over week </span>
-              <PriceChange value={card.wow_delta} digits={card.unit === "percent" ? 1 : 0}
-                           unit={card.unit === "percent" ? "pts" : ""} />
+            <History card={card} tone={delta === 0 ? "flat" : good ? "gain" : "loss"} />
+            <div className="between caption dim" style={{ gap: "var(--gap-sm)" }}>
+              <span>{supporting(card, universe)}</span>
+              <button type="button" className="breadth-days"
+                      onClick={() => setOpen(open === card.key ? null : card.key)}
+                      aria-expanded={open === card.key}>
+                {open === card.key ? "Hide the days" : "Day by day"}
+              </button>
             </div>
-            <button
-              type="button"
-              className="control footnote"
-              style={{ minHeight: 36, alignSelf: "flex-start" }}
-              onClick={() => setOpen(open === card.key ? null : card.key)}
-              aria-expanded={open === card.key}
-            >
-              Day by day ›
-            </button>
-            {open === card.key && <Sparkline card={card} />}
+            {open === card.key && <Days card={card} />}
           </div>
-        ))}
-      </div>
-    </>
+        );
+      })}
+    </div>
   );
 }
 
@@ -54,31 +65,44 @@ export function BreadthGrid({ cards, universe }: { cards: BreadthCard[]; univers
  * The bar has to know which way each card points. */
 const INVERTED = new Set(["near_52w_lows"]);
 
-/** A gauge under the headline figure.
+/**
+ * The published history as a line, the latest session marked.
  *
- * Only for percentages: the count cards ("broke out today") have no denominator
- * on this card, so a bar would need a maximum invented for it.
+ * A percentage is drawn on its own range with the 50% line shown when the
+ * range crosses it, since that is the level these readings are judged
+ * against. The colour follows the week: green when the figure moved the
+ * constructive way, which for the lows card means down.
  */
-function BreadthBar({ card }: { card: BreadthCard }) {
-  if (card.unit !== "percent") return null;
-  const pct = Math.min(Math.max(card.value, 0), 100);
-  const constructive = INVERTED.has(card.key) ? pct < 50 : pct >= 50;
+function History({ card, tone }: { card: BreadthCard; tone: "gain" | "loss" | "flat" }) {
+  const values = card.series.map((point) => point.value);
+  if (values.length < 2) return <div style={{ height: 56 }} />;
+  const W = 300, H = 56, PADY = 6;
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const span = hi - lo || 1;
+  const x = (i: number) => (i / (values.length - 1)) * (W - 6) + 1;
+  const y = (v: number) => H - PADY - ((v - lo) / span) * (H - PADY * 2);
+  const line = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const colour = tone === "gain" ? "var(--gain)" : tone === "loss" ? "var(--loss)" : "var(--text-muted)";
+  const last = values.length - 1;
+  const first = card.series[0], latest = card.series[last];
+  const show = (v: number) => (card.unit === "percent" ? `${decimal(v, 1)}%` : String(v));
   return (
-    <div
-      role="img"
-      aria-label={`${decimal(card.value, 1)} percent`}
-      style={{
-        height: 5, borderRadius: "var(--radius-pill)",
-        background: "var(--border-stronger)", overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          width: `${pct}%`, height: "100%", borderRadius: "var(--radius-pill)",
-          background: constructive ? "var(--gain)" : "var(--warn)",
-          opacity: 0.85,
-        }}
-      />
+    <div className="stack" style={{ gap: 2 }}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img"
+           aria-label={`${card.label} from ${show(first.value)} on ${longDate(first.date)} to ${show(latest.value)} on ${longDate(latest.date)}; range ${show(lo)} to ${show(hi)}`}>
+        {card.unit === "percent" && lo < 50 && hi > 50 && (
+          <line x1="0" x2={W} y1={y(50)} y2={y(50)} stroke="var(--border-stronger)"
+                strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        )}
+        <path d={`${line} L${x(last).toFixed(1)},${H} L${x(0).toFixed(1)},${H} Z`} fill={colour} opacity="0.1" />
+        <path d={line} fill="none" stroke={colour} strokeWidth="1.75" vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round" />
+        <rect x={x(last) - 2.5} y={y(values[last]) - 4} width="5" height="8" fill="var(--text-primary)" />
+      </svg>
+      <div className="between caption dim num">
+        <span>{longDate(first.date)}</span>
+        <span>range {show(lo)} to {show(hi)}</span>
+      </div>
     </div>
   );
 }
@@ -94,40 +118,17 @@ function supporting(card: BreadthCard, universe: number): string {
   return `${counts.count ?? 0} of ${counts.universe ?? universe} names`;
 }
 
-function Sparkline({ card }: { card: BreadthCard }) {
-  const values = card.series.map((point) => point.value);
-  const max = Math.max(...values, 1);
-  const min = Math.min(...values, 0);
-  const span = max - min || 1;
+function Days({ card }: { card: BreadthCard }) {
   return (
-    <div className="stack" style={{ gap: "var(--gap-xs)" }}>
-      <svg viewBox={`0 0 ${card.series.length * 8} 40`} height={40} width="100%"
-           preserveAspectRatio="none" aria-hidden>
-        {card.series.map((point, index) => {
-          const height = ((point.value - min) / span) * 34 + 2;
-          return (
-            <rect
-              key={point.date}
-              x={index * 8}
-              y={38 - height}
-              width={6}
-              height={height}
-              fill="var(--text-muted)"
-              rx={1}
-            />
-          );
-        })}
-      </svg>
-      <table className="data">
-        <tbody>
-          {[...card.series].reverse().slice(0, 6).map((point) => (
-            <tr key={point.date}>
-              <td className="text caption dim">{longDate(point.date)}</td>
-              <td>{card.unit === "percent" ? `${decimal(point.value, 1)}%` : point.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <table className="data">
+      <tbody>
+        {[...card.series].reverse().slice(0, 8).map((point) => (
+          <tr key={point.date}>
+            <td className="text caption dim">{longDate(point.date)}</td>
+            <td>{card.unit === "percent" ? `${decimal(point.value, 1)}%` : point.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

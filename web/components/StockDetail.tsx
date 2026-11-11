@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
@@ -11,7 +11,7 @@ import { GatedEarningsMoves } from "./EarningsMoves";
 import { EarningsPriced } from "./EarningsPriced";
 import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
-import { LevelsPanel } from "./LevelsPanel";
+import { levelLines, LevelsPanel } from "./LevelsPanel";
 import { StockLeadership } from "./Leadership";
 import { StockPassport } from "./StockPassport";
 import { GatedXRay } from "./GatedXRay";
@@ -27,6 +27,10 @@ import { StockCard } from "./StockCard";
 import { rsText } from "@/lib/format";
 import { planMovingAverages } from "@/lib/movingAverages";
 import type { DeskRun, StockFile } from "@/lib/types";
+
+// Stable empties, so the chart is not rebuilt on every render.
+const NONE: never[] = [];
+const NONE_FLAGS: string[] = [];
 
 /** Reads plainly, and never says what the stock is going to do next. */
 function plainRead(stock: StockFile): string {
@@ -72,61 +76,84 @@ export function StockDetail({ stock, run }: {
     [chartBars, stock.sma200],
   );
 
+  const lines = useMemo(() => levelLines(stock.levels), [stock.levels]);
+  const [layers, setLayers] = useState({ base: true, averages: true, levels: false });
+  const flip = (key: keyof typeof layers) =>
+    setLayers((held) => ({ ...held, [key]: !held[key] }));
+  const toggles = (
+    <div className="chart-layers" role="group" aria-label="What the chart draws">
+      <span className="label-caps" style={{ color: "var(--text-muted)" }}>Draw</span>
+      {setup && (
+        <button type="button" aria-pressed={layers.base} onClick={() => flip("base")}>
+          <span aria-hidden className="swatch" style={{ borderTop: "2px dashed var(--chart-pivot, var(--warn))" }} />
+          Base and pivot
+        </button>
+      )}
+      <button type="button" aria-pressed={layers.averages} onClick={() => flip("averages")}>
+        <span aria-hidden className="swatch" style={{ borderTop: "2px solid var(--chart-ma-50)" }} />
+        Averages
+      </button>
+      {lines.length > 0 && (
+        <button type="button" aria-pressed={layers.levels} onClick={() => flip("levels")}>
+          <span aria-hidden className="swatch" style={{ borderTop: "2px dotted var(--text-secondary)" }} />
+          Levels <span className="num dim">{lines.length}</span>
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="stack" style={{ gap: "var(--pad-xl)" }}>
       <StockPassport stock={stock} />
 
-      {setup ? (
-        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+      {/* One chart. The page used to draw the same hundred and forty sessions
+          three times: once with the base, once with the averages, once with
+          the levels. They are layers of one picture, so they are switches on
+          one chart, and a reader can see a pivot against a level against the
+          50-day line without holding two charts in their head. */}
+      <div id="chart" style={{ scrollMarginTop: 120 }}>
+        {setup ? (
           <StockCard setup={setup} bars={chartBars} chartHeight="responsive"
-                     showHeader={false} />
-          {/* Drawn only here, never on a card in a list: four lines on a chart
-              the size of a business card is noise, and this is the page someone
-              reached by looking one company up. */}
-          {chartBars.length > 0 && (
-            <div className="card stack" style={{ padding: "var(--pad-md)",
-                                                 gap: "var(--gap-sm)" }}>
-              <div className="eyebrow">Moving averages</div>
-              <SetupChart
-                bars={chartBars}
-                pivot={null}
-                contractions={[]}
-                breakoutDate={null}
-                flags={[]}
-                symbol={`${stock.symbol}-ma`}
-                height="responsive"
-                movingAverages={maPlan}
-              />
-              <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} />
-            </div>
-          )}
-        </div>
-      ) : (
-        <div id="structure" className="stack" style={{ gap: "var(--gap-sm)", scrollMarginTop: 120 }}>
-          <StructureCheck rows={stock.structure_check} name={stock.symbol} />
-          {chartBars.length > 0 && (
-            <div className="card stack" style={{ padding: "var(--pad-md)",
-                                                 gap: "var(--gap-sm)" }}>
-              <SetupChart
-                bars={chartBars}
-                pivot={null}
-                contractions={[]}
-                breakoutDate={null}
-                flags={[]}
-                symbol={stock.symbol}
-                height="responsive"
-                movingAverages={maPlan}
-              />
-              <MovingAverageKey plan={maPlan} />
-            </div>
-          )}
-        </div>
-      )}
+                     showHeader={false} strip
+                     overlays={{ base: layers.base,
+                                 movingAverages: layers.averages ? maPlan : null,
+                                 levels: layers.levels ? lines : null }}
+                     chartHead={toggles}
+                     chartFoot={layers.averages
+                       ? <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} /> : null} />
+        ) : (
+          <div id="structure" className="stack" style={{ gap: "var(--gap-sm)", scrollMarginTop: 120 }}>
+            <StructureCheck rows={stock.structure_check} name={stock.symbol} />
+            {chartBars.length > 0 && (
+              <div className="card stack" style={{ padding: "var(--pad-md)",
+                                                   gap: "var(--gap-sm)" }}>
+                {toggles}
+                <SetupChart
+                  bars={chartBars}
+                  pivot={null}
+                  contractions={NONE}
+                  breakoutDate={null}
+                  flags={NONE_FLAGS}
+                  symbol={stock.symbol}
+                  height="responsive"
+                  movingAverages={layers.averages ? maPlan : null}
+                  levels={layers.levels ? lines : null}
+                />
+                {layers.averages && <MovingAverageKey plan={maPlan} />}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {stock.levels !== undefined && (
         <section className="stack" style={{ gap: "var(--gap-sm)" }}>
           <div className="eyebrow">Support and resistance</div>
-          <LevelsPanel summary={stock.levels} bars={chartBars} symbol={stock.symbol} />
+          <LevelsPanel summary={stock.levels} symbol={stock.symbol}
+                       onShow={() => {
+                         setLayers((held) => ({ ...held, levels: true }));
+                         document.getElementById("chart")?.scrollIntoView({ behavior: "smooth" });
+                       }} />
         </section>
       )}
 

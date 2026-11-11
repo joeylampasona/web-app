@@ -51,6 +51,13 @@ class Digest:
     # The strength radar's label for the week, its key ratios and the leading
     # and weakest groups, with the leadership layers' front-line count.
     radar: dict | None = None
+    # The four checks as the home page's meter draws them: a label, the
+    # reading set large, and whether it is in gear (1), neither (0) or
+    # against (-1).
+    meter: list[dict] = field(default_factory=list)
+    # Share of each tenth of the ranking above both its 50- and 200-day
+    # lines, strongest tenth first: the breadth barcode, ten cells wide.
+    tenths: list[int] = field(default_factory=list)
     quiet: bool = False
 
 
@@ -61,7 +68,7 @@ def _read(out: pathlib.Path, name: str) -> Any | None:
         return None
 
 
-def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str]]:
+def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str], list[dict]]:
     """The same four checks the home page runs, in words.
 
     Deliberately a reimplementation of the scoring in web/lib/marketRead.ts
@@ -72,6 +79,7 @@ def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str]]:
     cards = {c["key"]: c for c in (breadth or {}).get("cards", [])}
     regime = (indexes or {}).get("regime") or {}
     checks: list[str] = []
+    meter: list[dict] = []
     score = 0
     measured = 0
 
@@ -79,12 +87,21 @@ def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str]]:
         measured += 1
         score += 1 if regime["above"] else -1
         checks.append(regime.get("note") or "")
+        gap = regime.get("vs_200_pct")
+        meter.append({
+            "label": f"{regime.get('symbol', 'S&P 500')} against its 200-day",
+            "value": ("Above" if regime["above"] else "Below") if gap is None
+                     else f"{'+' if gap > 0 else '−'}{abs(gap):.1f}%",
+            "score": 1 if regime["above"] else -1})
 
     b = cards.get("breakouts", {}).get("value")
     f = cards.get("failed_pokes", {}).get("value")
     if b is not None and f is not None and (b > 0 or f > 0):
         measured += 1
-        score += -1 if f >= b * 1.5 else (1 if b >= f else 0)
+        step = -1 if f >= b * 1.5 else (1 if b >= f else 0)
+        score += step
+        meter.append({"label": "Breakouts against failed pokes",
+                      "value": f"{b:.0f} : {f:.0f}", "score": step})
         checks.append(f"{b:.0f} cleared a pivot on the last session, "
                       f"{f:.0f} tested one and fell back.")
 
@@ -96,37 +113,40 @@ def _verdict(breadth: Any, indexes: Any) -> tuple[str, str, list[str]]:
         measured += 1
         v = card["value"]
         if key == "above_50ma":
-            score += 1 if v >= 55 else (-1 if v <= 40 else 0)
+            step = 1 if v >= 55 else (-1 if v <= 40 else 0)
         else:
-            score += 1 if v >= 40 else (-1 if v <= 25 else 0)
+            step = 1 if v >= 40 else (-1 if v <= 25 else 0)
+        score += step
+        meter.append({"label": "Above the 50-day line" if key == "above_50ma"
+                      else "In a confirmed uptrend", "value": f"{v:.0f}%", "score": step})
         checks.append(f"{v:.0f}% of the market is {label}.")
 
     if measured < 2:
         return ("Not enough data to call it",
                 "The last run did not publish enough breadth to read the market.",
-                checks)
+                checks, meter)
 
     below_trend = regime.get("above") is False
     if score >= 3 and not below_trend:
         return ("The tape is in gear",
                 "Breakouts are being paid for and most of the market is "
                 "participating. This is the backdrop these screens are built for.",
-                checks)
+                checks, meter)
     if score <= -2:
         return ("The tape is against breakouts",
-                "More names are failing at their pivots than holding above them. "
-                "Bases that look clean still tend to fail in this.",
-                checks)
+                "More names are failing at their pivots than holding above them, and "
+                "participation is thin. Bases that look clean still tend to fail in this.",
+                checks, meter)
     if below_trend and score >= 3:
         return ("Mixed, under a falling benchmark",
                 "Breadth is holding up, but the benchmark is below its 200-day "
                 "line. Those are the weeks that cost the most, because "
                 "everything else is telling you to buy.",
-                checks)
+                checks, meter)
     return ("Mixed",
-            "Some of the market is working and some of it is not. The individual "
-            "setup matters more than usual.",
-            checks)
+            "Some of the market is working and some of it is not. Breakouts go both "
+            "ways in this, so the individual setup matters more than usual.",
+            checks, meter)
 
 
 def build(out: pathlib.Path) -> Digest:
@@ -136,7 +156,8 @@ def build(out: pathlib.Path) -> Digest:
     indexes = _read(out, "indexes.json")
     releases = _read(out, "catalysts/releases.json") or {}
 
-    verdict, blurb, checks = _verdict(breadth, indexes)
+    verdict, blurb, checks, meter = _verdict(breadth, indexes)
+    barcode = _read(out, "market/barcode.json") or {}
 
     setups: list[dict] = []
     for screen in meta.get("screens", []):
@@ -208,6 +229,8 @@ def build(out: pathlib.Path) -> Digest:
         priced_moves=priced_moves,
         priced_record=priced_record,
         radar=radar,
+        meter=meter,
+        tenths=[int(v) for v in barcode.get("healthy_by_tenth") or []],
         quiet=quiet,
     )
 

@@ -7,6 +7,7 @@ import { Drawer } from "vaul";
 import { LEGAL, SITE_NAME, TAGLINE } from "@/lib/copy";
 import { AccountButton } from "./AccountButton";
 import { NavIcon, type NavIconName } from "./NavIcon";
+import { OPEN_SEARCH, SearchPalette, type PaletteDestination } from "./SearchPalette";
 import { DirectionArrow, ScreenGlyph } from "./ScreenGlyph";
 import { Tape } from "./Tape";
 import { ThemeToggle } from "./ThemeToggle";
@@ -16,6 +17,10 @@ interface Destination {
   href: string;
   title: string;
   blurb: string;
+  /** A heading drawn above this destination, opening a group that runs to the
+   *  next one. Seventeen links in one column was a list to read top to
+   *  bottom; three headed groups is one to glance at. */
+  group?: string;
 }
 
 const TABS: {
@@ -27,19 +32,19 @@ const TABS: {
     key: "screens", label: "Screens", glyph: "screens", match: "/screens",
     destinations: [
       { href: "/screens/forming", title: "Forming (all)", blurb: "Every base forming, across every screen, in one list." },
-      { href: "/screens/vcp", title: "VCP", blurb: "A leader pauses and the swings tighten." },
+      { group: "Bases", href: "/screens/vcp", title: "VCP", blurb: "A leader pauses and the swings tighten." },
       { href: "/screens/blue_sky", title: "Blue sky", blurb: "Resting at the highest price it has ever traded." },
       { href: "/screens/multi_year", title: "Multi-year / deep comeback", blurb: "A lid that has held for a year or more." },
       { href: "/screens/ipo", title: "IPO base", blurb: "A recent listing building its first real base." },
       { href: "/screens/flat_base", title: "Flat base", blurb: "A shallow, level shelf near the highs." },
       { href: "/screens/cup_and_handle", title: "Cup and handle", blurb: "A rounded bottom, then a small pause below the lid." },
-      { href: "/screens/bull_flag", title: "Bull flag", blurb: "A sharp advance, then an orderly pause in it." },
+      { group: "Trendline shapes", href: "/screens/bull_flag", title: "Bull flag", blurb: "A sharp advance, then an orderly pause in it." },
       { href: "/screens/falling_wedge", title: "Falling wedge", blurb: "Both lines falling, the upper one faster." },
       { href: "/screens/rising_wedge", title: "Rising wedge", blurb: "Both lines rising, the lower one faster." },
       { href: "/screens/triangle", title: "Triangle", blurb: "Falling highs against rising or level lows." },
       { href: "/screens/descending_triangle", title: "Descending triangle", blurb: "Falling highs against a level floor." },
       { href: "/screens/squeeze", title: "Squeeze", blurb: "Its quietest range in months." },
-      { href: "/screens/combine", title: "Combine screens", blurb: "Tick several and see the union." },
+      { group: "Your own", href: "/screens/combine", title: "Combine screens", blurb: "Tick several and see the union." },
       { href: "/screens/custom", title: "Create your own", blurb: "Move every dial yourself." },
     ],
   },
@@ -47,18 +52,19 @@ const TABS: {
   {
     key: "market", label: "Market", glyph: "market", match: "/market",
     destinations: [
-      { href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
+      { group: "The day", href: "/market/breakouts", title: "All breakouts today", blurb: "Every name that cleared its pivot." },
       { href: "/market/news", title: "In the news", blurb: "Headlines for the names this site follows." },
       { href: "/market/calendar", title: "The calendar", blurb: "Earnings, ex-dividends and splits, day by day." },
       { href: "/market/earnings", title: "Earnings", blurb: "Priced against realised, and every recent quarter read." },
       { href: "/market/followthrough", title: "Did it work?", blurb: "What happened to the breakouts we showed." },
-      { href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
+      { href: "/market/editions", title: "Back issues", blurb: "Each night's read, kept as it was published." },
+      { group: "The structure", href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
       { href: "/market/rotation", title: "Rotation", blurb: "Strength now against momentum since last month." },
       { href: "/market/sectors", title: "Sector strength", blurb: "Strongest and weakest, heating and cooling." },
       { href: "/market/radar", title: "Strength radar", blurb: "Growth, small caps, equal weight and every group against the market." },
       { href: "/market/leadership", title: "Leadership layers", blurb: "Every stock against its own industry." },
       { href: "/market/map", title: "The map", blurb: "Every industry sized by market value." },
-      { href: "/market/high-iv", title: "High IV", blurb: "Rich options pricing around a dated event." },
+      { group: "Options and flows", href: "/market/high-iv", title: "High IV", blurb: "Rich options pricing around a dated event." },
       { href: "/market/gamma", title: "Gamma concentration", blurb: "Where the option book anchors the most gamma." },
       { href: "/market/volume", title: "Relative volume", blurb: "Who traded unusually heavily today." },
       { href: "/market/insiders", title: "Insider activity", blurb: "What officers and directors actually bought and sold." },
@@ -73,6 +79,10 @@ const TABS: {
     ],
   },
 ];
+
+/** Every page the menus reach, for the search that opens from any page. */
+const PAGES: PaletteDestination[] = TABS.flatMap((tab) =>
+  (tab.destinations ?? []).map((d) => ({ href: d.href, title: d.title, blurb: d.blurb, section: tab.label })));
 
 function dateline(tape: TapeData | null): string | null {
   if (!tape?.asOf) return null;
@@ -128,6 +138,17 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
             {dateline(tape) ?? TAGLINE}
           </div>
           <div className="row" style={{ gap: "var(--gap-sm)" }}>
+            {/* A keyboard's way in to search, on the widths that have a
+                keyboard. A phone has the search tab under the thumb. */}
+            {pathname !== "/search" && (
+              <button type="button" className="control footnote masthead-search"
+                      onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH))}
+                      aria-label="Search" title="Search (press /)">
+                <NavIcon name="search" size={15} />
+                <span>Search</span>
+                <kbd>/</kbd>
+              </button>
+            )}
             <ThemeToggle />
             {/* Hidden on desktop, where the sidebar footer carries it.
                 Drawn rather than typed: U+2699 is emoji-presentation-prone, so
@@ -153,6 +174,7 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
         </div>
       </header>
       {tape && <Tape data={tape} />}
+      <SearchPalette destinations={PAGES} disabled={pathname === "/search"} />
 
       <main>{children}</main>
 
@@ -274,7 +296,10 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
                 padding: "var(--gap-sm) var(--pad-lg)",
                 paddingBottom: "calc(var(--pad-xl) + env(safe-area-inset-bottom))",
               }}>
-                {tab.destinations!.map((destination) => (
+                {tab.destinations!.flatMap((destination) => [
+                  destination.group
+                    ? <div key={`g-${destination.group}`} className="nav-group">{destination.group}</div>
+                    : null,
                   <Link
                     key={destination.href}
                     href={destination.href}
@@ -299,8 +324,8 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
                       </span>
                       <span className="caption dim">{destination.blurb}</span>
                     </span>
-                  </Link>
-                ))}
+                  </Link>,
+                ])}
               </div>
             </Drawer.Content>
           </Drawer.Portal>
@@ -356,7 +381,10 @@ function SideNav({ tabs, pathname, active }: {
                 {row}
               </button>
             )}
-            {isOpen && tab.destinations!.map((destination) => (
+            {isOpen && tab.destinations!.flatMap((destination) => [
+              destination.group
+                ? <div key={`g-${destination.group}`} className="nav-group">{destination.group}</div>
+                : null,
               <Link
                 key={destination.href}
                 href={destination.href}
@@ -370,8 +398,8 @@ function SideNav({ tabs, pathname, active }: {
                 </span>
                 {destination.title}
                 <DirectionArrow href={destination.href} />
-              </Link>
-            ))}
+              </Link>,
+            ])}
           </div>
         );
       })}

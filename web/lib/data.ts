@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import type {
+  Edition, EditionIndex, LeadershipLayer,
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
   BreadthBarcode, EarningsFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
   StockFile,
@@ -278,6 +279,16 @@ export function getEarnings() {
 }
 
 /** One tick per ranked stock, strongest first, by trend state. */
+/** The archive of nightly editions, newest first. */
+export function getEditions() {
+  return read<EditionIndex>("editions/index.json");
+}
+
+export function getEdition(date: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  return read<Edition>(`editions/${date}.json`);
+}
+
 export function getBarcode() {
   return read<BreadthBarcode>("market/barcode.json");
 }
@@ -334,6 +345,10 @@ export function getFollowThrough() {
 export interface SearchRow {
   symbol: string; name: string; industry: string; rs_rating: number | string;
   themes: string[];
+  /** Screens the name is on tonight. Absent on older files. */
+  on_screen?: string[];
+  /** Its leadership layer against its own industry. Absent on older files. */
+  layer?: LeadershipLayer | null;
   /** Normalised 0-100 price shape for rows that have no room for a chart.
    *  Null when the window was too short or dead flat -- a flat line and a
    *  missing one look the same to a reader and only one is true. */

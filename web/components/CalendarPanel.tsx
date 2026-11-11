@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useWatchlist } from "@/lib/useWatchlist";
 import { TickerLink } from "./StockDrawer";
 import type { CatalystEvent, DataRelease, FomcMeeting, FomcStatus } from "@/lib/types";
 
@@ -22,9 +23,26 @@ import type { CatalystEvent, DataRelease, FomcMeeting, FomcStatus } from "@/lib/
  *     because Q3 reporting does not start until mid-October; an empty day here
  *     is the calendar, not a gap in it. The empty state says so rather than
  *     leaving a reader to assume the page is broken.
+ *
+ * The week is drawn as the week: five columns, Monday to Friday, a chip per
+ * name. It used to be a card per event, three hundred identical cards on a
+ * reporting day, each repeating "Quarterly earnings" under a ticker. A column
+ * of chips shows which day is the heavy one at a glance, and puts the names a
+ * reader is most likely to care about first: strongest by relative strength,
+ * with the ones already on a screen marked in lime and the reader's own
+ * watchlist starred.
  */
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                    "Saturday", "Sunday"];
+/** Chips a day shows before the rest fold behind a button. A reporting day
+ *  runs past three hundred names; the strongest forty are the column. */
+const DAY_SHOWN = 40;
+/** A peer's report is context, not the name's own event, so it gets less room. */
+const PEERS_SHOWN = 12;
+
+/** What the page knows about a ticker beyond its event: [RS rating, how many
+ *  screens it is on tonight]. Passed as a tuple to keep the payload small. */
+export type CalendarNames = Record<string, [number | null, number]>;
 
 /** Monday of the week containing `iso`. Weeks start Monday because the market
  *  does; a Sunday-first week would split the trading week across two screens. */
@@ -47,11 +65,27 @@ function prettyDate(iso: string): string {
   });
 }
 
+/** A day's events by kind, a company's own first. A read-through is a peer's
+ *  report, so it sits in its own group below the names actually reporting. */
+function groupEvents(events: CatalystEvent[], labels: Record<string, string>) {
+  const groups = new Map<string, { key: string; label: string; rows: CatalystEvent[] }>();
+  for (const event of events) {
+    const key = event.readthrough ? "readthrough" : event.type;
+    if (!groups.has(key)) {
+      groups.set(key, { key, rows: [],
+        label: event.readthrough ? "A peer reports" : labels[event.type] ?? event.type });
+    }
+    groups.get(key)!.rows.push(event);
+  }
+  const order = (key: string) => (key === "earnings" ? 0 : key === "readthrough" ? 9 : 1);
+  return [...groups.values()].sort((a, b) => order(a.key) - order(b.key) || a.label.localeCompare(b.label));
+}
+
 /** The releases filter is its own chip rather than a type inside `events`,
  *  because a data release has no ticker and everything in `events` does. */
 const RELEASES = "data_releases";
 
-export function CalendarPanel({ file, releases }: {
+export function CalendarPanel({ file, releases, names }: {
   file: {
     as_of: string; count: number;
     events: CatalystEvent[];
@@ -62,9 +96,14 @@ export function CalendarPanel({ file, releases }: {
     releases: DataRelease[];
     fomc?: FomcStatus;
   } | null;
+  names?: CalendarNames;
 }) {
   const [monday, setMonday] = useState(() => weekStart(file.as_of));
   const [kind, setKind] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const { symbols } = useWatchlist();
+  const mine = useMemo(() => new Set(symbols), [symbols]);
+  const rs = (ticker: string): number => names?.[ticker]?.[0] ?? -1;
 
   // Which types actually appear, so the filters never offer an empty one.
   const kinds = useMemo(() => {
@@ -108,11 +147,17 @@ export function CalendarPanel({ file, releases }: {
       grouped.get(event.date)!.push(event);
     }
     for (const rows of grouped.values()) {
-      rows.sort((a, b) => a.type.localeCompare(b.type) || a.ticker.localeCompare(b.ticker));
+      // The reader's own names, then strongest first. Alphabetical order put
+      // a reporting day's most followed name wherever its letter fell.
+      rows.sort((a, b) => Number(mine.has(b.ticker)) - Number(mine.has(a.ticker))
+        || rs(b.ticker) - rs(a.ticker) || a.ticker.localeCompare(b.ticker));
     }
     return window.map((date) => ({ date, events: grouped.get(date)! }));
-  }, [file.events, kind, monday]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file.events, kind, monday, mine, names]);
 
+  const busiest = Math.max(1, ...days.map((d) => d.events.length
+    + (releasesByDay.get(d.date)?.length ?? 0) + (fomcByDay.get(d.date)?.length ?? 0)));
   const releasesShown = days.reduce(
     (n, d) => n + (releasesByDay.get(d.date)?.length ?? 0)
       + (fomcByDay.get(d.date)?.length ?? 0), 0);
@@ -197,131 +242,124 @@ export function CalendarPanel({ file, releases }: {
         </p>
       )}
 
-      {days.map(({ date, events }) => {
-        const dayReleases = releasesByDay.get(date) ?? [];
-        const dayFomc = fomcByDay.get(date) ?? [];
-        const weekend = [5, 6].includes((new Date(`${date}T12:00:00`).getDay() + 6) % 7);
-        if (weekend && events.length === 0 && dayReleases.length === 0
-            && dayFomc.length === 0) return null;
-        return (
-          <section key={date} className="stack" style={{ gap: "var(--gap-xs)" }}>
-            <div className="between">
-              <div className="eyebrow">
-                {DAY_NAMES[(new Date(`${date}T12:00:00`).getDay() + 6) % 7]}
-                {" · "}{prettyDate(date)}
-              </div>
-              <span className="caption dim">
-                <span className="num">
-                  {events.length + dayReleases.length + dayFomc.length}
-                </span>
-                {events.length > 0
-                  && events.every((e) => e.confirmed !== "confirmed")
-                  && " · all estimated"}
-              </span>
-            </div>
-            {dayFomc.map((meeting) => (
-              <div key={`fomc-${meeting.date}-${meeting.label}`}
-                   style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
-                <div className="footnote">{meeting.label}</div>
-                <div className="caption dim">
-                  Federal Reserve · the decision lands at the end of this day
-                </div>
-              </div>
-            ))}
-            {dayReleases.length > 0 && (
-              <div className="grid-auto" style={{ gap: "var(--gap-xs)" }}>
-                {dayReleases.map((row) => (
-                  // Borderless to match the ticker rows beside it: TickerLink
-                  // sets border and background to none inline, so a bordered
-                  // card here made a data release look heavier than an earnings
-                  // date sitting on the same day. They rank the same.
-                  <div key={`${row.date}-${row.release_id}-${row.name}`}
-                       style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
-                    <div className="footnote">{row.name}</div>
-                    {/* Was a run-on caption: "data release · widely watched
-                        FRED". Three different things — what it is, how much it
-                        matters, and where it came from — reading as one
-                        sentence. As chips they keep their own row height on a
-                        narrow screen instead of rewrapping the day's card. */}
-                    <div className="row wrap" style={{ gap: "var(--gap-xs)", marginTop: 3 }}>
-                      <span className="badge" style={{ letterSpacing: "0.04em" }}>
-                        {row.notable && (
-                          <span
-                            aria-hidden
-                            style={{
-                              width: 5, height: 5, borderRadius: "50%",
-                              background: "var(--brand)", flexShrink: 0,
-                            }}
-                          />
+      {shown > 0 && (
+        <>
+          <div className="week-grid">
+            {days.map(({ date, events }) => {
+              const dayReleases = releasesByDay.get(date) ?? [];
+              const dayFomc = fomcByDay.get(date) ?? [];
+              const index = (new Date(`${date}T12:00:00`).getDay() + 6) % 7;
+              const total = events.length + dayReleases.length + dayFomc.length;
+              if (index > 4 && total === 0) return null;
+              const groups = groupEvents(events, file.type_labels);
+              return (
+                <section key={date} className="week-day"
+                         data-today={date === file.as_of || undefined}>
+                  <header className="week-day-head">
+                    <div className="between" style={{ alignItems: "baseline" }}>
+                      <span className="label-caps">{DAY_NAMES[index]}</span>
+                      <span className="num week-day-count">{total}</span>
+                    </div>
+                    <div className="caption dim">{prettyDate(date)}</div>
+                    <div className="week-day-bar" aria-hidden>
+                      <span style={{ width: `${(total / busiest) * 100}%` }} />
+                    </div>
+                  </header>
+
+                  {dayFomc.map((meeting) => (
+                    <div key={`fomc-${meeting.date}-${meeting.label}`} className="week-note">
+                      <span className="hl" style={{ fontWeight: 600 }}>{meeting.label}</span>
+                      <div className="caption dim">Federal Reserve · decision at the end of this day</div>
+                    </div>
+                  ))}
+                  {dayReleases.map((row) => (
+                    <div key={`${row.date}-${row.release_id}-${row.name}`} className="week-note">
+                      {row.link
+                        ? <a href={row.link} target="_blank" rel="noopener noreferrer">{row.name}</a>
+                        : row.name}
+                      <div className="caption dim">
+                        Data release{row.notable && " · widely watched"}
+                      </div>
+                    </div>
+                  ))}
+
+                  {total === 0 && <p className="caption dim" style={{ margin: 0 }}>Nothing dated.</p>}
+
+                  {groups.map((group) => {
+                    const key = `${date}:${group.key}`;
+                    const all = open.has(key);
+                    const cap = group.key === "readthrough" ? PEERS_SHOWN : DAY_SHOWN;
+                    const rows = all ? group.rows : group.rows.slice(0, cap);
+                    const estimated = group.rows.filter((e) => e.confirmed !== "confirmed").length;
+                    return (
+                      <div key={group.key} className="stack" style={{ gap: 6 }}>
+                        <div className="caption dim between">
+                          <span>{group.label}</span>
+                          <span className="num" title={estimated
+                            ? `${estimated} of ${group.rows.length} are estimated dates` : undefined}>
+                            {group.rows.length}
+                          </span>
+                        </div>
+                        <div className="week-chips">
+                          {rows.map((event) => {
+                            const rating = names?.[event.ticker]?.[0];
+                            const screens = names?.[event.ticker]?.[1] ?? 0;
+                            const firm = event.confirmed === "confirmed";
+                            return (
+                              <TickerLink
+                                key={`${event.ticker}-${event.type}-${event.readthrough?.from ?? "own"}`}
+                                symbol={event.ticker}
+                                className={`week-chip${firm ? "" : " week-chip--est"}${screens ? " week-chip--screen" : ""}`}
+                                title={[
+                                  event.title,
+                                  firm ? "confirmed by the company"
+                                    : event.confirmed === "window" ? "estimated window" : "estimated date",
+                                  event.readthrough ? `reads through from ${event.readthrough.from}` : null,
+                                  rating != null ? `RS ${rating}` : null,
+                                  screens ? `on ${screens} screen${screens === 1 ? "" : "s"} tonight` : null,
+                                  event.priced_move_pct != null
+                                    ? `options price ±${event.priced_move_pct.toFixed(1)}%` : null,
+                                ].filter(Boolean).join(" · ")}
+                              >
+                                {mine.has(event.ticker) && <span aria-label="on your watchlist">★ </span>}
+                                <span className="mono" style={{ fontWeight: 600 }}>{event.ticker}</span>
+                                {rating != null && <span className="num week-chip-rs">{rating}</span>}
+                                {event.priced_move_pct != null && (
+                                  <span className="num week-chip-move">±{event.priced_move_pct.toFixed(0)}%</span>
+                                )}
+                              </TickerLink>
+                            );
+                          })}
+                        </div>
+                        {group.rows.length > cap && (
+                          <button type="button" className="week-more"
+                                  onClick={() => setOpen((prev) => {
+                                    const next = new Set(prev);
+                                    if (all) next.delete(key); else next.add(key);
+                                    return next;
+                                  })}>
+                            {all ? "Show the strongest only"
+                              : `${group.rows.length - cap} more, in order of strength`}
+                          </button>
                         )}
-                        Data release
-                      </span>
-                      {row.notable && (
-                        <span className="caption dim">widely watched</span>
-                      )}
-                      {row.link && (
-                        <a href={row.link} target="_blank" rel="noopener noreferrer"
-                           className="badge" style={{ letterSpacing: "0.04em" }}>
-                          FRED
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {events.length === 0 && dayReleases.length === 0
-              && dayFomc.length === 0 ? (
-              <p className="caption dim" style={{ margin: 0 }}>Nothing dated.</p>
-            ) : (
-              // A busy day is three hundred rows. One column of them wastes a
-              // wide screen and buries the day after it; grid-auto is already
-              // auto-fill, so this is three or four across on a desktop and one
-              // on a phone.
-              <div className="grid-auto" style={{ gap: "var(--gap-xs)" }}>
-                {events.map((event) => (
-                  <TickerLink
-                    key={`${event.ticker}-${event.type}-${event.date}-${event.readthrough?.from ?? "own"}`}
-                    symbol={event.ticker}
-                    className="card"
-                    style={{ padding: "var(--pad-sm) var(--pad-md)", width: "100%" }}
-                  >
-                    <div>
-                      <span className="mono">{event.ticker}</span>{" "}
-                      {/* The title already says which kind of event this is —
-                          "Quarterly earnings", "Ex-dividend date", "Stock split"
-                          — so a type label beside it was the same word twice. */}
-                      <span className="footnote">{event.title}</span>
-                    </div>
-                    <div className="row wrap caption dim" style={{ gap: "var(--gap-xs)" }}>
-                      {/* Confirmed is the rare one — twelve of nine hundred — so
-                          it is the one that gets emphasis. Marking every estimate
-                          in amber put a warning on all three hundred rows of a
-                          reporting week, which teaches a reader to stop seeing
-                          it. The caveat is still on every row, just quietly, and
-                          the count at the top of the week says it out loud. */}
-                      <span style={{ color: event.confirmed === "confirmed"
-                        ? "var(--text-secondary)" : undefined }}>
-                        {event.confirmed === "confirmed" ? "confirmed by the company"
-                          : event.confirmed === "window" ? "estimated window"
-                            : "estimated"}
-                      </span>
-                      {event.readthrough && (
-                        <span>· reads through from {event.readthrough.from}</span>
-                      )}
-                      {event.priced_move_pct != null && (
-                        <span title="The at-the-money straddle at the first expiry after the report">
-                          · options price ±{event.priced_move_pct.toFixed(1)}%
-                        </span>
-                      )}
-                    </div>
-                  </TickerLink>
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
+                      </div>
+                    );
+                  })}
+                </section>
+              );
+            })}
+          </div>
+          <div className="row wrap caption dim" style={{ gap: "6px var(--gap-lg)" }}>
+            <span><span className="week-chip week-chip--screen" style={{ pointerEvents: "none" }}>
+              <span className="mono" style={{ fontWeight: 600 }}>ABC</span></span> on a screen tonight</span>
+            <span><span className="week-chip" style={{ pointerEvents: "none" }}>
+              <span className="mono" style={{ fontWeight: 600 }}>ABC</span></span> date confirmed by the company</span>
+            <span><span className="week-chip week-chip--est" style={{ pointerEvents: "none" }}>
+              <span className="mono" style={{ fontWeight: 600 }}>ABC</span></span> estimated date</span>
+            <span>The small figure is the RS rating; names run strongest first, your watchlist ahead of them.</span>
+          </div>
+        </>
+      )}
 
       {shown === 0 && (
         <div className="card muted footnote">

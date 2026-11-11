@@ -25,6 +25,13 @@ export const LAYER_HELP: Record<LeadershipLayer, string> = {
   unconfirmed: "None of the patterns above holds.",
 };
 
+/** The pipeline's own names for the layers, for rows that carry only the key. */
+export const LAYER_LABELS: Record<LeadershipLayer, string> = {
+  front: "Front line", specific: "Stock-specific strength", developing: "Developing",
+  weak_in_strong: "Strong industry, weak stock", turning: "Turning", caution: "Caution",
+  unconfirmed: "Unconfirmed",
+};
+
 const TONE: Partial<Record<LeadershipLayer, string>> = {
   front: "badge badge--gain", specific: "badge badge--brand", developing: "badge badge--gain",
   turning: "badge", weak_in_strong: "badge badge--warn", caution: "badge badge--loss",

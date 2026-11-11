@@ -40,6 +40,45 @@ const PAD = 30;
 const DOT = 3.5;
 const HIT = 12;
 const BOX = { min: 280, max: 520, ratio: 0.58, step: 20 } as const;
+/** Tails and names are for a map a reader can take in whole. A few dozen
+ *  industries, yes; two and a half thousand stocks would be a hairball. */
+const TAILS_UP_TO = 80;
+const NAMES_SHOWN = 16;
+const NAME_PX = 6.1;   // an 11px label, per character, near enough to keep names apart
+
+/**
+ * Which dots get their name written beside them.
+ *
+ * The map used to be anonymous: coloured dots, and a name only for the one
+ * under the cursor. The names worth printing are the ones at the edges, since
+ * those are what a rotation map is read for, so candidates are taken furthest
+ * from the centre first and a name is skipped when it would sit on one already
+ * placed. Each goes on the outward side of its dot.
+ */
+function placeNames(points: RotationPoint[], px: (x: number) => number,
+                    py: (y: number) => number, yMax: number, W: number, H: number) {
+  const ranked = [...points].sort((a, b) =>
+    Math.hypot(((b.x as number) - 50) / 49, (b.y as number) / yMax)
+    - Math.hypot(((a.x as number) - 50) / 49, (a.y as number) / yMax));
+  const placed: { id: string; x: number; y: number; anchor: "start" | "end"; text: string;
+                  box: [number, number, number, number] }[] = [];
+  for (const point of ranked) {
+    if (placed.length >= NAMES_SHOWN) break;
+    const text = point.label.length > 24 ? `${point.label.slice(0, 23)}…` : point.label;
+    const cx = px(point.x as number);
+    const cy = py(point.y as number);
+    const width = text.length * NAME_PX;
+    const left = cx > W / 2;
+    const x0 = left ? cx - 8 - width : cx + 8;
+    if (x0 < 2 || x0 + width > W - 2 || cy < PAD + 4 || cy > H - PAD - 2) continue;
+    const box: [number, number, number, number] = [x0 - 3, cy - 9, x0 + width + 3, cy + 5];
+    if (placed.some((p) => box[0] < p.box[2] && box[2] > p.box[0]
+                           && box[1] < p.box[3] && box[3] > p.box[1])) continue;
+    placed.push({ id: point.id, x: left ? cx - 8 : cx + 8, y: cy + 3.5,
+                  anchor: left ? "end" : "start", text, box });
+  }
+  return placed;
+}
 
 export function Scatter({
   groups, labels,
@@ -99,6 +138,8 @@ export function Scatter({
 
   const px = (x: number) => PAD + ((x - 1) / 98) * (W - PAD * 2);
   const py = (y: number) => H - PAD - ((y + yMax) / (2 * yMax)) * (H - PAD * 2);
+  const tails = points.length <= TAILS_UP_TO;
+  const named = tails ? placeNames(points, px, py, yMax, W, H) : [];
 
   return (
     <div className="stack">
@@ -150,10 +191,30 @@ export function Scatter({
         <div className="card" style={{ padding: "var(--pad-sm)" }} ref={frame}>
           <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img"
                aria-label="Strength now against momentum versus a month ago">
+            {/* Each quarter of the map in its own faint wash, so a dot's
+                colour and the ground it sits on say the same thing. */}
+            {([["turning_up", PAD, PAD], ["powering_up", px(50), PAD],
+               ["falling_back", PAD, py(0)], ["cooling_off", px(50), py(0)]] as const)
+              .map(([q, x, y]) => (
+                <rect key={q} x={x} y={y} width={(W - PAD * 2) / 2} height={(H - PAD * 2) / 2}
+                      fill={QUADRANT_COLOUR[q]} opacity="0.06" />
+              ))}
             <line x1={px(50)} y1={PAD} x2={px(50)} y2={H - PAD}
-                  stroke="var(--chart-grid)" strokeWidth="1" />
+                  stroke="var(--border-stronger)" strokeWidth="1" />
             <line x1={PAD} y1={py(0)} x2={W - PAD} y2={py(0)}
-                  stroke="var(--chart-grid)" strokeWidth="1" />
+                  stroke="var(--border-stronger)" strokeWidth="1" />
+            {[25, 50, 75].map((tick) => (
+              <text key={tick} x={px(tick)} y={H - PAD + 12} textAnchor="middle" fontSize="9"
+                    fill="var(--text-muted)" style={{ fontFamily: "var(--font-mono)" }}>
+                RS {tick}
+              </text>
+            ))}
+            {[yMax, -yMax].map((tick) => (
+              <text key={tick} x={px(50) + 4} y={py(tick) + (tick > 0 ? 9 : -3)} fontSize="9"
+                    fill="var(--text-muted)" style={{ fontFamily: "var(--font-mono)" }}>
+                {tick > 0 ? "+" : "−"}{Math.abs(Math.round(tick))}
+              </text>
+            ))}
             <text x={W - PAD} y={PAD - 8} textAnchor="end" fontSize="11"
                   fill="var(--q-powering)">{labels.powering_up}</text>
             <text x={PAD} y={PAD - 8} fontSize="11" fill="var(--q-turning)">
@@ -167,6 +228,22 @@ export function Scatter({
             {/* Tapping the background puts the map back to no selection. */}
             <rect x={0} y={0} width={W} height={H} fill="transparent"
                   onClick={() => setPinned(null)} />
+            {/* Where each one sat a month ago: the tail starts at the strength
+                it had then and ends at the dot. Height is the change itself, so
+                a long tail from the left is a group that has climbed. */}
+            {tails && points.map((point) => {
+              const x = point.x as number;
+              const y = point.y as number;
+              const from = Math.min(99, Math.max(1, x - y));
+              if (Math.abs(px(x) - px(from)) < 6) return null;
+              const dim = highlighted.size > 0 && !highlighted.has(point.id);
+              return (
+                <line key={`tail-${point.id}`} x1={px(from)} y1={py(y)} x2={px(x)} y2={py(y)}
+                      stroke={QUADRANT_COLOUR[point.quadrant ?? ""] ?? "var(--text-muted)"}
+                      strokeWidth="1.5" opacity={dim ? 0.08 : 0.4}
+                      style={{ pointerEvents: "none" }} />
+              );
+            })}
             {points.map((point) => {
               const dim = highlighted.size > 0 && !highlighted.has(point.id);
               const open = reading?.id === point.id;
@@ -202,6 +279,14 @@ export function Scatter({
                 </g>
               );
             })}
+            {named.filter((n) => n.id !== reading?.id
+                                 && (highlighted.size === 0 || highlighted.has(n.id))).map((n) => (
+              <text key={`name-${n.id}`} x={n.x} y={n.y} textAnchor={n.anchor} fontSize="11"
+                    fill="var(--text-secondary)" stroke="var(--surface-1)" strokeWidth="3"
+                    paintOrder="stroke" style={{ pointerEvents: "none" }}>
+                {n.text}
+              </text>
+            ))}
             {/* The name, drawn last so it sits above every dot, and flipped to
                 the left of the point when it would otherwise run off the edge. */}
             {reading && (() => {
@@ -240,12 +325,14 @@ export function Scatter({
                   </span>
                 </span>
                 <span className="num caption">
-                  RS {reading.x} · {signed(reading.y, 0, " pts")}
+                  RS {reading.x} · {signed(reading.y, 0, " pts")} on the month
                 </span>
               </>
             ) : (
               <span className="caption dim">
-                Point at a dot to name it, or tap one to keep it.
+                {tails
+                  ? "The furthest out are named. Each tail starts at the strength it had a month ago. Point at any dot to name it."
+                  : "Point at a dot to name it, or tap one to keep it."}
               </span>
             )}
           </div>

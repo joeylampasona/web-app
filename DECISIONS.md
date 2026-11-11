@@ -278,3 +278,43 @@ means the earlier bars were never adjusted, and they are. Ratios under
 ordinary day. A dry run on 2026-11-10 found 62 symbols to adjust, none of
 them in the ranked universe (funds and sub-$3 reverse splits). The radar's
 own guard, which sets a fund aside after a one-session move over 35%, stays.
+
+## The rest of the site set as the printed page (2026-11-11)
+
+The home page, stock passport and screen pages had the new look and the
+Market section did not. What changed, and why each is drawn the way it is:
+
+- **The calendar is a week.** Five columns, a chip per name, strongest by RS
+  first with the reader's watchlist ahead of them. Lime marks a name on a
+  screen tonight; a dashed chip is an estimated date. A peer's report is its
+  own short group under the names actually reporting.
+- **The rotation map names its dots.** The furthest from the centre are
+  labelled, each tail starts at the strength the group had a month ago, and
+  each quarter has a faint wash. Tails and names are drawn only for maps of
+  80 points or fewer: on the stocks tab they would be a hairball.
+- **News is a ruled list** with the time in the left column. A day's law-firm
+  notices fold into one line that says how many and against which names.
+- **One chart on a stock's page.** Base and pivot, averages and levels are
+  layers switched on one chart, where there were three charts of the same
+  140 sessions. The six readings under it are a ruled strip.
+- **Menus are grouped** under small headings, in the sidebar and the phone
+  sheet alike.
+- **Search opens from any page** on "/" or Ctrl/Cmd K. It asks `/api/search`
+  for the best twelve rather than shipping the index to every page, and also
+  finds the site's own pages by name. Search rows now carry the leadership
+  layer.
+- **Breadth figures each draw their history**, coloured by whether the week
+  moved the constructive way (for the lows card, down).
+- **Back issues.** The published tree is rebuilt whole each night, so an
+  edition (the read, its four checks, where strength sat, the layers, the
+  breadth strip in ten cells, screen counts) is stored in the `editions`
+  table and the archive is written out from it every night. On its first
+  night it also rebuilds the read and its checks for the sessions the breadth
+  file still holds, and marks those editions as rebuilt. Nothing gated goes
+  in an edition.
+- **The digest email is the same page**: paper and ink, the headline under
+  the highlighter, the meter as four cells, ratio bars from a centre line and
+  the breadth strip in ten cells. Light only, since mail clients do not
+  reliably honour a dark scheme.
+- **Share tonight's read** draws the headline, meter and barcode as one
+  1200 by 675 image, from the tokens of whichever theme the reader is in.

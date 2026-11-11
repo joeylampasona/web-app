@@ -825,6 +825,15 @@ def cmd_publish(args) -> int:
                              earnings_reads=earnings_reads)
 
     out = settings.out_dir()
+    # Tonight's front page kept as an edition, and the archive written out
+    # again from the database: the tree itself is rebuilt whole every night.
+    try:
+        from publish import editions
+        kept = editions.record(conn, out, market.benchmark)
+        written += kept
+        print(f"  → {max(0, len(kept) - 1)} edition(s) in the archive.", flush=True)
+    except Exception as exc:                                    # noqa: BLE001
+        print(f"  → Editions not written: {type(exc).__name__}: {exc}", flush=True)
     _banner(f"Published — {len(written)} files under {out}")
     tree = {}
     for path in written:

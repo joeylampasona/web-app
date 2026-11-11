@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { rsText } from "@/lib/format";
 import type { SearchRow } from "@/lib/data";
+import { LAYER_LABELS, LayerChip } from "./Leadership";
 import { PriceChange } from "./PriceChange";
 import { Sparkline } from "./Sparkline";
 import { WatchStar } from "./WatchStar";
@@ -157,30 +158,33 @@ export function SearchPanel({
         </p>
       )}
 
-      <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+      {results.length > 0 && (
+      <div className="ruled-list">
         {results.map((row) => (
           /* The row is a div, not one big TickerLink, because the star is a
              button and a button inside a button is invalid markup -- the tap
              would have opened the drawer instead of saving the ticker. The
              link covers the text; the star sits beside it. */
-          <div key={row.symbol} className="card between"
-               style={{ padding: "var(--pad-md) var(--pad-lg)", width: "100%",
-                        gap: "var(--gap-sm)" }}>
+          <div key={row.symbol} className="between search-row" style={{ gap: "var(--gap-sm)" }}>
             <TickerLink symbol={row.symbol} className="grow"
                         style={{ minWidth: 0, display: "block" }}>
-              <span className="mono" style={{ color: "var(--link)" }}>{row.symbol}</span>{" "}
+              <span className="mono" style={{ fontWeight: 600 }}>{row.symbol}</span>{" "}
               <span>{row.name}</span>
               <span className="caption dim"> · {row.industry}</span>
             </TickerLink>
-            <span className="row" style={{ gap: "var(--gap-sm)", flexShrink: 0 }}>
+            <span className="row wrap" style={{ gap: "var(--gap-sm)", flexShrink: 0, justifyContent: "flex-end" }}>
+              {row.layer && row.layer !== "unconfirmed" && (
+                <LayerChip layer={row.layer} label={LAYER_LABELS[row.layer]} />
+              )}
               <Sparkline points={row.spark} changePct={row.spark_change_pct} />
               <PriceChange value={row.spark_change_pct} className="footnote" />
-              <span className="num dim">{rsText(row.rs_rating)}</span>
+              <span className="num dim">RS {rsText(row.rs_rating)}</span>
               <WatchStar symbol={row.symbol} />
             </span>
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 }

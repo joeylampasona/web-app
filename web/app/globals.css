@@ -815,3 +815,144 @@ table.data thead th {
 .tape .tape-tag { background: var(--brand); color: var(--on-brand); padding: 0 6px;
                   font-family: var(--font-display); font-weight: 600; letter-spacing: 0.04em;
                   text-transform: uppercase; }
+
+/* The calendar's week: a column per trading day, a chip per name. */
+.week-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0;
+             border-top: 3px solid var(--rule); border-bottom: 1px solid var(--border); }
+.week-day { display: flex; flex-direction: column; gap: var(--gap-md); min-width: 0;
+            padding: var(--pad-md); border-right: 1px solid var(--border); }
+.week-day:nth-child(5n), .week-day:last-child { border-right: 0; }
+.week-day:nth-child(n+6) { border-top: 1px solid var(--border); }
+.week-day[data-today] { background: var(--surface-1); }
+.week-day[data-today] .week-day-head .label-caps { background: var(--brand); color: var(--on-brand); padding: 0 6px; }
+.week-day-count { font-size: 22px; font-weight: 600; line-height: 1; }
+.week-day-bar { height: 4px; background: var(--border); margin-top: 6px; }
+.week-day-bar span { display: block; height: 100%; background: var(--rule); }
+.week-note { font-size: var(--size-footnote); border-left: 3px solid var(--rule); padding-left: 8px; }
+.week-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.week-chip { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 7px;
+             border: 1px solid var(--border-stronger); background: var(--surface-2);
+             font-size: var(--size-caption); line-height: 1.3; color: var(--text-primary); }
+.week-chip:hover { border-color: var(--rule); }
+.week-chip--est { border-style: dashed; border-color: var(--border); }
+.week-chip--screen { background: var(--brand); color: var(--on-brand); border-color: var(--brand); border-style: solid; }
+.week-chip-rs { font-size: 10px; opacity: 0.65; }
+.week-chip-move { font-size: 10px; font-weight: 600; }
+.week-more { background: none; border: 0; padding: 4px 0; cursor: pointer; text-align: left;
+             font-size: var(--size-caption); color: var(--text-secondary); text-decoration: underline; }
+@media (max-width: 900px) {
+  .week-grid { grid-template-columns: 1fr; }
+  .week-day { border-right: 0; border-top: 1px solid var(--border); }
+  .week-day:first-child { border-top: 0; }
+}
+
+/* A day's legal notices, folded into one line of the news list. */
+.news-fold > summary { cursor: pointer; list-style: none; }
+.news-fold > summary::-webkit-details-marker { display: none; }
+.news-fold[open] > summary .dim:last-child { display: none; }
+.news-fold-body { padding: 8px 0 0 calc(92px + var(--gap-md)); }
+@media (max-width: 560px) { .news-fold-body { padding-left: 0; } }
+
+/* The stock page's chart layers, and its six readings as one strip. */
+.chart-layers { display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--gap-md);
+                border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.chart-layers button { display: inline-flex; align-items: center; gap: 7px; min-height: var(--h-control);
+                       padding: 0 10px; background: none; border: 0; border-bottom: 3px solid transparent;
+                       cursor: pointer; font-size: var(--size-footnote); color: var(--text-muted); }
+.chart-layers button[aria-pressed="true"] { color: var(--text-primary); border-bottom-color: var(--rule); font-weight: 600; }
+.chart-layers button[aria-pressed="false"] .swatch { opacity: 0.35; }
+.chart-layers .swatch { width: 16px; height: 0; }
+.metric-grid--strip { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0;
+                      background: none; border: 0; border-top: 3px solid var(--rule);
+                      border-radius: 0; overflow: hidden; }
+/* Every tile carries a right and a bottom rule and overhangs its cell by a
+   pixel, so the rules on the outer edge fall outside the strip and are cut
+   off: clean dividers however many tiles the width fits to a row. */
+.metric-grid--strip .metric-tile { background: none; padding: 10px var(--pad-md) 12px;
+                                   border-right: 1px solid var(--border); margin-right: -1px;
+                                   border-bottom: 1px solid var(--border); }
+.metric-grid--strip .metric-tile .label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; }
+.metric-grid--strip .metric-tile .value { font-size: 20px; font-weight: 600; }
+
+/* A heading over a group of destinations, in the sidebar and the phone sheet. */
+.nav-group { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+             text-transform: uppercase; color: var(--text-muted);
+             padding: 12px 0 4px 14px; margin-top: 4px; border-top: 1px solid var(--border); }
+.sidenav .nav-group { margin-left: 38px; padding-left: 0; }
+
+/* Search from any page. */
+.masthead-search { min-height: 36px; gap: 8px; padding: 0 10px; }
+.masthead-search kbd, .palette-foot kbd { font-family: var(--font-mono); font-size: 11px;
+  border: 1px solid var(--border-strong); padding: 0 5px; color: var(--text-muted); }
+@media (max-width: 1023px) { .masthead-search { display: none; } }
+.palette-veil { position: fixed; inset: 0; z-index: 80; background: rgba(8, 10, 9, 0.55);
+                display: flex; justify-content: center; align-items: flex-start;
+                padding: min(14vh, 120px) 16px 16px; }
+.palette { width: min(760px, 100%); max-height: 72vh; display: flex; flex-direction: column;
+           background: var(--surface-0); border: 1px solid var(--rule); border-top-width: 4px;
+           box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5); }
+.palette-input { display: flex; align-items: center; gap: var(--gap-md); padding: 0 var(--pad-lg);
+                 border-bottom: 1px solid var(--border); }
+.palette-input > span { font-size: 22px; font-weight: 600; background: var(--brand); color: var(--on-brand);
+                        padding: 0 8px; }
+.palette-input input, .palette-input input:focus, .palette-input input:focus-visible {
+  box-shadow: none; outline: none; }
+.palette-input input { flex: 1; min-width: 0; height: 60px; border: 0; background: none;
+                       color: var(--text-primary); font-family: var(--font-display); font-size: 22px; }
+.palette-list { overflow-y: auto; }
+.palette-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: var(--gap-md);
+               align-items: center; width: 100%; text-align: left; padding: 10px var(--pad-lg);
+               background: none; border: 0; border-bottom: 1px solid var(--border); cursor: pointer;
+               color: var(--text-primary); font-size: var(--size-footnote); }
+.palette-row[aria-selected="true"] { background: var(--brand-muted); box-shadow: inset 4px 0 0 var(--rule); }
+.palette-symbol { font-weight: 600; }
+.palette-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-figures { display: flex; align-items: center; gap: var(--gap-sm); }
+.palette-rs { min-width: 46px; text-align: right; color: var(--text-secondary); }
+.palette-foot { display: flex; gap: var(--gap-lg); padding: 8px var(--pad-lg); }
+@media (max-width: 640px) {
+  .palette-row { grid-template-columns: 56px minmax(0, 1fr); }
+  .palette-figures { grid-column: 1 / -1; flex-wrap: wrap; }
+}
+.search-row { align-items: center; }
+
+/* Breadth: a figure and the line it ends. */
+.breadth-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 3px solid var(--rule); }
+.breadth-cell { display: flex; flex-direction: column; gap: var(--gap-sm); min-width: 0;
+                padding: var(--pad-md) var(--pad-md) var(--pad-lg); border-bottom: 1px solid var(--border);
+                border-right: 1px solid var(--border); }
+.breadth-cell:nth-child(3n) { border-right: 0; }
+.breadth-figure { font-family: var(--font-display); font-size: 40px; font-weight: 600; line-height: 1; }
+.breadth-unit { font-size: 20px; margin-left: 2px; color: var(--text-muted); }
+.breadth-days { background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit;
+                text-decoration: underline; white-space: nowrap; min-height: 24px; }
+@media (max-width: 900px) {
+  .breadth-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .breadth-cell:nth-child(3n) { border-right: 1px solid var(--border); }
+  .breadth-cell:nth-child(2n) { border-right: 0; }
+}
+@media (max-width: 560px) {
+  .breadth-grid { grid-template-columns: 1fr; }
+  .breadth-cell { border-right: 0 !important; padding-left: 0; padding-right: 0; }
+}
+
+/* Back issues. */
+.edition-nav { display: flex; gap: var(--gap-sm); flex: none !important; align-self: flex-end;
+               padding-bottom: var(--pad-md); }
+.edition-run { display: flex; gap: 2px; height: 30px; border: 1px solid var(--rule); padding: 2px; }
+.edition-run-cell { flex: 1 1 0; min-width: 3px; }
+.edition-run-cell:hover, .edition-run-cell[aria-current="page"] { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.edition-tone--gear { background: var(--brand); }
+.edition-tone--mixed { background: var(--border-strong); }
+.edition-tone--against { background: var(--loss); }
+.edition-tone--unknown { background: var(--surface-1); }
+.edition-key { display: inline-block; width: 12px; height: 12px; border: 1px solid var(--rule); vertical-align: -2px; }
+.edition-checks { display: inline-flex; gap: 2px; vertical-align: middle; }
+.edition-checks > span { width: 14px; height: 14px; border: 1px solid var(--rule); background: var(--surface-2); }
+.edition-checks > span[data-score="1"] { background: var(--brand); }
+.edition-checks > span[data-score="-1"] { background: var(--loss); }
+.edition-table td { vertical-align: middle; }
+.edition-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--pad-xl); }
+@media (max-width: 860px) { .edition-split { grid-template-columns: minmax(0, 1fr); } .edition-nav { align-self: flex-start; } }
+.tenths { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); border: 1px solid var(--rule); }
+.tenths > span { display: grid; place-items: center; height: 40px; font-size: 11px; font-weight: 600; }

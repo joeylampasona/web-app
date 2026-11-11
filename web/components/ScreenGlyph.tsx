@@ -210,6 +210,18 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/editions": {
+    label: "Earlier editions",
+    // A stack of pages, the top one ruled.
+    art: (
+      <>
+        <path d="M7 3.5 L20.5 3.5 L20.5 17" opacity={0.6} />
+        <path d="M3.5 7 L17 7 L17 20.5 L3.5 20.5 Z" />
+        <path d="M6.5 11 L14 11" />
+        <path d="M6.5 14.5 L12 14.5" opacity={0.7} />
+      </>
+    ),
+  },
   "/market/breadth": {
     label: "How much is participating",
     art: (

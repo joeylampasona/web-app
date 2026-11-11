@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import type { Bar, Setup } from "@/lib/types";
+import type { MaPlan } from "@/lib/movingAverages";
 import { useLazyBars } from "@/lib/useBars";
 import { copy } from "@/lib/copy";
 import {
@@ -12,10 +13,14 @@ import { CriteriaMeter } from "./CriteriaMeter";
 import { MetricTile } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
 import { DelayedGap } from "./DelayedGap";
-import { MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
+import { type ChartLevel, MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
 import { TickerLink } from "./StockDrawer";
 import { WatchStar } from "./WatchStar";
+
+// Stable empties: a fresh array each render would rebuild the chart each render.
+const NO_BASES: Setup["bases"] = [];
+const NO_FLAGS: string[] = [];
 
 /**
  * Every surface on this site is a list of these. The metric rows swap on the
@@ -23,6 +28,7 @@ import { WatchStar } from "./WatchStar";
  */
 export function StockCard({
   setup, bars, variant = "setup", chartHeight = 210, showHeader = true,
+  overlays, chartHead, chartFoot, strip = false,
 }: {
   setup: Setup;
   /** Passed only for the handful of cards above the fold. The rest fetch their
@@ -35,8 +41,17 @@ export function StockCard({
   /** Off on a stock's own page, whose header already carries the name and
    *  the price; printing them again on the card below was a repeat. */
   showHeader?: boolean;
+  /** The stock page's one chart: the base, the averages and the levels drawn
+   *  together, each switched by the controls passed as `chartHead`. Cards in a
+   *  list pass none of these and draw the base alone. */
+  overlays?: { base: boolean; movingAverages?: MaPlan | null; levels?: ChartLevel[] | null };
+  chartHead?: React.ReactNode;
+  chartFoot?: React.ReactNode;
+  /** The six readings as one ruled strip rather than a block of tiles. */
+  strip?: boolean;
 }) {
   const ohlc = setup.ohlc;
+  const base = overlays?.base ?? true;
   const lazy = useLazyBars(setup.symbol, !bars);
   const drawn = bars ?? lazy.bars;
   // Eager cards (above the fold) always draw. The rest draw only while they
@@ -116,6 +131,7 @@ export function StockCard({
         {"  "}Vol {volume(setup.volume)}
       </div>
 
+      {chartHead}
       {/* Holds the card's height steady whether or not the chart is mounted, so
           the list does not jump about as charts appear and are torn down. */}
       <div ref={lazy.ref} style={{
@@ -124,19 +140,22 @@ export function StockCard({
         {show && drawn && drawn.length > 0 && (
         <SetupChart
           bars={drawn}
-          pivot={setup.pivot}
-          contractions={setup.bases}
-          breakoutDate={setup.breakout_date}
-          flags={setup.flags}
+          pivot={base ? setup.pivot : null}
+          contractions={base ? setup.bases : NO_BASES}
+          breakoutDate={base ? setup.breakout_date : null}
+          flags={base ? setup.flags : NO_FLAGS}
           symbol={setup.symbol}
           height={chartHeight}
           onReady={handleChartReady}
-          shape={setup.shape}
+          shape={base ? setup.shape : null}
+          movingAverages={overlays?.movingAverages}
+          levels={overlays?.levels}
         />
         )}
       </div>
+      {chartFoot}
 
-      <div className="metric-grid">
+      <div className={strip ? "metric-grid metric-grid--strip" : "metric-grid"}>
         {rows.map((row) => (
           <MetricTile key={row.label} {...row} />
         ))}

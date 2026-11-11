@@ -514,6 +514,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             # The last close and the session's move, so a list of names (the
             # tape's watchlist) can show a price without opening each file.
             **_last_move(market.closes(symbol)),
+            # Where it sits against its own industry, so a search result can
+            # say so without opening the stock's file.
+            "layer": (layer_of.get(symbol) or {}).get("layer"),
         } for symbol in market.universe],
     }))
 

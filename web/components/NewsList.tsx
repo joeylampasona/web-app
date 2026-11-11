@@ -14,6 +14,11 @@ import { TickerLink } from "./StockDrawer";
  * nothing and feel broken, while "show me what was written about this name" is
  * the question somebody actually arrives with.
  *
+ * A ruled list, time in the left column, the way the home page sets its
+ * headlines: a box round every story made a hundred equal boxes, and the
+ * law-firm notices took as much room as the reporting. Those now fold into
+ * one line per day.
+ *
  * Grouped by day, because a reader scanning a week wants to know whether five
  * stories landed on one afternoon or were spread across it. That difference is
  * the whole signal in a headline list.
@@ -59,6 +64,45 @@ function time(iso: string): string {
   return new Date(at).toLocaleTimeString("en-US", {
     hour: "numeric", minute: "2-digit",
   });
+}
+
+/**
+ * A day's law-firm notices as one line that opens.
+ *
+ * They were given less room before, but still a card each, and on most days
+ * they outnumber the reporting. They are not hidden: the line says how many
+ * landed and against which names, which is the only information in them, and
+ * opens to the notices themselves.
+ */
+function LegalFold({ rows }: { rows: MarketHeadline[] }) {
+  if (!rows.length) return null;
+  const tickers = [...new Set(rows.flatMap((a) => a.tickers))];
+  return (
+    <details className="news-fold">
+      <summary className="news-row">
+        <span className="mono caption dim">{rows.length}×</span>
+        <span className="footnote" style={{ color: "var(--text-secondary)" }}>
+          {rows.length === 1 ? "One law-firm notice" : `${rows.length} law-firm notices`}
+          {tickers.length > 0 && (
+            <span className="mono dim"> · {tickers.slice(0, 10).join(" ")}
+              {tickers.length > 10 && ` +${tickers.length - 10}`}</span>
+          )}
+          <span className="dim"> · show</span>
+        </span>
+      </summary>
+      <div className="stack news-fold-body" style={{ gap: 6 }}>
+        {rows.map((article) => (
+          <div key={article.url} className="caption">
+            <a href={article.url} target="_blank" rel="noopener noreferrer nofollow"
+               style={{ color: "var(--text-muted)" }}>
+              {article.title}
+            </a>
+            <span className="dim"> · {article.publisher} · {time(article.published_at)}</span>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 export function NewsList({ articles: nightly }: { articles: MarketHeadline[] }) {
@@ -157,72 +201,52 @@ export function NewsList({ articles: nightly }: { articles: MarketHeadline[] }) 
         </p>
       ) : (
         days.map(([day, rows]) => (
-          <section key={day} className="stack" style={{ gap: "var(--gap-sm)" }}>
-            <div className="between" style={{ alignItems: "baseline", gap: "var(--gap-sm)" }}>
-              <div className="eyebrow" style={{ marginBottom: 0 }}>
-                {dayLabel(day, now)}
-              </div>
+          <section key={day} className="stack" style={{ gap: 0 }}>
+            <div className="ruled-head">
+              <h2>{dayLabel(day, now)}</h2>
               <span className="caption dim" style={{ whiteSpace: "nowrap" }}>
-                {rows.length} {rows.length === 1 ? "story" : "stories"}
+                {rows.filter((a) => a.kind !== "legal").length} written
+                {rows.some((a) => a.kind === "legal")
+                  && ` · ${rows.filter((a) => a.kind === "legal").length} legal`}
               </span>
             </div>
-            {rows.map((article) => {
-              // A law firm's wire is given less room, not hidden. It is still
-              // a thing that was published, and six of them landing at once is
-              // itself information about the day.
-              const quiet = article.kind === "legal";
-              return (
-                <article
-                  key={article.url}
-                  className="card stack"
-                  style={{
-                    gap: quiet ? 2 : "var(--gap-xs)",
-                    padding: quiet ? "var(--pad-sm) var(--pad-md)" : undefined,
-                  }}
-                >
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                    className={quiet ? "footnote" : undefined}
-                    style={{
-                      color: quiet ? "var(--text-muted)"
-                        : article.prominent ? "var(--text-primary)"
-                        : "var(--text-secondary)",
-                    }}
-                  >
-                    {article.title}
-                  </a>
-                  <div className="row wrap" style={{ gap: "var(--gap-xs)", alignItems: "center" }}>
-                    {article.tickers.slice(0, 6).map((ticker) => (
-                      <TickerLink
-                        key={ticker}
-                        symbol={ticker}
-                        className="badge badge--ticker"
-                        style={statusEdge(article.status?.[ticker])}
-                      >
-                        {ticker}
-                      </TickerLink>
-                    ))}
-                    {article.tickers.length > 6 && (
-                      <span className="caption dim">+{article.tickers.length - 6}</span>
-                    )}
-                    {quiet && (
-                      <span className="badge" style={{ color: "var(--warn)" }}>
-                        PR / legal
-                      </span>
-                    )}
-                  </div>
-                  <div className="row caption dim" style={{ gap: "var(--gap-xs)", alignItems: "center" }}>
-                    <PublisherMark publisher={article.publisher} />
-                    <span>
-                      {article.publisher}
-                      {time(article.published_at) && ` · ${time(article.published_at)}`}
-                    </span>
+            <div className="ruled-list">
+              {rows.filter((a) => a.kind !== "legal").map((article) => (
+                <article key={article.url} className="news-row">
+                  <span className="mono caption dim">{time(article.published_at)}</span>
+                  <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+                    <a
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      style={{
+                        fontWeight: article.prominent ? 600 : 500,
+                        color: article.kind === "release" ? "var(--text-secondary)" : undefined,
+                      }}
+                    >
+                      {article.title}
+                    </a>
+                    <div className="row wrap caption dim" style={{ gap: "var(--gap-xs)", alignItems: "center" }}>
+                      <PublisherMark publisher={article.publisher} />
+                      <span>{article.publisher}</span>
+                      {article.kind === "release" && <span className="badge">Company release</span>}
+                      {article.tickers.slice(0, 6).map((ticker) => (
+                        <TickerLink
+                          key={ticker}
+                          symbol={ticker}
+                          className="badge badge--ticker"
+                          style={statusEdge(article.status?.[ticker])}
+                        >
+                          {ticker}
+                        </TickerLink>
+                      ))}
+                      {article.tickers.length > 6 && <span>+{article.tickers.length - 6}</span>}
+                    </div>
                   </div>
                 </article>
-              );
-            })}
+              ))}
+              <LegalFold rows={rows.filter((a) => a.kind === "legal")} />
+            </div>
           </section>
         ))
       )}

@@ -912,3 +912,38 @@ export interface BreadthBarcode {
   /** Share above both lines in each tenth of the ranking, strongest first. */
   healthy_by_tenth: (number | null)[];
 }
+
+/** One night's front page, kept: the read, its four checks, where strength
+ *  sat and the breadth strip. `rebuilt` editions were recomputed from the
+ *  breadth history and carry the read and its checks only. */
+export interface EditionCheck { label: string; value: string; score: -1 | 0 | 1 }
+export interface Edition {
+  date: string; headline: string; blurb: string;
+  meter: EditionCheck[]; checks: string[];
+  indexes?: { symbol: string; close: number | null; vs_200_pct: number | null; above_200: boolean | null }[];
+  radar?: {
+    label: string; sub: string;
+    pairs: { label: string; rs126: number | null; start126?: number | null }[];
+    leaders: string[]; weakest: string[];
+    front: number | null; front_week_ago: number | null;
+  } | null;
+  layers?: {
+    counts: LayerCounts; order: LeadershipLayer[];
+    labels: Record<LeadershipLayer, string>; front: string[];
+  } | null;
+  tenths?: number[];
+  barcode?: { n: number; counts: Record<string, number>; labels: Record<string, string> } | null;
+  breadth: { key: string; label: string; value: number; unit: "percent" | "count" }[];
+  screens?: { key: string; name: string; total: number }[];
+  universe?: number | null;
+  rebuilt: boolean;
+  newer: string | null; older: string | null;
+}
+export interface EditionIndex {
+  as_of: string; count: number;
+  editions: {
+    date: string; headline: string; scores: (-1 | 0 | 1)[];
+    label: string | null; front: number | null;
+    breakouts: number | null; failed: number | null; rebuilt: boolean;
+  }[];
+}

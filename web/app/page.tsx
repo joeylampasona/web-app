@@ -2,12 +2,13 @@ import Link from "next/link";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { HomeNews } from "@/components/HomeNews";
 import { HomeRead } from "@/components/HomeRead";
+import { ShareRead } from "@/components/ShareRead";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
 import type { WatchRow } from "@/components/WatchlistPanel";
 import {
-  getAllScreens, getBreadth, getMarketContext, getDiff, getIndexes, getLeadership, getMeta,
+  getAllScreens, getBarcode, getBreadth, getMarketContext, getDiff, getIndexes, getLeadership, getMeta,
   getNews, getRadar, getReleases,
   getSearchIndex, getSectors, getUpcoming, hasData,
 } from "@/lib/data";
@@ -130,7 +131,21 @@ export default function Home() {
 
       <div className="stack" style={{ gap: "var(--gap-sm)", paddingTop: "var(--pad-md)" }}>
         <HomeRead read={read} session={`${shortDate(meta?.as_of)} close`}
-                  series={series} radar={radar} />
+                  series={series} radar={radar}
+                  actions={meta?.as_of && read.tests.length > 0 ? (
+                    <>
+                      <ShareRead card={{
+                        asOf: meta.as_of, headline: read.headline, blurb: read.blurb,
+                        cells: read.tests.map((t) => ({ label: t.label, value: t.value, score: t.score })),
+                        ticks: getBarcode()?.ticks ?? null,
+                        strength: radar?.read.label ?? null,
+                      }} />
+                      <Link href="/market/editions" className="footnote"
+                            style={{ textDecoration: "underline" }}>
+                        Back issues
+                      </Link>
+                    </>
+                  ) : undefined} />
         <MarketContext file={context} compact />
       </div>
 

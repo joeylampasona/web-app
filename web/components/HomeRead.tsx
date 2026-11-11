@@ -22,7 +22,7 @@ const STATE: Record<string, string> = { "1": "In gear", "0": "Neither", "-1": "A
 /** One ratio's bar runs out to this many percent either side of the centre. */
 const RATIO_SCALE = 8;
 
-function Headline({ text }: { text: string }) {
+export function Headline({ text }: { text: string }) {
   // "The tape is in gear" marks "in gear"; a headline with no such lead-in is
   // marked whole.
   const lead = "The tape is ";
@@ -40,13 +40,15 @@ function signed(v: number): string {
 }
 
 export function HomeRead({
-  read, session, series, radar,
+  read, session, series, radar, actions,
 }: {
   read: MarketRead;
   session: string;
   /** The last twenty sessions of each check's own number, by check key. */
   series: Record<string, number[]>;
   radar: Radar | null;
+  /** What a reader can do with the read: share it, page back through it. */
+  actions?: React.ReactNode;
 }) {
   const inGear = read.tests.filter((t) => t.score === 1).length;
   return (
@@ -97,6 +99,9 @@ export function HomeRead({
             What each one counts
           </Link>
         </p>
+        {actions && (
+          <div className="row wrap" style={{ gap: "var(--gap-sm)", alignItems: "center" }}>{actions}</div>
+        )}
       </div>
 
       {radar && (
