@@ -1,7 +1,7 @@
 "use client";
 
 import { Locked } from "@/components/Locked";
-import { Sparkline } from "@/components/Sparkline";
+import { normalise, Sparkline } from "@/components/Sparkline";
 import { useGated } from "@/lib/useGated";
 import type { PositioningFile, PositioningMarket } from "@/lib/types";
 
@@ -86,7 +86,9 @@ function Table({ markets }: { markets: PositioningMarket[] }) {
               <td><Percentile value={m.pct52} /></td>
               <td><Percentile value={m.pct156} /></td>
               <td>
-                <Sparkline points={m.history.map(([, net]) => net)} width={80} height={22} />
+                <Sparkline points={normalise(m.history.map(([, net]) => net))} width={80} height={22}
+                           colour="var(--text-secondary)"
+                           label={`Net position over the last ${m.history.length} weeks`} />
               </td>
             </tr>
           ))}

@@ -38,6 +38,12 @@ export function Sparkline({
   /** What the line is, for a screen reader. */
   label?: string;
 }) {
+  // A caller that hands over raw figures (contracts, dollars) instead of a
+  // 0-100 shape would otherwise draw a line thousands of units outside its
+  // box, and the box does not clip: the positioning table did exactly that
+  // and ruled vertical lines down every row. Anything outside the range is
+  // stretched to it here.
+  if (points && points.some((v) => v < 0 || v > 100)) points = normalise(points);
   if (!points || points.length < 2) {
     return (
       <span
