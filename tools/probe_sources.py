@@ -472,6 +472,23 @@ def probe_universe_trace() -> None:
         except Exception:                             # noqa: BLE001
             pass
         if key:
+            # What the provider lists as this symbol's splits, asked by ticker:
+            # the nightly asks by date range, and a split missing from one
+            # listing but present in the other is the thing to know.
+            try:
+                resp = requests.get("https://api.polygon.io/v3/reference/splits",
+                                    params={"ticker": sym, "limit": 10, "apiKey": key}, timeout=30)
+                listed = [(r.get("execution_date"), r.get("split_from"), r.get("split_to"))
+                          for r in (resp.json().get("results") or [])]
+                print(f"     splits the provider lists for it ({resp.status_code}): {listed}")
+            except Exception as exc:                  # noqa: BLE001
+                print(f"     splits lookup failed: {type(exc).__name__}")
+            try:
+                near = conn.execute("SELECT date, close, volume FROM bars WHERE symbol=? "
+                                    "ORDER BY date DESC LIMIT 8", (sym,)).fetchall()
+                print(f"     newest stored closes: {[(r[0], round(r[1], 2)) for r in near]}")
+            except Exception:                         # noqa: BLE001
+                pass
             try:
                 resp = requests.get(f"https://api.polygon.io/v3/reference/tickers/{sym}",
                                     params={"apiKey": key}, timeout=30)
