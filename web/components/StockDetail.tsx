@@ -223,7 +223,7 @@ export function StockDetail({ stock, run }: {
       {stock.fundamentals !== undefined && (
         <section id="business">
           <div className="eyebrow">The business</div>
-          <FundamentalsPanel f={stock.fundamentals} />
+          <FundamentalsPanel f={stock.fundamentals} symbol={stock.symbol} name={stock.name} />
         </section>
       )}
 

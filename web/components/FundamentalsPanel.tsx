@@ -45,7 +45,11 @@ function day(iso: string): string {
   });
 }
 
-export function FundamentalsPanel({ f }: { f: Fundamentals | null | undefined }) {
+export function FundamentalsPanel({ f, symbol, name }: {
+  f: Fundamentals | null | undefined;
+  /** Passed through so the quarter's read can be shared with its company named. */
+  symbol?: string; name?: string;
+}) {
   if (!f) {
     return (
       <p className="muted footnote" style={{ margin: 0 }}>
@@ -77,7 +81,7 @@ export function FundamentalsPanel({ f }: { f: Fundamentals | null | undefined })
         from the annual report. Revenue growth is the latest quarter against
         the same quarter a year earlier.
       </p>
-      <QuarterlyPanel q={f.quarterly} />
+      <QuarterlyPanel q={f.quarterly} symbol={symbol} name={name} />
     </div>
   );
 }

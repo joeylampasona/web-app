@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { shareOrSave } from "@/lib/shareBlob";
 import { renderReadImage, type ReadCard } from "@/lib/shareRead";
 
 /**
@@ -19,25 +20,9 @@ export function ShareRead({ card }: { card: ReadCard }) {
     try {
       const blob = await renderReadImage(card);
       if (!blob) { flash("failed"); return; }
-      const name = `the-read-${card.asOf}.png`;
-      const file = new File([blob], name, { type: "image/png" });
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: card.headline, url: window.location.origin });
-          setState("idle");
-          return;
-        } catch (error) {
-          // Closing the share sheet is not a failure, and needs no download.
-          if ((error as Error)?.name === "AbortError") { setState("idle"); return; }
-        }
-      }
-      const href = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      anchor.download = name;
-      anchor.click();
-      URL.revokeObjectURL(href);
-      flash("saved");
+      const done = await shareOrSave(blob, `the-read-${card.asOf}.png`,
+        { title: card.headline, url: window.location.origin });
+      if (done === "saved") flash("saved"); else setState("idle");
     } catch {
       flash("failed");
     }

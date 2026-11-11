@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { compactMoney } from "@/lib/format";
 import type { QuarterlyRead, ReadLine } from "@/lib/types";
+import { ShareEarningsRead } from "./ShareEarningsRead";
 
 /**
  * An earnings read: the latest filed quarter, in Market Desk's card.
@@ -126,6 +127,29 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
     : g.fcf > 0 ? "Cash generating"
     : `Burning${g.runway_q != null && g.runway_q < 40 ? ` · ${Math.max(1, Math.round(g.runway_q))}q runway` : ""}`;
 
+  // The four figures as data, so the card and its shared image print the
+  // same values and cannot drift apart.
+  const tiles: { label: string; value: string; chip?: string | null; tone?: 1 | 0 | -1 }[] = [
+    { label: "Revenue", value: money(g.revenue),
+      chip: g.rev_qoq == null && g.rev_yoy == null ? null
+        : `${pct(g.rev_qoq)} QoQ · ${pct(g.rev_yoy)} YoY`,
+      tone: g.rev_yoy == null ? 0 : g.rev_yoy >= 20 ? 1 : g.rev_yoy <= -5 ? -1 : 0 },
+    { label: "Gross margin", value: g.gm == null ? "—" : `${g.gm.toFixed(1)}%`,
+      chip: g.gm_pp == null ? null : `${g.gm_pp > 0 ? "+" : ""}${g.gm_pp.toFixed(1)} pts QoQ`,
+      tone: g.gm_pp == null ? 0 : g.gm_pp >= 1 ? 1 : g.gm_pp <= -1 ? -1 : 0 },
+    { label: "Net income", value: money(g.net_income),
+      chip: g.net_income == null ? null : g.net_income > 0 ? "Positive" : "Loss",
+      tone: g.net_income == null ? 0 : g.net_income > 0 ? 1 : -1 },
+    { label: "Free cash flow", value: money(g.fcf), chip: fcfChip,
+      tone: g.fcf == null ? 0 : g.fcf > 0 ? 1 : -1 },
+  ];
+  const balance = [
+    g.dilution != null ? `shares ${pct(g.dilution)} in a year` : null,
+    g.net_cash != null ? (g.net_cash >= 0 ? `net cash ${money(g.net_cash)}` : `net debt ${money(-g.net_cash)}`) : null,
+  ].filter(Boolean).join(" · ");
+  const deskLine = deskParts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" · ");
+  const reported = r.report_date ? `Reported ${day(r.report_date, { month: "short", day: "numeric" })} · ` : "";
+
   return (
     <article className="card stack read-card" style={{ gap: "var(--gap-md)" }}>
       {heading && (
@@ -160,18 +184,7 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
       </div>
 
       <div className="read-tiles">
-        <Tile label="Revenue" value={money(g.revenue)}
-              chip={g.rev_qoq == null && g.rev_yoy == null ? null
-                : `${pct(g.rev_qoq)} QoQ · ${pct(g.rev_yoy)} YoY`}
-              tone={g.rev_yoy == null ? 0 : g.rev_yoy >= 20 ? 1 : g.rev_yoy <= -5 ? -1 : 0} />
-        <Tile label="Gross margin" value={g.gm == null ? "—" : `${g.gm.toFixed(1)}%`}
-              chip={g.gm_pp == null ? null : `${g.gm_pp > 0 ? "+" : ""}${g.gm_pp.toFixed(1)} pts QoQ`}
-              tone={g.gm_pp == null ? 0 : g.gm_pp >= 1 ? 1 : g.gm_pp <= -1 ? -1 : 0} />
-        <Tile label="Net income" value={money(g.net_income)}
-              chip={g.net_income == null ? null : g.net_income > 0 ? "Positive" : "Loss"}
-              tone={g.net_income == null ? 0 : g.net_income > 0 ? 1 : -1} />
-        <Tile label="Free cash flow" value={money(g.fcf)} chip={fcfChip}
-              tone={g.fcf == null ? 0 : g.fcf > 0 ? 1 : -1} />
+        {tiles.map((tile) => <Tile key={tile.label} {...tile} />)}
       </div>
 
       <section className="stack" style={{ gap: "var(--gap-xs)" }}>
@@ -183,12 +196,7 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
         <Bars title="Revenue by quarter" values={r.bars.map((b) => b.revenue)} />
         <Bars title="Free cash flow" values={r.bars.map((b) => b.fcf)} />
         <Bars title="Net income" values={r.bars.map((b) => b.net_income)} />
-        <span className="caption dim">
-          {g.dilution != null && <>shares {pct(g.dilution)} in a year</>}
-          {g.dilution != null && g.net_cash != null && " · "}
-          {g.net_cash != null && (g.net_cash >= 0
-            ? <>net cash {money(g.net_cash)}</> : <>net debt {money(-g.net_cash)}</>)}
-        </span>
+        <span className="caption dim">{balance}</span>
       </div>
 
       {r.forensic.length > 0 && (
@@ -201,7 +209,7 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
       {deskParts.length > 0 && (
         <section className="stack" style={{ gap: 2 }}>
           <h3 className="read-h">The desk&rsquo;s own read</h3>
-          <p className="footnote muted" style={{ margin: 0 }}>{deskParts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" · ")}</p>
+          <p className="footnote muted" style={{ margin: 0 }}>{deskLine}</p>
         </section>
       )}
 
@@ -216,12 +224,39 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
         <div className="footnote muted">Key question: {r.verdict.question}</div>
         <div className="footnote">{r.test}</div>
       </div>
+
+      {symbol && (
+        <footer className="row" style={{ justifyContent: "flex-end" }}>
+          <ShareEarningsRead card={{
+            symbol, name: companyName(name ?? symbol),
+            dateline: `${reported}quarter ending ${quarter}`,
+            takeaway: r.takeaway,
+            frame: negatives === 0 ? "good" : negatives <= 2 ? "warn" : "bad",
+            tiles,
+            flags: r.flags.map((f) => ({ tone: f.tone, text: f.text })),
+            forensic: r.forensic.map((f) => ({ tone: f.tone, text: f.text })),
+            bars: [
+              { title: "Revenue by quarter", values: r.bars.map((b) => b.revenue) },
+              { title: "Free cash flow", values: r.bars.map((b) => b.fcf) },
+              { title: "Net income", values: r.bars.map((b) => b.net_income) },
+            ],
+            footnote: balance || null,
+            desk: deskLine || null,
+            growth: r.verdict.growth, proof: r.verdict.proof,
+            question: r.verdict.question, test: r.test,
+          }} />
+        </footer>
+      )}
     </article>
   );
 }
 
 /** On a stock's page, under "The business". */
-export function QuarterlyPanel({ q }: { q: QuarterlyRead | null | undefined }) {
+export function QuarterlyPanel({ q, symbol, name }: {
+  q: QuarterlyRead | null | undefined;
+  /** Named so the read can be shared from the stock's own page too. */
+  symbol?: string; name?: string;
+}) {
   if (!q) return null;
   return (
     <div className="stack" style={{ gap: "var(--gap-sm)" }}>
@@ -229,7 +264,7 @@ export function QuarterlyPanel({ q }: { q: QuarterlyRead | null | undefined }) {
         The latest quarter, read by fixed rules
         {q.report_date && <> · reported {day(q.report_date, { month: "short", day: "numeric" })}</>}
       </div>
-      <EarningsReadCard r={q} heading={false} />
+      <EarningsReadCard r={q} heading={false} symbol={symbol} name={name} />
       <p className="caption dim" style={{ margin: 0 }}>
         From the company&rsquo;s 10-Q and 10-K filings, by Market Desk&rsquo;s rules.
         Every line, the takeaway and the final read are fixed rules on the
