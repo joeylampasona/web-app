@@ -37,9 +37,9 @@ days = [D("2026-10-01") + dt.timedelta(days=i) for i in range(20)]
 SPLIT = days[10]
 
 
-def fill(symbol: str, before: float, after: float) -> None:
+def fill(symbol: str, before: float, after: float, step_at: int = 10) -> None:
     for i, d in enumerate(days):
-        px = before if i < 10 else after
+        px = before if i < step_at else after
         conn.execute("INSERT INTO bars VALUES (?,?,?,?,?,?,?)",
                      (symbol, d.isoformat(), px, px + 1, px - 1, px, 1000.0))
 
@@ -49,6 +49,13 @@ fill("DONE", 100.0, 102.0)       # 3-for-1, fetched after it: already right
 fill("REV", 2.0, 19.5)           # 1-for-10 reverse, unadjusted
 fill("SMALL", 100.0, 80.0)       # 5-for-4: too small to tell from a bad day
 fill("LATE", 300.0, 300.0)       # executes tomorrow: no bar after it yet
+# 3-for-1 listed for days[10], but the session before it was fetched after the
+# provider had applied it: the stored step is one session early. This is ITA.
+fill("EARLY", 300.0, 102.0, step_at=9)
+# The first version looked only at the listed date and recorded it as right.
+conn.execute("INSERT INTO splits_applied VALUES ('EARLY', ?, ?, 'already_adjusted', 0, 'then')",
+             (SPLIT.isoformat(), 1 / 3))
+conn.execute("INSERT INTO kv VALUES ('splits.checked_through', ?)", (days[-1].isoformat(),))
 
 
 class Fake:
@@ -60,6 +67,7 @@ class Fake:
             {"ticker": "SMALL", "execution_date": SPLIT.isoformat(), "split_from": 4, "split_to": 5},
             {"ticker": "LATE", "execution_date": "2026-10-25", "split_from": 1, "split_to": 2},
             {"ticker": "GONE", "execution_date": SPLIT.isoformat(), "split_from": 1, "split_to": 2},
+            {"ticker": "EARLY", "execution_date": SPLIT.isoformat(), "split_from": 1, "split_to": 3},
         ]}
 
 
@@ -69,7 +77,8 @@ def close(symbol: str, i: int) -> float:
 
 
 dry = splits.apply(conn, Fake(), days[-1], dry_run=True)
-check("a dry run reports the adjustment", [a["symbol"] for a in dry["adjusted"]], ["REV", "UNADJ"])
+check("a dry run reports the adjustments", [a["symbol"] for a in dry["adjusted"]],
+      ["EARLY", "REV", "UNADJ"])
 check("and changes nothing", close("UNADJ", 0), 300.0)
 
 out = splits.apply(conn, Fake(), days[-1])
@@ -81,9 +90,14 @@ check("bars already adjusted are left alone", close("DONE", 0), 100.0)
 check("a reverse split multiplies", close("REV", 0), 20.0)
 check("a split under 3-for-2 is not guessed at", close("SMALL", 0), 100.0)
 check("counts", (out["adjusted"] and len(out["adjusted"]), out["already_adjusted"],
-                 out["too_small"], out["pending"], out["no_bars"]), (2, 1, 1, 1, 1))
+                 out["too_small"], out["pending"], out["no_bars"]), (3, 1, 1, 1, 1))
+check("a step one session before the listed date is found", close("EARLY", 0), 100.0)
+check("the session already at the new price is untouched", close("EARLY", 9), 102.0)
+check("and its earlier 'already right' verdict is replaced", conn.execute(
+    "SELECT outcome FROM splits_applied WHERE symbol='EARLY'").fetchone()[0], "adjusted")
 again = splits.apply(conn, Fake(), days[-1])
-check("a second run adjusts nothing more", (len(again["adjusted"]), close("UNADJ", 0)), (0, 100.0))
+check("a second run adjusts nothing more",
+      (len(again["adjusted"]), close("UNADJ", 0), close("EARLY", 0)), (0, 100.0, 100.0))
 check("a split not settled yet is asked about again", again["pending"], 1)
 
 print()
