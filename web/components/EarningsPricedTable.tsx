@@ -61,7 +61,7 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
               {priced.upcoming.map((row) => (
                 <tr key={`${row.ticker}-${row.report_date}`}>
                   <td className="text mono">
-                    <Link href={`/stocks/${row.ticker}`}>{row.ticker}</Link>
+                    <Link href={`/stocks/${row.ticker}`} className="mono" style={{ fontWeight: 600 }}>{row.ticker}</Link>
                   </td>
                   <td className="text">
                     {day(row.report_date)} {row.hour && <span className="dim">{row.hour}</span>}
@@ -103,7 +103,7 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
                 {priced.settled.map((row) => (
                   <tr key={`${row.ticker}-${row.report_date}`}>
                     <td className="text mono">
-                      <Link href={`/stocks/${row.ticker}`}>{row.ticker}</Link>
+                      <Link href={`/stocks/${row.ticker}`} className="mono" style={{ fontWeight: 600 }}>{row.ticker}</Link>
                     </td>
                     <td className="text">{day(row.report_date)}</td>
                     <td className="num">{row.implied_pct == null ? "—" : `±${row.implied_pct.toFixed(1)}%`}</td>

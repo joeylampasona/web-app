@@ -956,3 +956,15 @@ table.data thead th {
 @media (max-width: 860px) { .edition-split { grid-template-columns: minmax(0, 1fr); } .edition-nav { align-self: flex-start; } }
 .tenths { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); border: 1px solid var(--rule); }
 .tenths > span { display: grid; place-items: center; height: 40px; font-size: 11px; font-weight: 600; }
+
+/* An earnings read names its company first. */
+.read-head { display: flex; flex-direction: column; gap: 6px; padding-bottom: var(--gap-sm);
+             border-bottom: 1px solid var(--border); }
+.read-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.read-ticker { font-family: var(--font-mono); font-weight: 600; font-size: 22px; line-height: 1.15;
+               letter-spacing: 0.02em; background: var(--brand); color: var(--on-brand); padding: 1px 9px; }
+.read-ticker:hover { background: var(--brand-hover); }
+.read-name { font-family: var(--font-display); font-weight: 700; font-size: 24px; line-height: 1.15;
+             color: var(--text-primary); }
+a.read-name:hover { text-decoration: underline; }
+@media (max-width: 560px) { .read-ticker { font-size: 19px; } .read-name { font-size: 21px; } }

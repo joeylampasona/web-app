@@ -22,7 +22,18 @@ function pct(v: number | null | undefined, digits = 1): string {
 }
 
 function money(v: number | null | undefined): string {
-  return v == null ? "—" : compactMoney(v);
+  if (v == null) return "—";
+  // The sign leads the currency: a loss reads −$55.7M, not $-55.7M.
+  return v < 0 ? `−${compactMoney(-v)}` : compactMoney(v);
+}
+
+/** The company as a reader would say it. Listings carry the security's legal
+ *  description ("Telos Corporation Common Stock", "... Class A Ordinary
+ *  Shares"), which is the share class, not the name. */
+function companyName(name: string): string {
+  const cut = name.replace(
+    /[,]?\s+(?:(?:Class|Series)\s+[A-Z]\s+)?(?:Common Stock|Common Shares|Ordinary Shares?|American Depositary (?:Shares?|Receipts?)|Depositary Shares?|Capital Stock)\b.*$/i, "");
+  return cut.trim() || name;
 }
 
 function day(iso: string, opts: Intl.DateTimeFormatOptions): string {
@@ -107,7 +118,10 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
     deskParts.push(`moved ${pct(d.realised_pct)} on the print`
       + (d.implied_pct ? ` against ±${d.implied_pct.toFixed(1)}% priced` : ""));
   }
-  if (d?.drift) deskParts.push(`${d.drift.replace("_", " ").toLowerCase()} drift signal since`);
+  // PEAD_UP / PEAD_DOWN: post-earnings drift, in the direction named.
+  if (d?.drift) {
+    deskParts.push(`flagged as drifting ${d.drift.toUpperCase().endsWith("DOWN") ? "down" : "up"} since the report`);
+  }
   const fcfChip = g.fcf == null ? null
     : g.fcf > 0 ? "Cash generating"
     : `Burning${g.runway_q != null && g.runway_q < 40 ? ` · ${Math.max(1, Math.round(g.runway_q))}q runway` : ""}`;
@@ -115,11 +129,23 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
   return (
     <article className="card stack read-card" style={{ gap: "var(--gap-md)" }}>
       {heading && (
-        <header className="eyebrow" style={{ color: "var(--text-secondary)" }}>
-          {symbol && <Link href={`/stocks/${symbol}`} className="mono">{symbol}</Link>}
-          {name && <span className="dim" style={{ textTransform: "none", letterSpacing: 0 }}> {name}</span>}
-          {r.report_date && <> · reported {day(r.report_date, { month: "short", day: "numeric" })}</>}
-          {" "}· quarter ending {quarter}
+        // The company is what a reader scans the page for, so it leads: the
+        // ticker under the highlighter, the name in the display face, and the
+        // dates as a line beneath. It used to be one small line of caps in
+        // which the ticker was the same size as "quarter ending".
+        <header className="read-head">
+          <div className="read-who">
+            {symbol && <Link href={`/stocks/${symbol}`} className="read-ticker">{symbol}</Link>}
+            {name && (
+              symbol
+                ? <Link href={`/stocks/${symbol}`} className="read-name">{companyName(name)}</Link>
+                : <span className="read-name">{companyName(name)}</span>
+            )}
+          </div>
+          <div className="kicker">
+            {r.report_date && <>Reported {day(r.report_date, { month: "short", day: "numeric" })} · </>}
+            quarter ending {quarter}
+          </div>
         </header>
       )}
       {r.covers === false && (
@@ -175,7 +201,7 @@ export function EarningsReadCard({ r, symbol, name, heading = true }: {
       {deskParts.length > 0 && (
         <section className="stack" style={{ gap: 2 }}>
           <h3 className="read-h">The desk&rsquo;s own read</h3>
-          <p className="footnote muted" style={{ margin: 0 }}>{deskParts.join(" · ")}</p>
+          <p className="footnote muted" style={{ margin: 0 }}>{deskParts.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" · ")}</p>
         </section>
       )}
 
