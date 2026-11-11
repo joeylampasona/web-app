@@ -279,6 +279,15 @@ ordinary day. A dry run on 2026-11-10 found 62 symbols to adjust, none of
 them in the ranked universe (funds and sub-$3 reverse splits). The radar's
 own guard, which sets a fund aside after a one-session move over 35%, stays.
 
+The first night it ran (2026-11-11) it adjusted those 62 and missed ITA. The
+provider lists ITA's split for 11-05, but the stored bars step between 11-03
+and 11-04: a night's bar is fetched after midnight, by which time a split
+executing that morning has already been applied, so the last session before
+a split is stored at the new price. The check now also looks one session
+before the listed date, and judges again every split the first rule called
+already right. A dry run found 92 more that way, ITA, SOXX, MTUM and QUAL
+among them, none in the ranked universe.
+
 ## The rest of the site set as the printed page (2026-11-11)
 
 The home page, stock passport and screen pages had the new look and the
