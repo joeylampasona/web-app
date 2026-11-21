@@ -832,22 +832,42 @@ def _stop_press(args, out, full_lists: list[dict], quotes: dict[str, dict]) -> N
     now = dt.datetime.now(dt.timezone.utc)
     local = now.astimezone(alertsmod.NEW_YORK)
     today = local.date()
-    posted: set[str] = set()
+    # {symbol: {"pivot": ..., "screen": ...}}: the level each name was posted
+    # against, so the close can be held up to the same one.
+    posted: dict[str, dict] = {}
+    settled = False
     state_path = getattr(args, "stop_press_state", None)
     if state_path:
         try:
             kept = json.loads(pathlib.Path(state_path).read_text())
             if kept.get("date") == today.isoformat():
-                posted = set(kept.get("posted") or [])
+                was = kept.get("posted") or {}
+                posted = dict(was) if isinstance(was, dict) else {s: {} for s in was}
+                settled = bool(kept.get("settled"))
         except (OSError, ValueError):
             pass
 
     def keep() -> None:
         (out / "stop_press.json").write_text(json.dumps(
-            {"date": today.isoformat(), "posted": sorted(posted)}))
+            {"date": today.isoformat(), "posted": posted, "settled": settled}))
 
     keep()
     if not alertsmod.in_session(now):
+        # After the bell, once: how the day's names stood. Twenty minutes
+        # past, because the quotes are that much behind and an earlier one is
+        # still a price from inside the session.
+        after = local.weekday() < 5 and local.time() >= dt.time(16, 20)
+        if after and posted and not settled:
+            message = discord.settled_message(posted, quotes, today,
+                                              local.strftime("%-I:%M %p"))
+            if message:
+                print(message)
+                if getattr(args, "send_stop_press", False) and discord.post(
+                        "stop_press", message, username="The Tape · stop press"):
+                    settled = True
+                    keep()
+                    print("  sent to Discord.")
+                return
         print("  outside the regular session; nothing posted.")
         return
     names = {row["symbol"]: row.get("name") or ""
@@ -856,7 +876,7 @@ def _stop_press(args, out, full_lists: list[dict], quotes: dict[str, dict]) -> N
              for row in stage if row.get("symbol")}
     levels = alertsmod.forming_levels(full_lists)
     events = alertsmod.detect(levels, quotes, list(levels))
-    rows = discord.crossings(events, quotes, names, session=today, already=posted)
+    rows = discord.crossings(events, quotes, names, session=today, already=set(posted))
     crossed = sum(1 for e in events if e.kind == "crossed")
     print(f"  {crossed} name(s) through a pivot, {len(rows)} new with volume behind them")
     if not rows:
@@ -866,7 +886,8 @@ def _stop_press(args, out, full_lists: list[dict], quotes: dict[str, dict]) -> N
     if not getattr(args, "send_stop_press", False):
         return
     if discord.post("stop_press", message, username="The Tape · stop press"):
-        posted.update(row["symbol"] for row in rows)
+        posted.update({row["symbol"]: {"pivot": row["pivot"], "screen": row["screen"]}
+                       for row in rows})
         keep()
         print("  sent to Discord.")
     else:
@@ -1100,6 +1121,11 @@ def cmd_edition(args) -> int:
         edition = None
 
     send = bool(getattr(args, "send", False))
+    if getattr(args, "extras_only", False):
+        # What follows the edition, without the edition: for trying those
+        # posts out on a night whose edition has already gone.
+        _edition_extras(out, meta, send=send)
+        return 0
     picture = False
     if edition and send and not getattr(args, "no_wait", False):
         picture = discord.site_has(meta["as_of"])
@@ -1116,6 +1142,7 @@ def cmd_edition(args) -> int:
     if ops:
         print("\n".join(ops))
     if not send:
+        _edition_extras(out, meta, send=False)
         return 0
 
     together = discord.same_room("edition", "ops")
@@ -1128,7 +1155,76 @@ def cmd_edition(args) -> int:
     if ops and not together:
         discord.post("ops", f"**{meta['as_of']}**\n" + "\n".join(ops))
     print("\nSent to Discord.")
+    _edition_extras(out, meta, send=True)
     return 0
+
+
+def _edition_extras(out, meta: dict, *, send: bool) -> None:
+    """What follows the edition: new names, the morning line, earnings reads.
+
+    Each is its own message and each may have nothing to say, in which case
+    it says nothing. A failure in one does not stop the others, and none of
+    them can fail the run: the edition has already gone out.
+    """
+    from publish import discord
+
+    def load(*parts: str) -> dict:
+        try:
+            return json.loads(out.joinpath(*parts).read_text())
+        except (OSError, ValueError):
+            return {}
+
+    as_of = dt.date.fromisoformat(meta["as_of"])
+    labels = {s["key"]: s["name"] for s in meta.get("screens") or []}
+    on_screen: dict[str, str] = {}
+    try:
+        setups, _ = _briefing_setups(out)
+        for row in setups:
+            if row.get("symbol"):
+                on_screen.setdefault(row["symbol"],
+                                     labels.get(row.get("screen"), row.get("screen") or "a screen"))
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  names on a screen unavailable: {type(exc).__name__}")
+
+    def say(room: str, what: str, content: str | None, **kw) -> bool:
+        if not content and not kw.get("embeds"):
+            print(f"\n  {what}: nothing to say tonight.")
+            return False
+        print(f"\n{content or ''}")
+        for embed in kw.get("embeds") or []:
+            print(f"  [card] {embed['title']}")
+        if not send:
+            return False
+        try:
+            return discord.post(room, content or "", **kw)
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  {what}: Discord refused the post ({type(exc).__name__})")
+            return False
+
+    say("edition", "new on a screen",
+        discord.new_on_screens(load("screens", "diff.json"), meta))
+    say("edition", "the morning line",
+        discord.morning_line(load("catalysts", "upcoming.json"),
+                             load("catalysts", "releases.json"), on_screen, as_of))
+
+    # Earnings reads, each company once. What has been posted is kept in the
+    # database, which the nightly carries from one night to the next.
+    posted: dict[str, str] = {}
+    conn = None
+    try:
+        conn = _conn()
+        posted = json.loads(store.get_kv(conn, "discord.earnings_posted", "{}") or "{}")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  earnings memory unavailable: {type(exc).__name__}")
+    rows = discord.reads_to_post(load("market", "earnings.json").get("reads") or [],
+                                 on_screen, as_of, posted)
+    sent = say("earnings", "earnings reads",
+               "**Earnings reads**: reported since the last edition" if rows else None,
+               embeds=[discord.read_embed(row, on_screen) for row in rows] or None,
+               username="The Tape · earnings")
+    if sent and conn is not None:
+        store.set_kv(conn, "discord.earnings_posted",
+                     json.dumps(discord.remember_reads(posted, rows, as_of)))
 
 
 def cmd_rooms(args) -> int:
@@ -1145,16 +1241,20 @@ def cmd_rooms(args) -> int:
                        "pivot on volume posts here, once a day for each name."),
         "ops": ("the operations room. Failure notices, sources that were short and "
                 "the draft for X post here."),
+        "earnings": ("the earnings room. The read on each company that has just "
+                     "reported posts here after the nightly."),
     }
+    only = getattr(args, "room", None)
     by_hook: dict[str, list[str]] = {}
     for room in purpose:
         own = bool(os.environ.get(discord.ROOMS[room], "").strip()
                    and os.environ.get(discord.ROOMS[room]) != os.environ.get(discord.FALLBACK))
         url = discord.hook(room)
         print(f"  {room:<11} {'its own webhook' if own else 'the shared webhook' if url else 'NOT SET'}")
-        if url:
+        if url and (not only or room == only):
             by_hook.setdefault(url, []).append(room)
-    print(f"  {len(by_hook)} distinct room(s)")
+    if not only:
+        print(f"  {len(by_hook)} distinct room(s)")
     if not getattr(args, "send", False):
         return 0
     failed = 0

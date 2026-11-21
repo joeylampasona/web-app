@@ -38,7 +38,7 @@ jobs:
           key: market-db-polygon-
           restore-keys: market-db-polygon-
       - name: Ask the sources what they return
-        if: inputs.only != 'discord'
+        if: ${{ !startsWith(inputs.only, 'discord') }}
         env:
           # The contact address SEC requires. The probe never prints it.
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
@@ -49,24 +49,33 @@ jobs:
 
 
       # The one part of this workflow that is not read-only, and it runs only
-      # when asked for by name: `only: discord`. It posts a one-line test to
+      # when asked for by name: `only: discord`, or `only: discord-extras` for
+      # just the posts that follow the edition. It posts a one-line test to
       # each Discord room, then this week's wrap and the last edition, from the
       # published tree,
       # so the rooms can be seen working without waiting for a nightly.
       - name: Try the Discord rooms
-        if: inputs.only == 'discord'
+        if: ${{ startsWith(inputs.only, 'discord') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_WEBHOOK_EDITION: ${{ secrets.DISCORD_WEBHOOK_EDITION }}
           DISCORD_WEBHOOK_STOP_PRESS: ${{ secrets.DISCORD_WEBHOOK_STOP_PRESS }}
           DISCORD_WEBHOOK_OPS: ${{ secrets.DISCORD_WEBHOOK_OPS }}
+          DISCORD_WEBHOOK_EARNINGS: ${{ secrets.DISCORD_WEBHOOK_EARNINGS }}
           SITE_URL: https://thetape.cc
+          ONLY: ${{ inputs.only }}
         run: |
           git clone -q --depth 1 --branch data --single-branch \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" out
           rm -rf out/.git
-          python -m cli rooms --send
-          python -m cli wrap --send
-          # Last, because it waits for the site to be able to draw the card.
-          python -m cli edition --send
+          if [ "$ONLY" = "discord-extras" ]; then
+            # Only what follows the edition, and the room it added.
+            python -m cli rooms --send --room earnings
+            python -m cli edition --send --extras-only
+          else
+            python -m cli rooms --send
+            python -m cli wrap --send
+            # Last, because it waits for the site to be able to draw the card.
+            python -m cli edition --send
+          fi

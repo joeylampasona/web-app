@@ -199,7 +199,9 @@ args = types.SimpleNamespace(stop_press_state=str(state), send_stop_press=True)
 commands._stop_press(args, out, screens, quotes)
 kept = json.loads((out / "stop_press.json").read_text())
 check("only the new name is posted", ("`AAA`" in posted[0], "`EEE`" in posted[0]), (True, False))
-check("and both are remembered for the day", kept, {"date": "2026-11-23", "posted": ["AAA", "EEE"]})
+check("and both are remembered for the day, the new one with its level", kept,
+      {"date": "2026-11-23", "settled": False,
+       "posted": {"EEE": {}, "AAA": {"pivot": 100.0, "screen": "VCP"}}})
 state.write_text(json.dumps({"date": "2026-11-20", "posted": ["AAA", "EEE"]}))
 posted.clear()
 commands._stop_press(args, out, screens, quotes)
@@ -210,8 +212,97 @@ args.send_stop_press = False
 (out / "stop_press.json").unlink()
 commands._stop_press(args, out, screens, quotes)
 check("a dry run posts nothing and marks nothing",
-      (posted, json.loads((out / "stop_press.json").read_text())["posted"]), ([], []))
+      (posted, json.loads((out / "stop_press.json").read_text())["posted"]), ([], {}))
 commands.dt = dt
+
+# After the bell the day's names are held up to the levels they were posted at.
+state.write_text(json.dumps({"date": day.isoformat(), "settled": False, "posted": {
+    "AAA": {"pivot": 100.0, "screen": "VCP"}, "EEE": {"pivot": 30.0, "screen": "VCP"}}}))
+alerts.in_session = lambda now: False
+
+
+class AfterTheBell(dt.datetime):
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 11, 23, 21, 25, tzinfo=dt.timezone.utc)      # 4:25pm New York
+
+
+commands.dt = types.SimpleNamespace(datetime=AfterTheBell, timezone=dt.timezone,
+                                    date=dt.date, time=dt.time)
+closing = {"AAA": {"last": 99.0, "at": "2026-11-23T16:00:01"},
+           "EEE": {"last": 31.2, "at": "2026-11-23T16:00:02"}}
+posted.clear()
+args.send_stop_press = True
+commands._stop_press(args, out, screens, closing)
+check("after the bell the day's names are settled, held first", posted[0].splitlines()[:3],
+      ["**Stop press, settled**: Monday's 2 names after the bell",
+       "Held above the pivot (1): `EEE` +4.0% against 30.00",
+       "Fell back under it (1): `AAA` -1.0% against 100.00"])
+kept = json.loads((out / "stop_press.json").read_text())
+check("and that is remembered", kept["settled"], True)
+state.write_text(json.dumps(kept))
+posted.clear()
+commands._stop_press(args, out, screens, closing)
+check("so it is said once", posted, [])
+commands.dt = dt
+
+# ------------------------------------------------- what follows the edition
+diff = {"screens": {"vcp": {"newly_forming": ["AAA", "BBB"]}, "flat_base": {"newly_forming": []}}}
+labels = {"screens": [{"key": "vcp", "name": "VCP"}, {"key": "flat_base", "name": "Flat base"}]}
+check("new names are listed under their screen",
+      discord.new_on_screens(diff, labels).splitlines()[:2],
+      ["**New on a screen**: started forming a base last night", "  VCP: `AAA`, `BBB`"])
+check("a night with none says nothing",
+      discord.new_on_screens({"screens": {"vcp": {"newly_forming": []}}}, labels), None)
+
+friday = dt.date(2026, 11, 20)
+check("the session after a Friday is Monday", discord.next_session(friday), dt.date(2026, 11, 23))
+upcoming = {"events": [
+    {"ticker": "AAA", "type": "earnings", "date": "2026-11-23", "readthrough": None},
+    {"ticker": "ZZZ", "type": "earnings", "date": "2026-11-23", "readthrough": None},
+    {"ticker": "BBB", "type": "earnings", "date": "2026-11-23", "readthrough": {"from": "AAA"}},
+    {"ticker": "CCC", "type": "earnings", "date": "2026-11-24", "readthrough": None},
+    {"ticker": "DDD", "type": "dividend_ex_date", "date": "2026-11-23", "readthrough": None}]}
+releases = {"releases": [{"date": "2026-11-23", "name": "Gross Domestic Product", "notable": True},
+                         {"date": "2026-11-23", "name": "Minor Table", "notable": False}],
+            "fomc": {"meetings": [{"date": "2026-11-23", "label": "FOMC decision"}]}}
+line = discord.morning_line(upcoming, releases, {"AAA": "VCP", "BBB": "VCP"}, friday).splitlines()
+check("the morning line is for the next session", line[0], "**The morning line**: Monday 11/23")
+check("it names who on a screen reports, not a peer's read-through", line[1],
+      "Reporting, and on a screen: `AAA` (VCP)")
+check("and counts the rest", line[2], "1 more in the universe report the same day.")
+check("then the data due, the Fed first", line[3],
+      "Data due: FOMC decision; Gross Domestic Product")
+check("a morning with nothing on a screen and no data says nothing",
+      discord.morning_line({"events": upcoming["events"][1:2]}, {}, {}, friday), None)
+
+reads = [{"symbol": "OLD", "report_date": "2026-11-10"},
+         {"symbol": "WSM", "report_date": "2026-11-19", "name": "Williams-Sonoma, Inc.",
+          "takeaway": "Profitable; the question is growth.",
+          "flags": [{"text": "Revenue +6.7% year over year"}],
+          "verdict": {"growth": "FLAT", "proof": "SHOWN", "question": "Can it hold?"},
+          "test": "The next test is whether the quarter repeats."},
+         {"symbol": "WMT", "report_date": "2026-11-19", "name": "Walmart Inc. Common Stock"},
+         {"symbol": "ROST", "report_date": "2026-11-20", "name": "Ross Stores Inc"}]
+rows = discord.reads_to_post(reads, {"WMT": "Flat base"}, friday, {"ROST": "2026-11-20"})
+check("reads: recent, not posted before, a name on a screen first",
+      [r["symbol"] for r in rows], ["WMT", "WSM"])
+embed = discord.read_embed(reads[1], {})
+check("a read's card leads with the company and the takeaway", embed["title"],
+      "WSM Williams-Sonoma: Profitable; the question is growth.")
+check("then the figures, the verdict and the question", embed["description"].splitlines(),
+      ["• Revenue +6.7% year over year", "Growth flat, proof shown.", "Can it hold?",
+       "The next test is whether the quarter repeats."])
+check("a share class is not part of a company's name",
+      (discord.company_name("Walmart Inc. Common Stock"),
+       discord.company_name("Warner Music Group Corp. Class A Common Stock")),
+      ("Walmart Inc.", "Warner Music Group Corp."))
+check("and the card says when it reported and what screen it is on",
+      discord.read_embed(reads[2], {"WMT": "Flat base"})["footer"]["text"],
+      "Reported 11/19 · on Flat base")
+memory = discord.remember_reads({"ANC": "2026-09-01", "ROST": "2026-11-20"}, rows, friday)
+check("what was posted is remembered, and the old forgotten", memory,
+      {"ROST": "2026-11-20", "WMT": "2026-11-19", "WSM": "2026-11-19"})
 
 # -------------------------------------------------------------- the wrap
 follow = {"screens": {

@@ -415,3 +415,23 @@ beyond the free sample may be posted there.
   still sit above their pivot. It reads the published tree only.
 - **Cards are drawn by the server** so a link pasted anywhere unfurls into its
   card, and the same image serves the Discord post.
+
+## Four more things said in Discord (2026-11-21)
+
+- **A fourth room for earnings** (`DISCORD_WEBHOOK_EARNINGS`). After the
+  nightly, the read on each company that reported in the last few days, as a
+  card: the takeaway, the figures, the verdict and the question. Six a night
+  at most, names on a screen first, each company once: what has been posted
+  is kept in the database, which the nightly carries from night to night.
+- **New on a screen** follows the edition: the names that started forming a
+  base last night, by screen, from the nightly's own diff. Silent on a night
+  with none.
+- **The morning line** follows it too, posted by the nightly so it is there
+  before anybody is awake and does not depend on a morning schedule firing:
+  who on a screen reports next session, how many others do, and the notable
+  data due. Silent when there is neither. It does not know market holidays.
+- **Stop press, settled.** The first quotes run at least twenty minutes after
+  the bell holds each of the day's stop press names up to the level it was
+  posted against: held above, or fell back under. Once a day. The stop press
+  note on the quotes branch now keeps that level beside each name. The hourly
+  backstop for the quotes job gained a 4:41pm New York firing for it.

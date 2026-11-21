@@ -69,11 +69,15 @@ def main(argv: list[str] | None = None) -> int:
     p_edition.add_argument("--send", action="store_true", help="post it")
     p_edition.add_argument("--no-wait", dest="no_wait", action="store_true",
                            help="do not wait for the site to be rebuilt; no picture")
+    p_edition.add_argument("--extras-only", dest="extras_only", action="store_true",
+                           help="only what follows the edition: new names, the "
+                                "morning line, earnings reads")
     p_edition.add_argument("--behind", type=int, default=0,
                            help="sessions the data is behind, to say so in the post")
     p_rooms = sub.add_parser("rooms", help="which Discord rooms are wired")
     p_rooms.add_argument("--send", action="store_true",
                          help="post a one-line test to each room")
+    p_rooms.add_argument("--room", help="only this room (edition, stop_press, ops, earnings)")
     p_wrap = sub.add_parser("wrap", help="the week's wrap for Discord")
     p_wrap.add_argument("--send", action="store_true", help="post it")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")

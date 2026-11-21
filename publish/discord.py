@@ -1,9 +1,11 @@
 """What goes to Discord, and to which room.
 
-Three rooms, because three different readers were sharing one. The edition
-is for anybody: tonight's read as a picture, the counts under it. Stop press
-is the session: a name through its pivot on volume, once. Operations is for
-whoever runs this: what failed, which source was short, the draft for X.
+Four rooms, because four different readers were sharing one. The edition is
+for anybody: tonight's read as a picture, the counts under it, what is new on
+a screen and what the morning holds. Stop press is the session: a name
+through its pivot on volume, once, and how those names closed. Earnings is
+the read on each company that has just reported. Operations is for whoever
+runs this: what failed, which source was short, the draft for X.
 
 Each room is a webhook of its own, and each falls back to the original single
 webhook when it has not been given one, so the split costs nothing until the
@@ -15,6 +17,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import statistics
 import time
 import urllib.error
@@ -27,6 +30,7 @@ ROOMS = {
     "edition": "DISCORD_WEBHOOK_EDITION",
     "stop_press": "DISCORD_WEBHOOK_STOP_PRESS",
     "ops": "DISCORD_WEBHOOK_OPS",
+    "earnings": "DISCORD_WEBHOOK_EARNINGS",
 }
 # Discord's edge refuses the default Python-urllib agent with a 403.
 AGENT = "base-and-breakout-nightly/1.0"
@@ -170,6 +174,141 @@ def ops_lines(meta: dict) -> list[str]:
     return lines
 
 
+# -------------------------------------------------- new on a screen
+
+NAMES_A_SCREEN = 14
+
+
+def new_on_screens(diff: dict, meta: dict) -> str | None:
+    """The names that started forming last night, by screen. None if none."""
+    labels = {s["key"]: s["name"] for s in meta.get("screens") or []}
+    lines: list[str] = []
+    for key, row in (diff.get("screens") or {}).items():
+        fresh = list(row.get("newly_forming") or [])
+        if not fresh:
+            continue
+        shown = ", ".join(f"`{symbol}`" for symbol in fresh[:NAMES_A_SCREEN])
+        more = f" and {len(fresh) - NAMES_A_SCREEN} more" if len(fresh) > NAMES_A_SCREEN else ""
+        lines.append(f"  {labels.get(key, key)}: {shown}{more}")
+    if not lines:
+        return None
+    return "\n".join(["**New on a screen**: started forming a base last night"]
+                     + lines + [f"<{site()}/screens>"])
+
+
+# ------------------------------------------------------ the morning line
+
+def next_session(day: dt.date) -> dt.date:
+    """The next weekday. Market holidays are not known here, so on one the
+    line is for a day that does not trade, and says a date either way."""
+    nxt = day + dt.timedelta(days=1)
+    while nxt.weekday() >= 5:
+        nxt += dt.timedelta(days=1)
+    return nxt
+
+
+def morning_line(upcoming: dict, releases: dict, on_screen: dict[str, str],
+                 as_of: dt.date, most: int = 18) -> str | None:
+    """Who on a screen reports next session, and what data is due. None when
+    there is neither: a line that says nothing every morning gets muted."""
+    day = next_session(as_of)
+    stamp = day.isoformat()
+    reporting = sorted({e["ticker"] for e in upcoming.get("events") or []
+                        if e.get("type") == "earnings" and e.get("date") == stamp
+                        and not e.get("readthrough")})
+    ours = [s for s in reporting if s in on_screen]
+    due = [r["name"] for r in releases.get("releases") or []
+           if r.get("date") == stamp and r.get("notable")]
+    fomc = [m.get("label", "FOMC decision")
+            for m in (releases.get("fomc") or {}).get("meetings") or []
+            if m.get("date") == stamp]
+    if not ours and not due and not fomc:
+        return None
+
+    lines = [f"**The morning line**: {day.strftime('%A')} {day.month}/{day.day}"]
+    if ours:
+        shown = ", ".join(f"`{s}` ({on_screen[s]})" for s in ours[:most])
+        more = f" and {len(ours) - most} more" if len(ours) > most else ""
+        lines.append(f"Reporting, and on a screen: {shown}{more}")
+    if reporting:
+        others = len(reporting) - len(ours)
+        if ours and others:
+            lines.append(f"{others:,} more in the universe report the same day.")
+        elif not ours:
+            lines.append(f"{len(reporting):,} in the universe report; none of them "
+                         f"is on a screen.")
+    if fomc or due:
+        lines.append("Data due: " + "; ".join(fomc + due[:8]))
+    lines.append(f"<{site()}/market/calendar>")
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------- earnings reads
+
+READS_A_NIGHT = 6
+READ_WINDOW_DAYS = 5
+READ_MEMORY_DAYS = 45
+
+
+def reads_to_post(reads: list[dict], on_screen: dict[str, str], as_of: dt.date,
+                  posted: dict[str, str]) -> list[dict]:
+    """Tonight's reads for the earnings room: reported in the last few days
+    and not posted before, names on a screen first."""
+    cutoff = (as_of - dt.timedelta(days=READ_WINDOW_DAYS)).isoformat()
+    fresh = [r for r in reads
+             if r.get("symbol") and str(r.get("report_date") or "") >= cutoff
+             and posted.get(r["symbol"]) != r.get("report_date")]
+    # Newest report first, then whether it is on a screen. Stable, so the
+    # file's own order decides the rest.
+    fresh.sort(key=lambda r: r["report_date"], reverse=True)
+    fresh.sort(key=lambda r: r["symbol"] not in on_screen)
+    return fresh[:READS_A_NIGHT]
+
+
+_SHARE_CLASS = re.compile(
+    r"[\s,]+(Class [A-Z]\s+)?(Common Stock|Common Shares|Ordinary Shares|"
+    r"American Depositary Shares.*)$", re.IGNORECASE)
+
+
+def company_name(listed: str) -> str:
+    """A company's name without the description of its share class."""
+    return _SHARE_CLASS.sub("", listed.split(", Inc")[0] if listed.endswith(", Inc.") else listed).strip()
+
+
+def read_embed(read: dict, on_screen: dict[str, str]) -> dict:
+    """One company's read as a card: the takeaway, the figures, the question."""
+    symbol = read["symbol"]
+    lines = [f"• {flag['text']}" for flag in (read.get("flags") or [])[:5]
+             if flag.get("text")]
+    verdict = read.get("verdict") or {}
+    if verdict.get("growth") or verdict.get("proof"):
+        lines.append(f"Growth {str(verdict.get('growth', '?')).lower()}, "
+                     f"proof {str(verdict.get('proof', '?')).lower()}.")
+    if verdict.get("question"):
+        lines.append(verdict["question"])
+    if read.get("test"):
+        lines.append(read["test"])
+    reported = dt.date.fromisoformat(read["report_date"])
+    foot = f"Reported {reported.month}/{reported.day}"
+    if symbol in on_screen:
+        foot += f" · on {on_screen[symbol]}"
+    name = company_name(str(read.get("name") or ""))
+    return {
+        "title": (f"{symbol} {name}: {read.get('takeaway') or 'the read'}")[:250],
+        "url": f"{site()}/stocks/{symbol}",
+        "description": "\n".join(lines)[:1500],
+        "footer": {"text": foot},
+    }
+
+
+def remember_reads(posted: dict[str, str], rows: list[dict], as_of: dt.date) -> dict[str, str]:
+    """The note of what has been posted, with tonight's added and the old dropped."""
+    cutoff = (as_of - dt.timedelta(days=READ_MEMORY_DAYS)).isoformat()
+    kept = {symbol: day for symbol, day in posted.items() if str(day) >= cutoff}
+    kept.update({row["symbol"]: row["report_date"] for row in rows})
+    return kept
+
+
 # ------------------------------------------------------------ stop press
 
 def volume_pace(quote: dict) -> float | None:
@@ -231,6 +370,35 @@ def stop_press_message(rows: list[dict], read_at: str) -> str:
     return "\n".join(lines)
 
 
+def settled_message(posted: dict[str, dict], quotes: dict[str, dict],
+                    day: dt.date, read_at: str) -> str | None:
+    """How the day's stop press names stood after the bell. None with no
+    price for any of them."""
+    held, fell = [], []
+    for symbol, row in sorted(posted.items()):
+        quote = quotes.get(symbol) or {}
+        last, pivot = quote.get("last"), row.get("pivot")
+        if not last or not pivot or not str(quote.get("at") or "").startswith(day.isoformat()):
+            continue
+        gap = 100.0 * (last / pivot - 1.0)
+        text = f"`{symbol}` {gap:+.1f}% against {pivot:,.2f}"
+        (held if last >= pivot else fell).append((gap, text))
+    if not held and not fell:
+        return None
+    total = len(held) + len(fell)
+    lines = [f"**Stop press, settled**: {day.strftime('%A')}'s {total} "
+             f"name{'s' if total != 1 else ''} after the bell"]
+    if held:
+        lines.append(f"Held above the pivot ({len(held)}): "
+                     + ", ".join(text for _, text in sorted(held, reverse=True)))
+    if fell:
+        lines.append(f"Fell back under it ({len(fell)}): "
+                     + ", ".join(text for _, text in sorted(fell)))
+    lines.append(f"_Delayed prices read {read_at} ET. Tonight's run has the "
+                 f"settled closes._")
+    return "\n".join(lines)
+
+
 # -------------------------------------------------------- the week's wrap
 
 def week_of(day: dt.date) -> tuple[dt.date, dt.date]:
@@ -283,7 +451,9 @@ def wrap_message(follow: dict, editions: dict, as_of: dt.date) -> str | None:
             day = dt.date.fromisoformat(r["breakout_date"]).strftime("%a")
             return f"`{r['symbol']}` {r['now_pct']:+.1f}% ({r['screen']}, {day})"
 
-        lines.append("Furthest above: " + ", ".join(line(r) for r in ranked[:3]))
+        # Not "furthest above" in a week when nothing is above.
+        best = "Furthest above" if ranked[0]["now_pct"] > 0 else "Holding up best"
+        lines.append(f"{best}: " + ", ".join(line(r) for r in ranked[:3]))
         below = [line(r) for r in ranked[-3:][::-1] if r["now_pct"] < 0]
         if len(ranked) > 3 and below:
             lines.append("Furthest below: " + ", ".join(below))
