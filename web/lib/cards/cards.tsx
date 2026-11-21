@@ -112,7 +112,7 @@ export function screenCard(key: string): FigureCard | null {
 // ---------------------------------------------------------------- breakouts
 export function breakoutsCard(): FigureCard | null {
   const meta = getMeta();
-  const latest = getBreakoutDates().slice(-1)[0];
+  const latest = getBreakoutDates()[0];
   const file = latest ? getBreakouts(latest) : null;
   if (!meta?.as_of) return null;
   const count = file?.count ?? 0;

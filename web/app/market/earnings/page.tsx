@@ -4,6 +4,16 @@ import { EarningsPricedTable } from "@/components/EarningsPricedTable";
 import { EarningsReads } from "@/components/EarningsReads";
 import { MarketCTA } from "@/components/MarketCTA";
 import { getEarnings, getMeta, hasData } from "@/lib/data";
+import { cardMetadata } from "@/lib/cards/metadata";
+
+export function generateMetadata() {
+  return cardMetadata({
+    title: "Earnings",
+    description: "What each reported quarter's numbers say, and what the stock did next.",
+    card: "/share/earnings.png",
+    version: getMeta()?.as_of,
+  });
+}
 
 export default function EarningsPage() {
   if (!hasData()) return <NoData />;

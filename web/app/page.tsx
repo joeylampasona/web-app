@@ -23,6 +23,7 @@ import { ScreensScale } from "@/components/ScreensScale";
 import { StrengthMatrix } from "@/components/StrengthMatrix";
 import { WeekAhead } from "@/components/WeekAhead";
 import { SITE_NAME } from "@/lib/copy";
+import { cardMetadata } from "@/lib/cards/metadata";
 
 /**
  * Home.
@@ -37,11 +38,16 @@ import { SITE_NAME } from "@/lib/copy";
  * on this page asked the pipeline for anything new.
  */
 
-export const metadata = {
-  title: `${SITE_NAME} — today`,
-  description:
-    "Whether the tape is paying for breakouts, what cleared a pivot, and what is dated in the week ahead.",
-};
+// A pasted link to the front page shows tonight's read, not the banner.
+export function generateMetadata() {
+  return cardMetadata({
+    title: `${SITE_NAME} — today`,
+    description:
+      "Whether the tape is paying for breakouts, what cleared a pivot, and what is dated in the week ahead.",
+    card: "/share/read.png",
+    version: getMeta()?.as_of,
+  });
+}
 
 export default function Home() {
   if (!hasData()) return <NoData />;

@@ -2,6 +2,18 @@ import { CalendarPanel, type CalendarNames } from "@/components/CalendarPanel";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import { getMeta, getReleases, getSearchIndex, getUpcoming, hasData } from "@/lib/data";
+import { calendarCard } from "@/lib/cards/cards";
+import { cardMetadata } from "@/lib/cards/metadata";
+import { PageShare } from "@/lib/cards/share";
+
+export function generateMetadata() {
+  return cardMetadata({
+    title: "The calendar",
+    description: "Earnings, ex-dividend dates and splits for the names this site follows.",
+    card: "/share/calendar.png",
+    version: getMeta()?.as_of,
+  });
+}
 
 export default function CalendarPage() {
   if (!hasData()) return <NoData />;
@@ -22,6 +34,7 @@ export default function CalendarPage() {
       <DataBanner meta={getMeta()} />
       <div className="eyebrow">Market · what is dated</div>
       <h1>The calendar</h1>
+      <PageShare card={calendarCard()} image="/share/calendar.png" title="The calendar" />
       <p className="muted footnote">
         Earnings, ex-dividend dates and splits for the names this site follows,
         plus the economic data releases scheduled for the same days. A week at

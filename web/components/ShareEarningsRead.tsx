@@ -1,8 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { postText } from "@/lib/share";
 import { shareOrSave } from "@/lib/shareBlob";
 import { renderEarningsImage, type EarningsCard } from "@/lib/shareEarnings";
+import { CopyTextButton } from "./CopyTextButton";
+
+/** The read as a post: the company, the takeaway, the four figures. */
+export function earningsText(card: EarningsCard): string {
+  return postText([
+    `${card.name} (${card.symbol}) · ${card.dateline}`,
+    card.takeaway,
+    card.tiles.slice(0, 4)
+      .map((tile) => `${tile.label} ${tile.value}${tile.chip ? ` (${tile.chip})` : ""}`)
+      .join(" · "),
+  ], `/stocks/${card.symbol}`);
+}
 
 /** One tap: this earnings read as an image, shared or saved. */
 export function ShareEarningsRead({ card }: { card: EarningsCard }) {
@@ -26,11 +39,14 @@ export function ShareEarningsRead({ card }: { card: EarningsCard }) {
     }
   };
   return (
-    <button type="button" className="control footnote" onClick={onClick}
-            disabled={state === "working"} data-share-earnings={card.symbol}
-            style={{ minHeight: 36, padding: "0 var(--pad-md)" }}>
-      {state === "working" ? "Drawing…" : state === "saved" ? "Image saved"
-        : state === "failed" ? "Could not draw it" : "Share this read"}
-    </button>
+    <>
+      <CopyTextButton text={() => earningsText(card)} />
+      <button type="button" className="control footnote" onClick={onClick}
+              disabled={state === "working"} data-share-earnings={card.symbol}
+              style={{ minHeight: 36, padding: "0 var(--pad-md)" }}>
+        {state === "working" ? "Drawing…" : state === "saved" ? "Image saved"
+          : state === "failed" ? "Could not draw it" : "Share this read"}
+      </button>
+    </>
   );
 }

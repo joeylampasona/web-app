@@ -1,12 +1,18 @@
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { FollowThroughPanel } from "@/components/FollowThroughPanel";
 import { getFollowThrough, getMeta, hasData } from "@/lib/data";
-import { SITE_NAME } from "@/lib/copy";
+import { followCard } from "@/lib/cards/cards";
+import { cardMetadata } from "@/lib/cards/metadata";
+import { PageShare } from "@/lib/cards/share";
 
-export const metadata = {
-  title: `Did it work? — ${SITE_NAME}`,
-  description: "What happened to the breakouts each screen showed.",
-};
+export function generateMetadata() {
+  return cardMetadata({
+    title: "Did it work?",
+    description: "What happened to the breakouts each screen showed.",
+    card: "/share/followthrough.png",
+    version: getMeta()?.as_of,
+  });
+}
 
 export default function FollowThroughPage() {
   if (!hasData()) return <NoData />;
@@ -17,6 +23,7 @@ export default function FollowThroughPage() {
       <DataBanner meta={getMeta()} />
       <div className="eyebrow">Market · follow-through</div>
       <h1 style={{ marginBottom: "var(--gap-sm)" }}>Did it work?</h1>
+      <PageShare card={followCard()} image="/share/followthrough.png" title="Did it work?" />
       {file ? (
         <FollowThroughPanel file={file} />
       ) : (

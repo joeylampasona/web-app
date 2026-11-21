@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { postText } from "@/lib/share";
 import { renderShareImage, type ShareRow } from "@/lib/shareImage";
+import { CopyTextButton } from "./CopyTextButton";
 
 /**
  * Shares a rendered PNG of the card — chart, metric rows and disclaimer — where
@@ -77,11 +79,25 @@ export function ShareButton({
     : state === "saved" ? "Image saved"
     : "Share";
 
+  // The card as a post: the name and price, where it stands, the rows.
+  const asText = () => {
+    const move = changePct == null ? ""
+      : ` ${changePct >= 0 ? "+" : "−"}${Math.abs(changePct).toFixed(2)}%`;
+    return postText([
+      `${name} (${symbol}) $${close.toFixed(2)}${move}`,
+      text.replace(`${symbol} — `, ""),
+      rows.slice(0, 4).map((row) => `${row.label} ${row.value}`).join(" · "),
+    ], `/stocks/${symbol}`);
+  };
+
   return (
-    <button type="button" className="control footnote" onClick={onClick}
-            disabled={state === "working"}
-            style={{ minHeight: 36, padding: "0 var(--pad-md)" }}>
-      {label}
-    </button>
+    <span className="row" style={{ gap: "var(--gap-xs)", flexWrap: "wrap" }}>
+      <button type="button" className="control footnote" onClick={onClick}
+              disabled={state === "working"}
+              style={{ minHeight: 36, padding: "0 var(--pad-md)" }}>
+        {label}
+      </button>
+      <CopyTextButton text={asText} />
+    </span>
   );
 }

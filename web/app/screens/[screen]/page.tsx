@@ -7,9 +7,24 @@ import { RS_NOTE } from "@/lib/copy";
 import { longDate } from "@/lib/format";
 import { screenClass } from "@/lib/screenColour";
 import { EAGER_CHARTS, SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, hasData } from "@/lib/data";
+import { screenCard } from "@/lib/cards/cards";
+import { cardMetadata } from "@/lib/cards/metadata";
+import { PageShare } from "@/lib/cards/share";
 
 export function generateStaticParams() {
   return SCREEN_KEYS.map((screen) => ({ screen }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ screen: string }> }) {
+  const { screen } = await params;
+  const file = getScreen(screen);
+  if (!file) return {};
+  return cardMetadata({
+    title: file.name,
+    description: file.description,
+    card: `/share/screen/${screen}.png`,
+    version: file.as_of,
+  });
 }
 
 export default async function ScreenPage({
@@ -43,6 +58,8 @@ export default async function ScreenPage({
           <div className="caption dim">
             {meta?.market_wide_breakouts ?? 0} names broke out market-wide on this session.
           </div>
+          <PageShare card={screenCard(screen)} image={`/share/screen/${screen}.png`}
+                     title={file.name} />
         </div>
         <figure className={`screen-figure ${screenClass(screen)}`}>
           <ScreenGlyph href={`/screens/${screen}`} size={132} />

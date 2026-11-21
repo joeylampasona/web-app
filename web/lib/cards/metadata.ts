@@ -21,7 +21,7 @@ export function cardMetadata({ title, description, card, version }: {
   version?: string | null;
 }): Metadata {
   const image = version ? `${card}?v=${version}` : card;
-  const full = title === SITE_NAME ? title : `${title} — ${SITE_NAME}`;
+  const full = title.includes(SITE_NAME) ? title : `${title} — ${SITE_NAME}`;
   return {
     title: full,
     description,
