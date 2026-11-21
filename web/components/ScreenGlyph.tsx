@@ -402,6 +402,13 @@ export function ScreenGlyph({ href, size }: { href: string; size?: number }) {
   return <Frame label={glyph.label} size={size}>{glyph.art}</Frame>;
 }
 
+/** The bare drawing, without its frame, for a renderer that sets its own:
+ *  the share card draws on a server, where there is no text colour to
+ *  inherit and no stylesheet to resolve a variable against. */
+export function glyphArt(href: string): React.ReactNode | null {
+  return GLYPHS[href]?.art ?? null;
+}
+
 /** What a destination's glyph depicts, in words, for a caption under it. */
 export function glyphLabel(href: string): string | null {
   return GLYPHS[href]?.label ?? null;

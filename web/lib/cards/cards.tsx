@@ -1,5 +1,7 @@
 import "server-only";
-import { ScreenGlyph, glyphLabel } from "@/components/ScreenGlyph";
+import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from "react";
+import { glyphArt, glyphLabel } from "@/components/ScreenGlyph";
+import { paperToken } from "@/lib/ogTokens";
 import {
   getBarcode, getBreadth, getBreakoutDates, getBreakouts, getEarnings, getEdition,
   getFollowThrough, getIndexes, getMeta, getRadar, getScreen, getUpcoming,
@@ -84,6 +86,39 @@ export function editionCard(date: string): FigureCard | null {
 }
 
 // ---------------------------------------------------------------- a screen
+/**
+ * A screen's glyph, redrawn for the card.
+ *
+ * The page's glyph inherits the text colour and wraps its shapes in a
+ * fragment; the image renderer does neither. So the shapes are lifted out and
+ * every inherited or variable colour is written in as the ink it stands for.
+ */
+function Glyph({ href, size }: { href: string; size: number }) {
+  const art = glyphArt(href);
+  if (!isValidElement(art)) return null;
+  const ink = paperToken("text-primary");
+  const fix = (value: unknown) =>
+    value === "currentColor" ? ink
+      : typeof value === "string" && value.startsWith("var(") ? paperToken("surface-1")
+        : value;
+  const shapes = Children.toArray((art.props as { children?: ReactNode }).children)
+    .filter(isValidElement)
+    .map((shape, i) => {
+      const props = (shape as ReactElement<Record<string, unknown>>).props;
+      return cloneElement(shape as ReactElement<Record<string, unknown>>, {
+        key: i,
+        ...(props.fill !== undefined ? { fill: fix(props.fill) } : {}),
+        ...(props.stroke !== undefined ? { stroke: fix(props.stroke) } : {}),
+      });
+    });
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={ink}
+         strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round">
+      {shapes}
+    </svg>
+  );
+}
+
 export function screenCard(key: string): FigureCard | null {
   const screen = getScreen(key);
   if (!screen) return null;
@@ -101,10 +136,10 @@ export function screenCard(key: string): FigureCard | null {
       + ` · ${screen.total} ${plural(screen.total, "name", "names")} tonight`,
     marked: screen.name,
     sub: glyphLabel(href)
-      ? `${glyphLabel(href)}. ${clip(screen.description, 110)}`
+      ? `${glyphLabel(href)}. ${screen.description}`
       : screen.description,
     cells,
-    art: <ScreenGlyph href={href} size={200} />,
+    art: <Glyph href={href} size={200} />,
     path: href,
   };
 }
@@ -222,7 +257,7 @@ export function breadthCard(): FigureCard | null {
     dateline: closeLine(breadth.as_of),
     kicker: `Breadth · ${breadth.universe_size.toLocaleString("en-US")} names`,
     marked: figure(lead),
-    tail: " are above their 50-day line.",
+    tail: " of stocks are above their 50-day line.",
     sub: `${week ? `${week.note}. ` : ""}Below, every ranked stock strongest first: `
       + "tall bars are above both moving averages, short ones under both.",
     cells,

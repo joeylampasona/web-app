@@ -21,6 +21,9 @@ export function cardText(card: FigureCard): string {
   const bars = (card.bars ?? []).map((bar) => `${bar.label} ${bar.value}`);
   return postText([
     `The Tape · ${sentenceCase(card.dateline)}`,
+    // The kicker says what the headline is about, which the picture shows by
+    // position and a line of text has to say outright.
+    card.kicker,
     headline,
     figures.join(" · "),
     bars.join(" · "),

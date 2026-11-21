@@ -100,12 +100,17 @@ export function closeLine(asOf: string | null | undefined): string {
   return `${weekday} close · ${date}`.toUpperCase();
 }
 
+/**
+ * The largest size at which the headline still fits on one line.
+ *
+ * The renderer will not shrink text to fit, and a headline that wraps leaves
+ * its highlighted word alone on a line of its own. The condensed bold face
+ * runs a little under half its size a character, so the room is divided by
+ * the length and kept inside the sizes the layout was drawn for.
+ */
 function headlineSize(text: string, narrow: boolean): number {
-  const room = narrow ? 30 : 40;
-  if (text.length <= room * 0.55) return 104;
-  if (text.length <= room * 0.8) return 84;
-  if (text.length <= room) return 68;
-  return 56;
+  const budget = narrow ? 1600 : 2150;
+  return Math.max(44, Math.min(104, Math.floor(budget / Math.max(1, text.length))));
 }
 
 function Strip({ ticks, tenths }: { ticks?: string | null; tenths?: number[] | null }) {
@@ -171,12 +176,12 @@ function Cells({ cells }: { cells: CardCell[] }) {
           </div>
           {cell.note ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8,
-                          fontFamily: SANS, fontSize: 16,
+                          fontFamily: SANS, fontSize: 16, lineHeight: 1.25,
                           color: cell.marked ? ink("on-brand") : ink("text-secondary") }}>
               {cell.tone != null && !cell.marked ? (
                 <div style={{ width: 10, height: 10, background: toneColour(cell.tone) }} />
               ) : null}
-              {clip(cell.note, 30)}
+              {clip(cell.note, 56)}
             </div>
           ) : null}
         </div>
@@ -213,7 +218,7 @@ function BarLabels({ bars }: { bars: CardBar[] }) {
       {bars.slice(0, 12).map((bar) => (
         <div key={bar.label} style={{ flex: 1, display: "flex", fontFamily: MONO, fontSize: 13,
                                       letterSpacing: 0.6, color: ink("text-secondary") }}>
-          {clip(bar.label, bars.length > 6 ? 11 : 16).toUpperCase()}
+          {clip(bar.label, bars.length > 6 ? 15 : 18).toUpperCase()}
         </div>
       ))}
     </div>
@@ -257,7 +262,7 @@ export function figureCard(card: FigureCard): ImageResponse {
                           color: ink("text-muted"), marginBottom: 8 }}>
               {card.kicker.toUpperCase()}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center",
+            <div style={{ display: "flex", flexWrap: "nowrap", alignItems: "center",
                           fontFamily: DISPLAY, fontWeight: 700, fontSize: size, lineHeight: 1.08 }}>
               {card.lead ? <div style={{ display: "flex", whiteSpace: "pre" }}>{card.lead}</div> : null}
               <div style={{ display: "flex", background: ink("brand"), color: ink("on-brand"),
@@ -267,9 +272,10 @@ export function figureCard(card: FigureCard): ImageResponse {
               {card.tail ? <div style={{ display: "flex", whiteSpace: "pre" }}>{card.tail}</div> : null}
             </div>
             {card.sub ? (
-              <div style={{ fontSize: 23, lineHeight: 1.35, color: ink("text-secondary"),
-                            marginTop: 14, maxWidth: narrow ? 720 : 1000 }}>
-                {clip(card.sub, narrow ? 120 : 170)}
+              <div style={{ fontSize: narrow ? 21 : 23, lineHeight: 1.35,
+                            color: ink("text-secondary"),
+                            marginTop: 14, maxWidth: narrow ? 760 : 1000 }}>
+                {clip(card.sub, narrow ? 190 : 170)}
               </div>
             ) : null}
           </div>
