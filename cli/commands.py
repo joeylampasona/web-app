@@ -1216,6 +1216,11 @@ def _edition_extras(out, meta: dict, *, send: bool) -> None:
         posted = json.loads(store.get_kv(conn, "discord.earnings_posted", "{}") or "{}")
     except Exception as exc:                       # noqa: BLE001
         print(f"  earnings memory unavailable: {type(exc).__name__}")
+    # And whatever the day's two reporters runs posted as filings came in, so
+    # the same card is not sent again at night. READS_POSTED_FILE is their
+    # note, fetched by the workflow; absent, there is nothing to add.
+    theirs = _reads_file(os.environ.get("READS_POSTED_FILE") or "")
+    posted.update(theirs)
     rows = discord.reads_to_post(load("market", "earnings.json").get("reads") or [],
                                  on_screen, as_of, posted)
     sent = say("earnings", "earnings reads",
@@ -1260,12 +1265,28 @@ def cmd_reporters(args) -> int:
             pass
 
     def keep() -> None:
+        # The reads posted from here ride in the same note. They are written
+        # by the reads step, so whatever it left is carried, not overwritten.
+        reads: dict = {}
+        for source in (out / "reporters.json", pathlib.Path(state_path or "")):
+            try:
+                reads = json.loads(source.read_text()).get("reads") or {}
+                break
+            except (OSError, ValueError):
+                continue
         (out / "reporters.json").write_text(json.dumps(
-            {"date": day.isoformat(), "posted": sorted(set(posted))}))
+            {"date": day.isoformat(), "posted": sorted(set(posted)), "reads": reads}))
 
     keep()
+    if getattr(args, "reads", False):
+        # Whatever the hour: a filing arrives when it arrives.
+        try:
+            _reads_as_filed(args, out, day, state_path, today=posted)
+        except Exception as exc:                   # noqa: BLE001 - never cost the reaction
+            print(f"  reads as filed: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
     if run is None:
-        print(f"  {local.strftime('%-I:%M %p')} New York is outside both windows; nothing to do.")
+        print(f"  {local.strftime('%-I:%M %p')} New York is outside both windows; "
+              f"no reaction post.")
         return 0
 
     try:
@@ -1345,6 +1366,95 @@ def cmd_reporters(args) -> int:
         print(f"\nDiscord refused the post: {type(exc).__name__}")
         return 1
     return 0
+
+
+def _reads_file(path) -> dict[str, str]:
+    """The reads the reporters job has posted, from its note. Empty if none."""
+    import pathlib
+    try:
+        return dict(json.loads(pathlib.Path(path).read_text()).get("reads") or {})
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _reads_as_filed(args, out, day: dt.date, state_path, today=()) -> None:
+    """Post the read of any recent reporter whose 10-Q has now been filed.
+
+    The nightly does this once a day. Half the filings for a day's reports are
+    in within a day and most within three, at no particular hour, so asking
+    SEC again at each of the day's two runs gets a read out hours sooner. It
+    works on the nightly's database, restored read-only: what it fetches is
+    used for the post and not kept, and the nightly asks again for itself.
+    """
+    from catalysts import yf as yfmod
+    from data import earnings_read, fundamentals
+    from publish import discord
+
+    conn = _conn()
+    universe = [row["symbol"] for row in store.universe_rows(conn)]
+    if not universe:
+        print("  reads as filed: no database here; skipped.")
+        return
+    reported = yfmod.reported_dates(conn, universe, day + dt.timedelta(days=1))
+    recent = {symbol: dates for symbol, dates in reported.items()
+              if dates and 0 <= (day - max(dates)).days <= discord.READ_WINDOW_DAYS}
+    # The companies named this morning. The database learns that a report
+    # happened only at night, and some of them file the 10-Q the same day.
+    for symbol in today:
+        if symbol in set(universe):
+            recent[symbol] = [day] + [d for d in recent.get(symbol, []) if d != day]
+    waiting = fundamentals.due(conn, recent, day)
+    _banner(f"Reads as filed — {len(recent)} reported in the last "
+            f"{discord.READ_WINDOW_DAYS} days, {len(waiting)} still waiting on a 10-Q")
+    if not waiting:
+        return
+    result = fundamentals.refresh(conn, waiting, budget=len(waiting), first=waiting)
+    filed = fundamentals.load(conn)
+    reads = earnings_read.build({s: filed.get(s) for s in waiting},
+                                {s: recent[s] for s in waiting}, day)
+    arrived = [r for r in reads if r.get("covers") is True]
+    print(f"  asked SEC about {result.get('asked', 0)}: {len(arrived)} now have the "
+          f"quarter they reported")
+
+    posted: dict[str, str] = {}
+    try:
+        posted = json.loads(store.get_kv(conn, "discord.earnings_posted", "{}") or "{}")
+    except ValueError:
+        pass
+    mine = _reads_file(out / "reporters.json") or _reads_file(state_path or "")
+    posted.update(mine)
+
+    names = {row["symbol"]: row["name"] for row in conn.execute(
+        "SELECT symbol, name FROM tickers")}
+    labels: dict[str, str] = {}
+    for path in sorted((out / "screens").glob("*.json")):
+        if path.stem == "diff":
+            continue
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        for stage in (payload.get("setups") or {}).values():
+            for row in stage:
+                if row.get("symbol"):
+                    labels.setdefault(row["symbol"], payload.get("name") or "a screen")
+    rows = discord.reads_to_post(
+        [{**r, "name": names.get(r["symbol"], "")} for r in arrived], labels, day, posted)
+    if not rows:
+        print("  none of them is new to the room.")
+        return
+    for row in rows:
+        print(f"  [card] {row['symbol']}: {row.get('takeaway')}")
+    if not getattr(args, "send", False):
+        return
+    if discord.post("earnings", "**Earnings reads**: the 10-Q is in",
+                    embeds=[discord.read_embed(row, labels) for row in rows],
+                    username="The Tape · earnings"):
+        mine = discord.remember_reads(mine, rows, day)
+        note = json.loads((out / "reporters.json").read_text())
+        note["reads"] = mine
+        (out / "reporters.json").write_text(json.dumps(note))
+        print("  sent to Discord.")
 
 
 def cmd_rooms(args) -> int:

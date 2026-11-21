@@ -452,3 +452,10 @@ beyond the free sample may be posted there.
   thirty looked up a run; each company once a day, kept on a `reporters`
   branch. The command picks its run from the New York clock and says nothing
   outside its two windows, so a schedule delivered late posts nothing.
+- **A read is posted when its filing arrives, not at night.** Half the 10-Qs
+  for a day's reports are in within a day and most within three, at no
+  particular hour. Each of the day's two reporters runs asks SEC about the
+  recent reporters still waiting on one, on the nightly's database restored
+  read-only, and posts the read of any that has arrived. What those runs post
+  is kept in their note on the `reporters` branch; the nightly reads that note
+  and the runs read the nightly's own, so a card is sent once.

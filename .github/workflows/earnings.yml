@@ -4,9 +4,10 @@
 # with the price before the bell. In the evening, the ones that reported after
 # the close, with the price after it. Each company is named once a day.
 #
-# This is the reaction, not the read. The read of the quarter is built from
-# the 10-Q, which is filed days later, and is posted by the nightly when it
-# arrives.
+# The reaction is not the read. The read of the quarter is built from the
+# 10-Q, which is filed days later at no particular hour. Each run here also
+# asks SEC about the recent reporters still waiting on one and posts the read
+# of any that has arrived, so it does not wait for the night.
 name: Earnings reporters
 
 on:
@@ -64,8 +65,21 @@ jobs:
             || mkdir -p last
           rm -rf last/.git
 
+      # The nightly's database, read-only, for the reads: which companies
+      # have reported lately and what of theirs is already on file. Nothing
+      # this job fetches is written back.
+      - name: Restore the database
+        uses: actions/cache/restore@v5
+        with:
+          path: var
+          key: market-db-polygon-
+          restore-keys: market-db-polygon-
+
       - name: Say who reported
         env:
+          DATA_PROVIDER: polygon
+          # The contact address SEC requires, for asking it about new filings.
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
           # The full screen lists, to say which of the reporters is on one.
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -75,7 +89,7 @@ jobs:
           SEND: ${{ github.event_name == 'schedule' || inputs.send == 'true' }}
           DAY: ${{ inputs.day }}
         run: |
-          set -- --when "$WHEN" --state last/reporters.json
+          set -- --when "$WHEN" --state last/reporters.json --reads
           if [ -n "$DAY" ]; then set -- "$@" --day "$DAY"; fi
           if [ "$SEND" = "true" ]; then set -- "$@" --send; fi
           python -m cli reporters "$@"

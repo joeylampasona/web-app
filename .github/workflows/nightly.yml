@@ -429,7 +429,16 @@ jobs:
         # webhook for everything it is one message, as it always was. The
         # picture is drawn by the site, so the command waits a few minutes for
         # the rebuild and posts without it rather than with last night's.
-        run: python -m cli edition --send --behind "${SESSIONS_BEHIND:-0}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          READS_POSTED_FILE: last/reporters.json
+        run: |
+          # The reads the day's reporters job already posted as filings came
+          # in, so they are not sent again. Missing is fine: nothing to add.
+          git clone -q --depth 1 --branch reporters --single-branch \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" last \
+            || mkdir -p last
+          python -m cli edition --send --behind "${SESSIONS_BEHIND:-0}"
 
       # The X post, as a draft, to Discord. After the summary so it is the
       # last message there and the easiest to find and copy.
