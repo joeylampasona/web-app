@@ -429,15 +429,77 @@ def probe_cboe_refusals(agent: str) -> None:
             except Exception as exc:                  # noqa: BLE001
                 print(f"   {label}: {type(exc).__name__}")
 
-    print("\n-- Yahoo spark: twenty names a request --")
+    # Yahoo, through the library the nightly already uses for earnings dates
+    # and forecasts. A bare request to it from a runner is refused (429); the
+    # library carries the cookie and crumb, which is why the nightly gets 394
+    # of 400. Two shapes: its own batch download, and the quote endpoint that
+    # answers for a few hundred names in one request.
+    print("\n-- Yahoo through yfinance --")
+    wanted: list[str] = []
     try:
-        response = requests.get(
-            "https://query1.finance.yahoo.com/v7/finance/spark",
-            params={"symbols": "AAPL,NVDA,MSFT", "range": "1d", "interval": "5m"},
-            headers={"User-Agent": browser}, timeout=TIMEOUT)
-        print(f"   HTTP {response.status_code} {(response.text or '')[:200]!r}")
+        from data import store
+        wanted = list(store.universe_symbols(store.open_db()))[:400]
     except Exception as exc:                          # noqa: BLE001
-        print(f"   {type(exc).__name__}: {str(exc)[:120]}")
+        print(f"   no database for a real list ({type(exc).__name__}); using a short one")
+    if not wanted:
+        wanted = ["AAPL", "NVDA", "MSFT", "SPY", "QQQ", "BRK.B", "XOM", "JPM"]
+    try:
+        import yfinance as yf
+        print(f"   yfinance {getattr(yf, '__version__', '?')}, asking about {len(wanted)} names")
+    except Exception as exc:                          # noqa: BLE001
+        yf = None
+        print(f"   yfinance unavailable: {type(exc).__name__}: {exc}")
+    if yf is not None:
+        yahoo = [s.replace(".", "-") for s in wanted]
+        try:
+            started = time.monotonic()
+            frame = yf.download(yahoo, period="5d", interval="1d", threads=True,
+                                progress=False, auto_adjust=False, group_by="ticker")
+            took = time.monotonic() - started
+            priced = 0
+            for symbol in yahoo:
+                try:
+                    closes = frame[symbol]["Close"].dropna()
+                    priced += 1 if len(closes) >= 2 else 0
+                except Exception:                     # noqa: BLE001
+                    pass
+            print(f"   download: {priced} of {len(yahoo)} with two closes, {took:.0f}s")
+            try:
+                tail = frame[yahoo[0]]["Close"].dropna().tail(2)
+                print(f"   {yahoo[0]}: {[(str(i)[:10], round(float(v), 2)) for i, v in tail.items()]}")
+            except Exception as exc:                  # noqa: BLE001
+                print(f"   sample unreadable: {type(exc).__name__}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   download: {type(exc).__name__}: {str(exc)[:160]}")
+
+        try:
+            from yfinance.data import YfData
+            data = YfData()
+            got: dict[str, dict] = {}
+            started = time.monotonic()
+            codes: list[int] = []
+            for at in range(0, len(yahoo), 200):
+                response = data.get("https://query1.finance.yahoo.com/v7/finance/quote",
+                                    params={"symbols": ",".join(yahoo[at:at + 200])})
+                codes.append(response.status_code)
+                if response.status_code == 200:
+                    for row in (response.json().get("quoteResponse") or {}).get("result") or []:
+                        got[row.get("symbol")] = row
+            took = time.monotonic() - started
+            print(f"   quote endpoint: HTTP {codes}, {len(got)} of {len(yahoo)} "
+                  f"answered in {took:.1f}s")
+            sample = got.get(yahoo[0]) or next(iter(got.values()), {})
+            print("   sample: " + json.dumps({k: sample.get(k) for k in (
+                "symbol", "regularMarketPrice", "regularMarketPreviousClose",
+                "regularMarketChangePercent", "regularMarketTime", "marketState",
+                "exchangeDataDelayedBy", "quoteSourceName", "fullExchangeName")}))
+            delays: dict = {}
+            for row in got.values():
+                key = row.get("exchangeDataDelayedBy")
+                delays[key] = delays.get(key, 0) + 1
+            print(f"   minutes delayed, by count of names: {delays}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   quote endpoint: {type(exc).__name__}: {str(exc)[:160]}")
 
     print("\n-- Stooq light CSV, a hundred names in one request --")
     hundred = ("aapl msft nvda amzn googl meta tsla avgo jpm v xom unh ma hd pg cost jnj "
