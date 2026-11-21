@@ -539,6 +539,52 @@ def probe_cboe_refusals(agent: str) -> None:
         print(f"   {type(exc).__name__}: {str(exc)[:120]}")
 
 
+def probe_reporters() -> None:
+    """What Yahoo says about a company on the day it reports.
+
+    For a post about who reported before the open and after the close: does
+    the quote carry the hour of the report and the price outside the session,
+    and does the earnings table carry the reported figure against the estimate.
+    """
+    print()
+    print(RULE)
+    print("8. REPORTERS — what Yahoo carries on the day of a report")
+    print(RULE)
+    symbols = [s.strip().upper() for s in
+               (os.environ.get("PROBE_SYMBOLS") or "WSM,WMT,ROST,DKS,ZM,BURL,A").split(",")
+               if s.strip()]
+    try:
+        import yfinance as yf
+        from yfinance.data import YfData
+        response = YfData().get("https://query1.finance.yahoo.com/v7/finance/quote",
+                                params={"symbols": ",".join(symbols)})
+        rows = (response.json().get("quoteResponse") or {}).get("result") or []
+        print(f"   quote endpoint: HTTP {response.status_code}, {len(rows)} rows")
+        wanted = ("marketState", "regularMarketPrice", "regularMarketChangePercent",
+                  "preMarketPrice", "preMarketChangePercent", "preMarketTime",
+                  "postMarketPrice", "postMarketChangePercent", "postMarketTime",
+                  "earningsTimestamp", "earningsTimestampStart", "earningsTimestampEnd",
+                  "earningsCallTimestampStart", "isEarningsDateEstimate",
+                  "epsTrailingTwelveMonths", "epsForward", "shortName")
+        for row in rows:
+            print(f"   {row.get('symbol')}: " + json.dumps(
+                {k: row.get(k) for k in wanted if row.get(k) is not None}))
+        if rows:
+            print("   every key on the first row: " + ", ".join(sorted(rows[0])))
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   quote endpoint: {type(exc).__name__}: {str(exc)[:160]}")
+        return
+    for symbol in symbols[:3]:
+        try:
+            frame = yf.Ticker(symbol).get_earnings_dates(limit=6)
+            print(f"   {symbol} earnings table columns: {list(frame.columns)}")
+            for stamp, row in frame.head(4).iterrows():
+                print(f"      {stamp}  " + json.dumps(
+                    {k: (None if v != v else v) for k, v in row.items()}, default=str))
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {symbol} earnings table: {type(exc).__name__}: {str(exc)[:120]}")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -559,6 +605,7 @@ def main() -> int:
         ("universe", probe_universe_trace),
         ("splits", probe_splits),
         ("cboe", lambda: probe_cboe_refusals(PLAIN_AGENT)),
+        ("reporters", probe_reporters),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:
