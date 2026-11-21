@@ -71,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
                            help="do not wait for the site to be rebuilt; no picture")
     p_edition.add_argument("--behind", type=int, default=0,
                            help="sessions the data is behind, to say so in the post")
+    p_rooms = sub.add_parser("rooms", help="which Discord rooms are wired")
+    p_rooms.add_argument("--send", action="store_true",
+                         help="post a one-line test to each room")
     p_wrap = sub.add_parser("wrap", help="the week's wrap for Discord")
     p_wrap.add_argument("--send", action="store_true", help="post it")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")

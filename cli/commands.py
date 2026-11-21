@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 import json
+import os
 
 from data import settings, store
 
@@ -1128,6 +1129,44 @@ def cmd_edition(args) -> int:
         discord.post("ops", f"**{meta['as_of']}**\n" + "\n".join(ops))
     print("\nSent to Discord.")
     return 0
+
+
+def cmd_rooms(args) -> int:
+    """Say which Discord rooms are wired, and with --send post a line to each.
+
+    Never prints a webhook: only whether a room has one and which rooms share
+    it. Rooms that share a webhook get one message between them.
+    """
+    from publish import discord
+
+    purpose = {
+        "edition": "the edition room. The nightly read and the Saturday wrap post here.",
+        "stop_press": ("the stop press room. During the session, a name through its "
+                       "pivot on volume posts here, once a day for each name."),
+        "ops": ("the operations room. Failure notices, sources that were short and "
+                "the draft for X post here."),
+    }
+    by_hook: dict[str, list[str]] = {}
+    for room in purpose:
+        own = bool(os.environ.get(discord.ROOMS[room], "").strip()
+                   and os.environ.get(discord.ROOMS[room]) != os.environ.get(discord.FALLBACK))
+        url = discord.hook(room)
+        print(f"  {room:<11} {'its own webhook' if own else 'the shared webhook' if url else 'NOT SET'}")
+        if url:
+            by_hook.setdefault(url, []).append(room)
+    print(f"  {len(by_hook)} distinct room(s)")
+    if not getattr(args, "send", False):
+        return 0
+    failed = 0
+    for rooms in by_hook.values():
+        lines = [f"Test from The Tape: this is {purpose[room]}" for room in rooms]
+        try:
+            discord.post(rooms[0], "\n".join(lines), username="The Tape · test")
+            print(f"  posted to {', '.join(rooms)}")
+        except Exception as exc:                   # noqa: BLE001
+            failed += 1
+            print(f"  {', '.join(rooms)}: Discord refused the post ({type(exc).__name__})")
+    return 1 if failed else 0
 
 
 def cmd_wrap(args) -> int:

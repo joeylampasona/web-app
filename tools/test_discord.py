@@ -69,11 +69,30 @@ class Reply(io.BytesIO):
 
 answers = iter(["2026-11-19", "2026-11-19", "2026-11-20"])
 naps: list[int] = []
+
+
+def rebuilding(request, timeout=None):
+    # The card answers as soon as it is asked for; only the data lags.
+    if "/share/" in request.full_url:
+        return Reply(b"png")
+    return Reply(json.dumps({"as_of": next(answers)}).encode())
+
+
 check("the site is waited for until it carries the session",
       discord.site_has("2026-11-20", wait_seconds=600, pause=20, sleep=naps.append,
-                       opener=lambda r, timeout=None: Reply(json.dumps(
-                           {"as_of": next(answers)}).encode())), True)
+                       opener=rebuilding), True)
 check("asking again after each pause", naps, [20, 20])
+
+
+def no_picture(request, timeout=None):
+    if "/share/" in request.full_url:
+        raise OSError("the card will not draw")
+    return Reply(json.dumps({"as_of": "2026-11-20"}).encode())
+
+
+check("a site that is rebuilt but cannot draw the card is not ready",
+      discord.site_has("2026-11-20", wait_seconds=0, sleep=naps.append, opener=no_picture),
+      False)
 
 
 def refuses(request, timeout=None):

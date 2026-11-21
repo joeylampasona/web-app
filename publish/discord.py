@@ -84,13 +84,26 @@ def site_has(session: str, *, wait_seconds: int = 420, pause: int = 20,
             request = urllib.request.Request(f"{site()}/api/quotes",
                                              headers={"User-Agent": AGENT})
             with opener(request, timeout=20) as response:
-                if json.loads(response.read()).get("as_of") == session:
-                    return True
+                rebuilt = json.loads(response.read()).get("as_of") == session
+            if rebuilt:
+                # And the picture itself answers. A card that will not draw
+                # is a post without a picture, not a post with a broken one.
+                picture = urllib.request.Request(read_card(session),
+                                                 headers={"User-Agent": AGENT})
+                with opener(picture, timeout=30) as response:
+                    response.read()
+                return True
         except Exception:                           # noqa: BLE001
             pass
         if time.monotonic() >= deadline:
             return False
         sleep(pause)
+
+
+def read_card(session: str) -> str:
+    """Where the site draws tonight's read. The session is in the address so
+    that Discord cannot serve a kept copy of an earlier night's card."""
+    return f"{site()}/share/read.png?v={session}"
 
 
 def _weekday(day: str) -> str:
@@ -130,9 +143,7 @@ def edition_message(meta: dict, edition: dict | None, *, behind: int = 0,
                 + [f"• {line}" for line in edition.get("checks") or []]).strip()[:1500],
         }
         if picture:
-            # The session in the address so Discord cannot serve a kept copy
-            # of an earlier night's card.
-            embed["image"] = {"url": f"{site()}/share/read.png?v={session}"}
+            embed["image"] = {"url": read_card(session)}
         embeds.append(embed)
     return "\n".join(lines), embeds
 
