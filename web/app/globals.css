@@ -968,3 +968,84 @@ table.data thead th {
              color: var(--text-primary); }
 a.read-name:hover { text-decoration: underline; }
 @media (max-width: 560px) { .read-ticker { font-size: 19px; } .read-name { font-size: 21px; } }
+
+/* ---- carried over ------------------------------------------------------- */
+/* A boxed word for a figure older or thinner than the page around it. No
+   colour: it states a date, it does not raise an alarm. */
+.carried { display: inline-block; font-family: var(--font-display); font-weight: 600;
+           font-size: 11px; line-height: 1.5; letter-spacing: 0.06em; text-transform: uppercase;
+           padding: 0 5px; border: 1px solid var(--text-secondary); color: var(--text-secondary);
+           white-space: nowrap; vertical-align: 1px; }
+.book-note { color: var(--text-secondary); max-width: 78ch; }
+
+/* ---- the colophon ------------------------------------------------------- */
+.colophon-head { border-top: 3px solid var(--rule); padding-top: var(--pad-lg); }
+.colophon-title { font-size: clamp(34px, 5vw, 64px); line-height: 0.98; letter-spacing: -0.01em; }
+.colophon-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0;
+                  border-top: 1px solid var(--rule); border-left: 1px solid var(--border); }
+.colophon-facts > div { padding: 12px 14px 14px; border-right: 1px solid var(--border);
+                        border-bottom: 1px solid var(--border); display: flex;
+                        flex-direction: column; gap: 6px; min-width: 0; }
+.colophon-facts dt { color: var(--text-muted); }
+.colophon-facts dd { margin: 0; font-family: var(--font-display); font-weight: 600;
+                     font-size: 20px; line-height: 1.15; }
+@media (max-width: 900px) { .colophon-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.colophon-table { border-top: 1px solid var(--rule); }
+.colophon-row { display: grid; align-items: baseline; gap: var(--gap-sm) var(--gap-lg);
+                grid-template-columns: minmax(0, 220px) 104px minmax(0, 1fr) 72px;
+                padding: 12px 0; border-bottom: 1px solid var(--border); }
+.colophon-row--head { padding: 8px 0; color: var(--text-muted); }
+.colophon-name { font-family: var(--font-display); font-weight: 600; font-size: 18px; line-height: 1.15; }
+.colophon-status { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display);
+                   font-weight: 600; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase;
+                   white-space: nowrap; }
+.colophon-swatch { width: 10px; height: 10px; flex: none; display: inline-block; }
+@media (max-width: 700px) {
+  .colophon-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .colophon-row--head { display: none; }
+  .colophon-row > :nth-child(3) { grid-column: 1 / -1; }
+  .colophon-row > :nth-child(4) { grid-column: 1 / -1; color: var(--text-muted); }
+  .colophon-row > :nth-child(4)::before { content: "Covers "; font-family: var(--font-sans); }
+}
+
+/* ---- stop press --------------------------------------------------------- */
+.stop-press { border: 1px solid var(--rule); border-top-width: 3px; background: var(--surface-1);
+              padding: var(--pad-lg); display: flex; flex-direction: column; gap: var(--gap-md); }
+.stop-press-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm) var(--gap-lg); }
+.stop-press-flag { background: var(--brand); color: var(--on-brand); padding: 1px 8px;
+                   font-family: var(--font-display); font-weight: 700; font-size: 15px;
+                   letter-spacing: 0.08em; text-transform: uppercase; }
+.stop-press-title { font-size: clamp(22px, 2.6vw, 30px); line-height: 1.1; margin: 0; }
+.stop-press-rows { border-top: 1px solid var(--rule); }
+.stop-press-row { display: grid; align-items: baseline; gap: 2px var(--gap-lg);
+                  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+                  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.stop-press-name { display: flex; align-items: baseline; gap: var(--gap-sm); min-width: 0; }
+.stop-press-ticker { font-weight: 600; font-size: 17px; }
+.stop-press-company { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis;
+                      white-space: nowrap; min-width: 0; }
+.stop-press-figure { font-weight: 600; white-space: nowrap; }
+.stop-press-screen { text-decoration: underline; text-decoration-color: var(--border-strong);
+                     text-underline-offset: 3px; white-space: nowrap; }
+@media (max-width: 700px) {
+  .stop-press { padding: var(--pad-md); }
+  .stop-press-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .stop-press-pace { grid-column: 1; }
+  .stop-press-screen { grid-column: 2; justify-self: end; }
+}
+
+/* ---- the home page on a phone ------------------------------------------- */
+/* The three slow-moving charts fold behind one button under the news. The
+   split's two halves become rows of the page itself so the fold can take one
+   and leave the other where it was. */
+.phone-fold-button { display: none; }
+.home-source-note { margin: 0; color: var(--text-secondary); }
+@media (max-width: 700px) {
+  .home-split { display: contents; }
+  .home-split > .wide, .home-split > .narrow { border-top: 1px solid var(--rule);
+                                               padding-top: var(--pad-xl); }
+  .phone-fold[data-phone-open="false"] { display: none; }
+  .phone-fold { order: 2; }
+  .phone-fold-button { display: block; order: 1; }
+  .home-last { order: 3; }
+}

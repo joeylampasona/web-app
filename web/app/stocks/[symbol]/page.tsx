@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { DeskBehind } from "@/components/CarriedOver";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { StockDetail } from "@/components/StockDetail";
 import { getMeta, getStock, hasData } from "@/lib/data";
@@ -51,7 +52,8 @@ export default async function StockPage({
   return (
     <div className="page">
       <DataBanner meta={getMeta()} />
-      <StockDetail stock={stock} run={getMeta()?.desk_run} />
+      <StockDetail stock={stock} run={getMeta()?.desk_run}
+                   deskNote={<DeskBehind meta={getMeta()} />} />
     </div>
   );
 }

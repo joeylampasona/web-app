@@ -1,4 +1,5 @@
 import type { GammaProfile } from "@/lib/types";
+import { CarriedOver, shortDay } from "./CarriedOver";
 
 /**
  * Where open interest concentrates option gamma.
@@ -39,6 +40,28 @@ export function GammaPanel({ gamma }: { gamma: GammaProfile | null }) {
         across the next {gamma.expiries} expir{gamma.expiries === 1 ? "y" : "ies"}.
         Bigger bars mean more optionality anchored there.
       </p>
+
+      {(gamma.book === "partial" || gamma.stale) && (
+        <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+          {gamma.book === "partial" && (
+            <p className="footnote book-note" style={{ margin: 0 }}>
+              <CarriedOver>Partial book</CarriedOver>{" "}
+              Built from a shorter option book, the nearest eight expiries,
+              because the full-book source was unavailable. The concentrations
+              below are understated and the peak strike may differ.
+            </p>
+          )}
+          {gamma.stale && (
+            <p className="footnote book-note" style={{ margin: 0 }}>
+              <CarriedOver />{" "}
+              This book was read
+              {shortDay(gamma.as_of) ? ` on ${shortDay(gamma.as_of)}` : " on an earlier night"}{" "}
+              and kept, because the source did not answer for this name on the
+              latest run.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="stack" style={{ gap: 2 }}>
         {levels.map((level) => {
@@ -81,7 +104,6 @@ export function GammaPanel({ gamma }: { gamma: GammaProfile | null }) {
         {" · "}
         {gamma.open_interest.toLocaleString()} contracts open across{" "}
         {levels.length} strikes within 30% of it
-        {gamma.stale && " · open interest is from the previous session"}
       </p>
 
       <div

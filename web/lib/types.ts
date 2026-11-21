@@ -197,12 +197,35 @@ export interface Meta {
   universe_count: number; survivorship_safe: boolean; benchmark: string;
   /** Which of the Market Desk's scanners worked on the run we ingested. */
   desk_run?: DeskRun | null;
+  /** What each source gave the nightly. Absent in a tree built before the
+   *  report existed, which the pages treat as "not reported", never as fine. */
+  sources?: SourceReport[];
   market_wide_breakouts: number;
   screens: { key: string; name: string; total: number; stages: Record<string, number> }[];
   themes: { slug: string; name: string }[];
   disclaimer: string;
   schema_valid?: boolean;
 }
+
+/** How one source did on the night. `partial` answered with less than it
+ *  should have, `behind` answered with an older day, `down` did not answer. */
+export type SourceStatus = "ok" | "partial" | "behind" | "down";
+
+export interface SourceReport {
+  key: string;
+  label: string;
+  /** Where the figures come from, in words. */
+  from: string;
+  status: SourceStatus;
+  /** A finished sentence, written by the pipeline that counted. */
+  detail: string;
+  /** The day the figures cover, when the source dates them. */
+  as_of: string | null;
+}
+
+/** Which option book a gamma reading was built from. `partial` is the shorter
+ *  book (the nearest eight expiries) used when the full one is unavailable. */
+export type GammaBook = "full" | "partial" | null;
 
 export interface Bar {
   time: string; open: number; high: number; low: number; close: number; volume: number;
@@ -328,6 +351,8 @@ export interface GammaBoardRow {
   total_net: number;
   flip: number | null;
   stale: boolean;
+  /** Absent on rows stored before books were labelled. */
+  book?: GammaBook;
   peak_strike: number;
   peak_concentration: number;
   peak_vs_spot_pct: number | null;
@@ -358,6 +383,8 @@ export interface GammaProfile {
   expiries: number;
   /** Open interest predates the session this page is showing. */
   stale?: boolean;
+  /** Absent on profiles stored before books were labelled. */
+  book?: GammaBook;
 }
 
 export interface StockFile {

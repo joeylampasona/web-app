@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { CarriedOver, sourcesShort } from "@/components/CarriedOver";
 import { DataBanner, NoData } from "@/components/DataBanner";
+import { HomeFoldButton, HomeFolded, HomeFoldProvider } from "@/components/HomeFold";
 import { HomeNews } from "@/components/HomeNews";
 import { HomeRead } from "@/components/HomeRead";
 import { ShareRead } from "@/components/ShareRead";
+import { StopPress, type PivotCandidate } from "@/components/StopPress";
 import { HomeStrongest, type StrongestStock } from "@/components/HomeStrongest";
 import { HomeWatchlist } from "@/components/HomeWatchlist";
 import { TickerLink } from "@/components/StockDrawer";
@@ -74,9 +77,24 @@ export default function Home() {
   // The watchlist strip is a client component, but the rows it filters are
   // static, so they are assembled here once rather than fetched in the browser.
   const stages = new Map<string, { stage: string; days: number | null }>();
+  // Names resting at or under a pivot at the close, for the stop-press box:
+  // the ones a delayed price can carry through it during the session. A screen
+  // that reads its level downward is left out, since "above the pivot" means
+  // the opposite thing there. A name on several screens keeps its nearest.
+  const resting = new Map<string, PivotCandidate>();
   for (const file of getAllScreens()) {
     for (const setups of Object.values(file.setups)) {
       for (const setup of setups) {
+        if (file.direction !== "short" && setup.pivot > 0 && setup.close > 0
+            && setup.close <= setup.pivot) {
+          const held = resting.get(setup.symbol);
+          if (!held || setup.pivot < held.pivot) {
+            resting.set(setup.symbol, {
+              symbol: setup.symbol, name: setup.name, pivot: setup.pivot,
+              close: setup.close, screen: file.screen, screenName: file.name,
+            });
+          }
+        }
         if (!stages.has(setup.symbol)) {
           stages.set(setup.symbol, {
             stage: setup.stage,
@@ -124,8 +142,10 @@ export default function Home() {
     confirmed_uptrend: seriesOf("confirmed_uptrend"),
   };
   const priced = context?.earnings_priced;
+  const short = sourcesShort(meta);
 
   return (
+    <HomeFoldProvider>
     <div className="page stack" style={{ gap: "var(--pad-xl)" }}>
       <DataBanner meta={meta} />
 
@@ -147,27 +167,41 @@ export default function Home() {
                     </>
                   ) : undefined} />
         <MarketContext file={context} compact />
+        {short.length > 0 && (
+          // Quiet, and only on a night it is true. Which sources, in words,
+          // because "some data may be delayed" is a sentence nobody can act on.
+          <p className="caption home-source-note">
+            <CarriedOver>{short.length === 1 ? "One source short" : `${short.length} sources short`}</CarriedOver>{" "}
+            {short.map((s) => s.label).join(", ")}{" "}
+            {short.length === 1 ? "is" : "are"} short or behind tonight.{" "}
+            <Link href="/colophon" style={{ textDecoration: "underline" }}>
+              How this edition was made
+            </Link>
+          </p>
+        )}
       </div>
 
+      <StopPress candidates={[...resting.values()]} />
+
       {layers?.counts && (
-        <section className="home-section stack" style={{ gap: "var(--gap-lg)" }}>
+        <HomeFolded className="home-section stack" style={{ gap: "var(--gap-lg)" }}>
           <div className="ruled-head">
             <h2>{layers.n.toLocaleString("en-US")} stocks, each against its own industry</h2>
             <span className="kicker">Change on the week in brackets</span>
           </div>
           <LayerBar s={layers} />
-        </section>
+        </HomeFolded>
       )}
 
       <section className="home-section home-split">
         {radar && (
-          <div className="wide stack" style={{ gap: "var(--gap-lg)" }}>
+          <HomeFolded as="div" className="wide stack" style={{ gap: "var(--gap-lg)" }}>
             <div className="ruled-head">
               <h2>The strength matrix</h2>
               <span className="kicker">Groups against the S&amp;P 500</span>
             </div>
             <StrengthMatrix radar={radar} edges={10} />
-          </div>
+          </HomeFolded>
         )}
         {upcoming && (
           <div className="narrow stack" style={{ gap: "var(--gap-lg)" }}>
@@ -213,13 +247,13 @@ export default function Home() {
         </p>
       </section>
 
-      <div className="home-section">
+      <HomeFolded as="div" className="home-section">
         <HomeStrongest
           industry={sectors?.strongest?.[0] ?? null}
           theme={sectors?.themes_strongest?.[0] ?? null}
           stock={strongestStock}
         />
-      </div>
+      </HomeFolded>
 
       <HomeWatchlist rows={watchRows} />
 
@@ -227,8 +261,11 @@ export default function Home() {
         <HomeNews articles={news?.articles ?? []} />
       </div>
 
+      <HomeFoldButton what="The layers, the strength matrix and the strongest three" />
+
       <HomeDisclaimer />
     </div>
+    </HomeFoldProvider>
   );
 }
 
@@ -243,7 +280,7 @@ export default function Home() {
 function HomeDisclaimer() {
   return (
     <section
-      className="stack"
+      className="stack home-last"
       style={{
         gap: "var(--gap-sm)",
         marginTop: "var(--gap-lg)",
@@ -269,7 +306,10 @@ function HomeDisclaimer() {
         <Link href="/legal" style={{ color: "var(--link)", textDecoration: "underline" }}>
           Read the full disclaimer
         </Link>
-        .
+        {" · "}
+        <Link href="/colophon" style={{ color: "var(--link)", textDecoration: "underline" }}>
+          How this edition was made
+        </Link>
       </p>
     </section>
   );

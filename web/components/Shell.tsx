@@ -81,8 +81,14 @@ const TABS: {
 ];
 
 /** Every page the menus reach, for the search that opens from any page. */
-const PAGES: PaletteDestination[] = TABS.flatMap((tab) =>
-  (tab.destinations ?? []).map((d) => ({ href: d.href, title: d.title, blurb: d.blurb, section: tab.label })));
+const PAGES: PaletteDestination[] = [
+  ...TABS.flatMap((tab) =>
+    (tab.destinations ?? []).map((d) => ({ href: d.href, title: d.title, blurb: d.blurb, section: tab.label }))),
+  // Reached from the foot of every page rather than from a menu, so it is
+  // listed here by hand or the search would not know it exists.
+  { href: "/colophon", title: "How this edition was made",
+    blurb: "Colophon: what each source gave tonight, and what is carried over.", section: "About" },
+];
 
 function dateline(tape: TapeData | null): string | null {
   if (!tape?.asOf) return null;
@@ -192,9 +198,14 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
         >
           <div className="stack shell-width" style={{ gap: "var(--gap-xs)" }}>
             <p className="caption dim" style={{ margin: 0 }}>{LEGAL}</p>
-            <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
-              What that means, in full
-            </Link>
+            <div className="row wrap" style={{ gap: "var(--gap-xs) var(--gap-lg)" }}>
+              <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
+                What that means, in full
+              </Link>
+              <Link href="/colophon" className="caption dim" style={{ textDecoration: "underline" }}>
+                How this edition was made
+              </Link>
+            </div>
           </div>
         </footer>
       )}

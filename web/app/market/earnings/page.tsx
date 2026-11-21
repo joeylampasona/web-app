@@ -1,3 +1,4 @@
+import { DeskBehind } from "@/components/CarriedOver";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { EarningsPricedTable } from "@/components/EarningsPricedTable";
 import { EarningsReads } from "@/components/EarningsReads";
@@ -14,6 +15,7 @@ export default function EarningsPage() {
       <DataBanner meta={getMeta()} />
       <div className="eyebrow">Market · reporting season</div>
       <h1>Earnings</h1>
+      <DeskBehind meta={getMeta()} />
 
       <section className="stack" style={{ marginTop: "var(--pad-lg)" }}>
         <div className="section-head">

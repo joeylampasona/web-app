@@ -5,7 +5,7 @@ import { Locked } from "@/components/Locked";
 import { useGated } from "@/lib/useGated";
 import type { GammaBoardRow } from "@/lib/types";
 
-type Board = { as_of: string; count: number; rows: GammaBoardRow[] };
+type Board = { as_of: string; count: number; rows: GammaBoardRow[]; partial_rows?: number };
 
 /**
  * The gamma board, free sample or the whole thing.
@@ -20,17 +20,20 @@ export function GatedGammaBoard({
   rows,
   total,
   gated,
+  partialRows,
 }: {
   rows: GammaBoardRow[];
   total: number;
   gated: boolean;
+  /** How many of every row came from the shorter book, from the public file. */
+  partialRows?: number;
 }) {
   // A tree published before gamma moved behind the paywall holds the whole
   // board in the public file. Asking for a gated copy of it would be pointless
   // and locking rows that are already in the page would be theatre.
   const full = useGated<Board>(gated ? "market/gamma.json" : null);
 
-  if (!gated) return <GammaBoard rows={rows} total={total} />;
+  if (!gated) return <GammaBoard rows={rows} total={total} partialRows={partialRows} />;
 
   if (full.state === "ready" && full.data?.rows?.length) {
     // The larger of the two counts, not the gated file's. Both are meant to be
@@ -40,13 +43,14 @@ export function GatedGammaBoard({
     // reader is correctly told 129. The public file cannot overstate it.
     return (
       <GammaBoard rows={full.data.rows}
-                  total={Math.max(full.data.count ?? 0, total)} />
+                  total={Math.max(full.data.count ?? 0, total)}
+                  partialRows={Math.max(full.data.partial_rows ?? 0, partialRows ?? 0)} />
     );
   }
 
   return (
     <>
-      <GammaBoard rows={rows} total={total} />
+      <GammaBoard rows={rows} total={total} partialRows={partialRows} />
       {full.state === "loading" ? (
         <p className="caption dim" style={{ marginTop: "var(--gap-md)" }}>
           Checking your subscription…

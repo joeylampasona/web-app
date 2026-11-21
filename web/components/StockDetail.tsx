@@ -51,11 +51,14 @@ function plainRead(stock: StockFile): string {
     `Its relative strength rating is ${rank}.`;
 }
 
-export function StockDetail({ stock, run }: {
+export function StockDetail({ stock, run, deskNote }: {
   stock: StockFile;
   /** Which of the market sweep's scanners worked — so an empty signal
    *  set can be told apart from a scanner that did not run. */
   run?: DeskRun | null;
+  /** Set by the page on a night the sweep's last run is older than the
+   *  session shown, so these flags are not read as tonight's. */
+  deskNote?: React.ReactNode;
 }) {
   const setup = stock.primary_setup;
   // The shape screens publish a fitted geometry; the base screens do not.
@@ -237,6 +240,7 @@ export function StockDetail({ stock, run }: {
 
       <section>
         <div className="eyebrow">Flagged by the market sweep</div>
+        {deskNote}
         <DeskSignals signals={stock.desk_signals} run={run} />
       </section>
 

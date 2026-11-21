@@ -54,6 +54,7 @@ export async function GET() {
     count?: number;
     fetched_at?: string | null;
     note?: string;
+    source?: string;
   };
 
   // A sweep older than the published close is dropped whole. The pages then
@@ -103,6 +104,9 @@ export async function GET() {
       live_at: liveAt,
       live_symbols: liveAt ? symbols : [],
       note: body.note ?? null,
+      // Which feed answered the sweep, for the page that says how the
+      // edition was made.
+      source: stale ? null : body.source ?? null,
     },
     { headers: { "Cache-Control": `public, max-age=${CACHE_SECONDS}` } },
   );

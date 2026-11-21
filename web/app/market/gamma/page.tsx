@@ -32,7 +32,8 @@ export default function GammaPage() {
         </div>
       ) : (
         <GatedGammaBoard rows={board.rows} total={board.count}
-                         gated={Boolean(board.gated)} />
+                         gated={Boolean(board.gated)}
+                         partialRows={board.partial_rows} />
       )}
 
       <p className="caption dim" style={{ marginTop: "var(--pad-lg)" }}>{board.copy.footer}</p>

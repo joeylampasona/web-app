@@ -12,6 +12,10 @@ export interface Quote {
   prev_close: number | null;
   change_pct: number | null;
   at: string | null;
+  /** Shares traded so far in the session, and the name's ordinary day. Both
+   *  optional: a sweep written before they were collected carries neither. */
+  volume?: number | null;
+  avg_volume?: number | null;
 }
 
 interface QuoteSet {
@@ -23,6 +27,8 @@ interface QuoteSet {
    *  number to the freshest one. */
   live_at: string | null;
   live_symbols: string[];
+  /** Which feed answered the sweep, as the file names it. */
+  source: string | null;
   /** Until the first fetch resolves, "no quote for this symbol" and "no
    *  quotes yet" are different things, and a page that shows a stale-looking
    *  dash for one second on every load reads as broken. */
@@ -30,7 +36,7 @@ interface QuoteSet {
 }
 
 const EMPTY: QuoteSet = {
-  quotes: {}, fetched_at: null, live_at: null, live_symbols: [], ready: false,
+  quotes: {}, fetched_at: null, live_at: null, live_symbols: [], source: null, ready: false,
 };
 const QuotesContext = createContext<QuoteSet>(EMPTY);
 
@@ -81,6 +87,7 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
           fetched_at: body.fetched_at ?? null,
           live_at: body.live_at ?? null,
           live_symbols: body.live_symbols ?? [],
+          source: body.source ?? null,
           ready: true,
         });
       } catch {
@@ -118,12 +125,13 @@ export function useQuotesMap(): Record<string, Quote> {
 }
 
 export function useQuotesMeta() {
-  const { fetched_at, live_at, live_symbols, ready, quotes } =
+  const { fetched_at, live_at, live_symbols, source, ready, quotes } =
     useContext(QuotesContext);
   return {
     fetchedAt: fetched_at,
     liveAt: live_at,
     liveSymbols: live_symbols,
+    source,
     ready,
     count: Object.keys(quotes).length,
   };

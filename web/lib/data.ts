@@ -333,6 +333,8 @@ export function getGammaBoard() {
     free_rows?: number;
     /** How many rows a subscriber gets. */
     board_rows?: number;
+    /** How many of every row were built from the shorter option book. */
+    partial_rows?: number;
     copy: { header: string; subhead: string; footer: string };
   }>("market/gamma.json");
 }

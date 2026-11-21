@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { GammaBoardRow } from "@/lib/types";
+import { CarriedOver } from "./CarriedOver";
 
 const PREVIEW = 20;
 
@@ -20,11 +21,29 @@ const PREVIEW = 20;
  * the unsigned one for the reason set out in GammaPanel: one of them depends
  * on an assumption about who holds which side and the other does not.
  */
-export function GammaBoard({ rows, total }: { rows: GammaBoardRow[]; total: number }) {
+export const PARTIAL_BOOK = "Built from a shorter option book, the nearest eight expiries, "
+  + "because the full-book source was unavailable. Concentrations are understated "
+  + "and the peak strike may differ.";
+export const CARRIED_BOOK = "This book was read on an earlier night. The source did not "
+  + "answer for it on this run.";
+
+export function GammaBoard({
+  rows, total, partialRows,
+}: {
+  rows: GammaBoardRow[];
+  total: number;
+  /** How many of every row, shown or not, came from the shorter book. */
+  partialRows?: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? rows : rows.slice(0, PREVIEW);
   const hidden = rows.length - visible.length;
   const peak = Math.max(...rows.map((r) => r.peak_concentration), 1);
+  // The file's own count when it sends one, since it covers rows this reader
+  // cannot see; the rows in hand otherwise.
+  const partialHere = rows.filter((r) => r.book === "partial").length;
+  const partial = Math.max(partialRows ?? 0, partialHere);
+  const carried = rows.filter((r) => r.stale).length;
 
   return (
     <>
@@ -32,6 +51,24 @@ export function GammaBoard({ rows, total }: { rows: GammaBoardRow[]; total: numb
         {total.toLocaleString()} names carried usable open interest
         {total > rows.length && ` · showing the deepest ${rows.length}`}
       </p>
+
+      {partial > 0 && (
+        <p className="footnote book-note" style={{ margin: "var(--gap-sm) 0 0" }}>
+          <CarriedOver>Partial book</CarriedOver>{" "}
+          {partial >= total && total > 0
+            ? "Every row tonight was"
+            : `${partial.toLocaleString()} of ${total.toLocaleString()} rows were`}{" "}
+          built from a shorter option book, the nearest eight expiries, because
+          the full-book source was unavailable. Concentrations on those rows are
+          understated and the peak strike may differ.
+        </p>
+      )}
+      {carried > 0 && (
+        <p className="caption dim" style={{ margin: "var(--gap-xs) 0 0" }}>
+          <CarriedOver /> marks a book read on an earlier night and kept, because
+          the source did not answer for that name on this run.
+        </p>
+      )}
 
       <div className="scroll-x scroll-tall card" style={{ padding: 0, marginTop: "var(--gap-sm)" }}>
         <table className="data">
@@ -48,12 +85,13 @@ export function GammaBoard({ rows, total }: { rows: GammaBoardRow[]; total: numb
           <tbody>
             {visible.map((row) => (
               <tr key={row.symbol}>
-                <td className="text">
+                <td className="text" style={{ whiteSpace: "nowrap" }}>
                   <Link href={`/stocks/${row.symbol}`} className="mono">{row.symbol}</Link>
+                  {row.book === "partial" && (
+                    <>{" "}<CarriedOver title={PARTIAL_BOOK}>Partial book</CarriedOver></>
+                  )}
                   {row.stale && (
-                    <span className="caption dim" title="Open interest is from the previous session">
-                      {" "}·&nbsp;lagged
-                    </span>
+                    <>{" "}<CarriedOver title={CARRIED_BOOK} /></>
                   )}
                 </td>
                 <td className="num">{row.open_interest.toLocaleString()}</td>
