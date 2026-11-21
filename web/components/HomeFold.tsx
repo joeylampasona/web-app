@@ -55,12 +55,12 @@ export function HomeFoldButton({ what }: { what: string }) {
   const { open, toggle } = useContext(FoldContext);
   return (
     <div className="phone-fold-button">
-      <button type="button" className="control" onClick={toggle} aria-expanded={open}
-              style={{ width: "100%", justifyContent: "space-between" }}>
-        <span style={{ fontFamily: "var(--font-display)", fontWeight: 600 }}>
+      <button type="button" className="control" onClick={toggle} aria-expanded={open}>
+        <span className="phone-fold-label">
           {open ? "Less from tonight" : "More from tonight"}
+          <span aria-hidden>{open ? " −" : " +"}</span>
         </span>
-        <span className="caption dim">{open ? "Fold these away" : what}</span>
+        <span className="caption dim">{open ? "Fold these away again" : what}</span>
       </button>
     </div>
   );

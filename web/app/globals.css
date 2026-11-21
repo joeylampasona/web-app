@@ -1046,6 +1046,12 @@ a.read-name:hover { text-decoration: underline; }
                                                padding-top: var(--pad-xl); }
   .phone-fold[data-phone-open="false"] { display: none; }
   .phone-fold { order: 2; }
-  .phone-fold-button { display: block; order: 1; }
+  .phone-fold-button { display: block; order: 1; border-top: 1px solid var(--rule);
+                       padding-top: var(--pad-lg); }
+  .phone-fold-button .control { width: 100%; height: auto; flex-direction: column;
+                                align-items: flex-start; gap: 2px; text-align: left;
+                                padding: var(--pad-md); white-space: normal; }
+  .phone-fold-label { font-family: var(--font-display); font-weight: 600; font-size: 20px;
+                      line-height: 1.15; white-space: nowrap; }
   .home-last { order: 3; }
 }

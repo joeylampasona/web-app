@@ -51,8 +51,11 @@ export function DeskBehind({ meta }: { meta: Meta | null | undefined }) {
       <CarriedOver title={desk.detail}>
         {desk.status === "down" ? "Not updated" : "Carried over"}
       </CarriedOver>{" "}
-      {day ? <>Market Desk data from {day}.</> : <>Market Desk data is from an earlier run.</>}{" "}
-      {desk.detail}{" "}
+      {/* The pipeline's own sentence when it wrote one; it already carries
+          the date, and saying it twice reads as two different facts. */}
+      Market Desk.{" "}
+      {desk.detail
+        || (day ? `Its data here is from ${day}.` : "Its data here is from an earlier run.")}{" "}
       <Link href="/colophon" style={{ textDecoration: "underline" }}>How this edition was made</Link>
     </p>
   );
