@@ -11,6 +11,11 @@ name: Probe data sources
 
 on:
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe). Empty runs all."
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -38,4 +43,5 @@ jobs:
           EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
           # For the universe trace's reference lookups. Never printed.
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          PROBE_ONLY: ${{ inputs.only }}
         run: python tools/probe_sources.py

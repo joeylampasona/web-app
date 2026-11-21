@@ -314,6 +314,153 @@ def probe_quote_sources(agent: str) -> None:
             print(f"   /{path}/ -> {type(exc).__name__}")
 
 
+def _refusal_line(response) -> str:
+    """Status, who answered, and the first of the body. Never a request header."""
+    keep = ("server", "content-type", "cf-ray", "cf-mitigated", "cf-cache-status",
+            "x-cache", "via", "retry-after", "x-amz-cf-pop", "x-served-by")
+    seen = {k: response.headers[k] for k in keep if k in response.headers}
+    body = (response.text or "")[:160].replace("\n", " ")
+    return f"HTTP {response.status_code} {json.dumps(seen)} body: {body!r}"
+
+
+def probe_cboe_refusals(agent: str) -> None:
+    """Why the intraday quote sweep is refused, and what could replace it.
+
+    Every quote request has come back 403 since the evening of 2026-11-19,
+    221 of 221 a run, while the nightly's option chains from the same host
+    still partly arrive. The two differ in three ways at once: the path, the
+    name the client gives, and the hour. This asks one question at a time so
+    the answer is read off rather than guessed, then tries the sources that
+    could carry the quote instead.
+    """
+    print()
+    print(RULE)
+    print("7. CBOE REFUSALS — why the intraday quotes get 403, and the alternatives")
+    print(RULE)
+    base = "https://cdn.cboe.com/api/global/delayed_quotes"
+    browser = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+    # Labels only: the contact agent is a secret and is never printed.
+    names = (
+        ("as the quotes job sends it (tape-research)",
+         {"User-Agent": "tape-research", "Accept": "application/json"}),
+        ("as the nightly sends it (the contact agent)",
+         {"User-Agent": agent, "Accept": "application/json"}),
+        ("the library's own default name", {"Accept": "application/json"}),
+        ("a browser's name alone", {"User-Agent": browser, "Accept": "application/json"}),
+        ("a browser's name, arriving from cboe.com",
+         {"User-Agent": browser, "Accept": "application/json, text/plain, */*",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Referer": "https://www.cboe.com/delayed_quotes/aapl",
+          "Origin": "https://www.cboe.com"}),
+    )
+    works: dict | None = None
+    for path in ("quotes/AAPL.json", "options/AAPL.json", "quotes/_SPX.json"):
+        print(f"\n-- {path} --")
+        for label, headers in names:
+            try:
+                # A fresh connection each time: a session would carry whatever
+                # the first answer set into the next question.
+                response = requests.get(f"{base}/{path}", headers=headers, timeout=TIMEOUT)
+                print(f"   {label:44} {_refusal_line(response)}")
+                if response.status_code == 200 and path.startswith("quotes/") and works is None:
+                    works = headers
+            except Exception as exc:                  # noqa: BLE001
+                print(f"   {label:44} {type(exc).__name__}: {str(exc)[:120]}")
+            time.sleep(1.0)
+
+    # Whether an accepted name stays accepted at the sweep's own pace. The
+    # job asks four hundred names a third of a second apart on one connection.
+    print("\n-- sixty names in a row at the sweep's pace --")
+    if works is None:
+        print("   no name was accepted for a quote, so there is no pace to test.")
+    else:
+        sample = ("AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO JPM V XOM UNH MA HD PG COST "
+                  "JNJ ABBV BAC KO CRM NFLX AMD CVX MRK WMT PEP TMO ORCL ADBE LIN CSCO "
+                  "ACN MCD ABT WFC DHR IBM GE CAT QCOM TXN VZ INTU AMGN NOW PFE DIS "
+                  "CMCSA PM UBER SPGI AMAT GS ISRG RTX HON T LOW").split()[:60]
+        session = requests.Session()
+        tally: dict[int, int] = {}
+        first_refusal = None
+        for i, symbol in enumerate(sample, 1):
+            try:
+                code = session.get(f"{base}/quotes/{symbol}.json", headers=works,
+                                   timeout=TIMEOUT).status_code
+            except Exception:                         # noqa: BLE001
+                code = -1
+            tally[code] = tally.get(code, 0) + 1
+            if code != 200 and first_refusal is None:
+                first_refusal = i
+            time.sleep(0.3)
+        print(f"   outcomes {tally}; first refusal at request {first_refusal}")
+
+    # One request for the whole market, from the provider the nightly already
+    # pays for. Whether the plan includes it is the only question.
+    print("\n-- Polygon snapshot: every ticker in one request --")
+    key = os.environ.get("POLYGON_API_KEY", "").strip()
+    if not key:
+        print("   POLYGON_API_KEY not set for the probe")
+    else:
+        for label, url, params in (
+            ("all tickers", "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers", {}),
+            ("three tickers", "https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers",
+             {"tickers": "AAPL,NVDA,MSFT"}),
+        ):
+            try:
+                started = time.monotonic()
+                response = requests.get(url, params={**params, "apiKey": key}, timeout=60)
+                took = time.monotonic() - started
+                if response.status_code != 200:
+                    # The error body names the plan, never the key.
+                    print(f"   {label}: HTTP {response.status_code} "
+                          f"{(response.text or '')[:200]!r}")
+                    continue
+                rows = response.json().get("tickers") or []
+                print(f"   {label}: HTTP 200, {len(rows):,} tickers, "
+                      f"{len(response.content) / 1e6:.1f} MB in {took:.1f}s")
+                for row in rows:
+                    if row.get("ticker") == "AAPL":
+                        print("   AAPL: " + json.dumps({
+                            "day": row.get("day"), "min": row.get("min"),
+                            "prevDay": row.get("prevDay"),
+                            "lastTrade": row.get("lastTrade"),
+                            "todaysChangePerc": row.get("todaysChangePerc"),
+                            "updated": row.get("updated")})[:700])
+            except Exception as exc:                  # noqa: BLE001
+                print(f"   {label}: {type(exc).__name__}")
+
+    print("\n-- Yahoo spark: twenty names a request --")
+    try:
+        response = requests.get(
+            "https://query1.finance.yahoo.com/v7/finance/spark",
+            params={"symbols": "AAPL,NVDA,MSFT", "range": "1d", "interval": "5m"},
+            headers={"User-Agent": browser}, timeout=TIMEOUT)
+        print(f"   HTTP {response.status_code} {(response.text or '')[:200]!r}")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {str(exc)[:120]}")
+
+    print("\n-- Stooq light CSV, a hundred names in one request --")
+    hundred = ("aapl msft nvda amzn googl meta tsla avgo jpm v xom unh ma hd pg cost jnj "
+               "abbv bac ko crm nflx amd cvx mrk wmt pep tmo orcl adbe lin csco acn mcd "
+               "abt wfc dhr ibm ge cat qcom txn vz intu amgn now pfe dis cmcsa pm uber "
+               "spgi amat gs isrg rtx hon t low bkng axp unp nee ms blk pgr c syk etn "
+               "tjx vrtx bsx lmt mdt schw adp cb mu panw gild bmy de adi sbux mmc fi "
+               "kkr lrcx pld amt so mo nke klac intc ci duk shw").split()[:100]
+    try:
+        response = requests.get(
+            "https://stooq.com/q/l/",
+            params={"s": "+".join(f"{s}.us" for s in hundred), "f": "sd2t2ohlcv",
+                    "h": "", "e": "csv"},
+            headers={"User-Agent": browser}, timeout=TIMEOUT)
+        lines = (response.text or "").strip().splitlines()
+        priced = [line for line in lines[1:] if "N/D" not in line]
+        print(f"   HTTP {response.status_code}, {len(lines) - 1} rows, {len(priced)} priced")
+        for line in lines[:4]:
+            print("   " + line[:120])
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {str(exc)[:120]}")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -322,12 +469,27 @@ def main() -> int:
         return 2
     # Never print the agent itself: it is a contact address kept in a secret.
     print(f"Contact agent configured: yes ({len(agent)} characters)\n")
-    probe_shares(agent)
-    probe_open_interest(agent)
-    probe_flag_gates()
-    probe_quote_sources(agent)
-    probe_universe_trace()
-    probe_splits()
+    # PROBE_ONLY narrows the run to the named sections, so a question about
+    # one source does not wait behind five others.
+    only = {s.strip().lower() for s in os.environ.get("PROBE_ONLY", "").split(",")
+            if s.strip()}
+    sections = (
+        ("shares", lambda: probe_shares(agent)),
+        ("open_interest", lambda: probe_open_interest(agent)),
+        ("flags", probe_flag_gates),
+        ("quotes", lambda: probe_quote_sources(agent)),
+        ("universe", probe_universe_trace),
+        ("splits", probe_splits),
+        ("cboe", lambda: probe_cboe_refusals(agent)),
+    )
+    unknown = only - {name for name, _ in sections}
+    if unknown:
+        print(f"PROBE_ONLY names no section: {sorted(unknown)}. "
+              f"Sections: {[name for name, _ in sections]}")
+        return 2
+    for name, run in sections:
+        if not only or name in only:
+            run()
     print()
     print(RULE)
     print("Probe complete. Nothing was written.")
