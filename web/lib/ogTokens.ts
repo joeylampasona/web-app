@@ -29,7 +29,40 @@ function read(): Record<string, string> {
   return out;
 }
 
+/** The light theme's block, laid over the first one: a token the light theme
+ *  does not restate (the brand fill, the faces) keeps its root value. */
+function readPaper(): Record<string, string> {
+  const css = fs.readFileSync(TOKENS, "utf8");
+  const start = css.indexOf('[data-theme="light"]');
+  const out = { ...read() };
+  if (start < 0) return out;
+  const end = css.indexOf("\n}", start);
+  const block = css.slice(start, end > start ? end : css.length);
+  const seen = new Set<string>();
+  for (const [, name, value] of block.matchAll(/--([\w-]+):\s*([^;]+);/g)) {
+    if (!seen.has(name)) { out[name] = value.trim(); seen.add(name); }
+  }
+  return out;
+}
+
 let cached: Record<string, string> | null = null;
+let cachedPaper: Record<string, string> | null = null;
+
+/**
+ * The same lookup against the light palette, for the share cards.
+ *
+ * Those are set as the printed page, paper and ink, whoever is looking: a
+ * card is posted into somebody else's feed, where there is no reader's theme
+ * to follow, and the paper is what makes it recognisably this site's.
+ */
+export function paperToken(name: string): string {
+  if (!cachedPaper) cachedPaper = readPaper();
+  const value = cachedPaper[name];
+  if (!value) {
+    throw new Error(`tokens.css has no --${name} for the share cards to read.`);
+  }
+  return value;
+}
 
 export function token(name: string): string {
   if (!cached) cached = read();
