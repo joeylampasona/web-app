@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./auth";
+import { quotesAreStale } from "./quoteAge";
 import { client } from "./supabase";
 
 /** One delayed price. `change_pct` is null when there is no previous close to
@@ -50,7 +51,7 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
      *  file carries the free sample's prices and nothing else, so without this
      *  the paid half of every screen would be the only rows on the page with
      *  no live price beside them. */
-    const paid = async (): Promise<Record<string, Quote>> => {
+    const paid = async (asOf: string | null): Promise<Record<string, Quote>> => {
       const supabase = client();
       if (!supabase || !signedIn) return {};
       const { data: { session } } = await supabase.auth.getSession();
@@ -60,6 +61,9 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
       });
       if (!response.ok) return {};
       const body = await response.json();
+      // Held to the same rule as the public half: a sweep from before the
+      // published close would put an older price over a newer one.
+      if (quotesAreStale(body?.payload?.fetched_at, asOf)) return {};
       return (body?.payload?.quotes ?? {}) as Record<string, Quote>;
     };
 
@@ -70,7 +74,7 @@ export function QuotesProvider({ children }: { children: React.ReactNode }) {
         const body = await response.json();
         // Not Promise.all: a failure here must not lose the public quotes,
         // which are the ones every reader gets.
-        const extra = await paid().catch(() => ({}));
+        const extra = await paid(body.as_of ?? null).catch(() => ({}));
         if (!alive) return;
         setState({
           quotes: { ...(body.quotes ?? {}), ...extra },

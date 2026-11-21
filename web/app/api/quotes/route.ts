@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchLiveQuote, worthAsking, type LiveQuote } from "@/lib/cboeQuote";
-import { getIndexes } from "@/lib/data";
+import { getIndexes, getMeta } from "@/lib/data";
+import { quotesAreStale } from "@/lib/quoteAge";
 
 /**
  * The delayed intraday prices, proxied.
@@ -55,7 +56,11 @@ export async function GET() {
     note?: string;
   };
 
-  const quotes: Record<string, unknown> = { ...(body.quotes ?? {}) };
+  // A sweep older than the published close is dropped whole. The pages then
+  // show the close, which is newer and is what they are labelled as showing.
+  const asOf = getMeta()?.as_of ?? null;
+  const stale = quotesAreStale(body.fetched_at, asOf);
+  const quotes: Record<string, unknown> = stale ? {} : { ...(body.quotes ?? {}) };
 
   // The index symbols, read live and laid over the top.
   //
@@ -88,7 +93,10 @@ export async function GET() {
     {
       quotes,
       count: Object.keys(quotes).length,
-      fetched_at: body.fetched_at ?? null,
+      fetched_at: stale ? null : body.fetched_at ?? null,
+      // The session the pages were built from, so the reader's side can hold
+      // the subscriber's half of the sweep to the same rule.
+      as_of: asOf,
       // When the live half was read, which is not when the sweep ran. Kept
       // separate so the page can date each number to the moment it belongs
       // to rather than showing one time over two different readings.

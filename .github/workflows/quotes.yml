@@ -57,6 +57,7 @@ jobs:
           echo "screens: $(ls out/screens/*.json 2>/dev/null | wc -l | tr -d ' ')"
 
       - name: Fetch delayed quotes
+        id: quotes
         env:
           # The data branch carries the free sample of each screen now, so the
           # full lists are read back from the gated store to decide who to
@@ -78,25 +79,50 @@ jobs:
       # site moves during the day too. The nightly is the only other fetch,
       # and there is none on a Sunday or Monday morning. A failure here
       # leaves the site on the nightly's headlines; the quotes still publish.
+      #
+      # It runs whether or not the quotes arrived. The two have nothing to do
+      # with each other, and the session the price source refused every
+      # request was also a session with no new headlines, for no reason but
+      # the order of these steps.
       - name: Fetch headlines since the nightly
+        if: ${{ !cancelled() }}
         continue-on-error: true
         env:
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
         run: python -m cli headlines
 
       - name: Publish to the quotes branch
+        if: ${{ !cancelled() }}
         run: |
           # A fresh single-commit repository each time, like the data branch.
           # This file is worth nothing the moment it is superseded, so keeping
           # its history would be paying to store staleness.
-          mkdir -p send && cp out/quotes.json send/quotes.json
+          mkdir -p send
+          if [ "${QUOTES_OUTCOME}" = "success" ]; then
+            cp out/quotes.json send/quotes.json
+          else
+            # No prices this run. The branch is rewritten whole, so the last
+            # file that had any is carried forward beside the new headlines
+            # rather than erased; it keeps its own timestamp, and the site
+            # drops it once the nightly publishes a later close.
+            git clone -q --depth 1 --branch quotes --single-branch \
+              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" last \
+              && cp last/quotes.json send/quotes.json \
+              || echo "no earlier quotes file to carry forward"
+          fi
           if [ -f out/news_live.json ]; then cp out/news_live.json send/news_live.json; fi
+          if [ -z "$(ls -A send)" ]; then
+            echo "Nothing to publish: no prices, no earlier file and no headlines."
+            exit 0
+          fi
           cd send
-          python3 -c "
+          if [ -f quotes.json ]; then
+            python3 -c "
           import json
           d = json.load(open('quotes.json'))
           print(f\"publishing {d['count']} quotes, fetched {d['fetched_at']}\")
           "
+          fi
           git init -q -b quotes
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -107,3 +133,4 @@ jobs:
             HEAD:refs/heads/quotes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUOTES_OUTCOME: ${{ steps.quotes.outcome }}
