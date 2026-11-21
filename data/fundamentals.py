@@ -340,12 +340,16 @@ def stale(conn: sqlite3.Connection, symbols: Iterable[str],
 
 
 def due(conn: sqlite3.Connection, reported: dict[str, list[dt.date]],
-        today: dt.date | None = None) -> list[str]:
+        today: dt.date | None = None, again: bool = False) -> list[str]:
     """Companies that reported in the last DUE_DAYS whose stored figures end a
     quarter before the report, and that were not already asked today.
 
     A 10-Q lands within days of the print, so these are asked every night
     until the quarter it covers is stored, rather than once a month.
+
+    `again` drops the once-a-day rule, for the runs that ask during the day.
+    The nightly stamps every one of these in the small hours, so a run at nine
+    that honoured the rule would find nobody left to ask, every day.
     """
     today = today or dt.date.today()
     held = {row["symbol"]: (row["fetched_at"], row["payload"]) for row in conn.execute(
@@ -357,7 +361,7 @@ def due(conn: sqlite3.Connection, reported: dict[str, list[dt.date]],
             continue
         report = max(recent)
         fetched, payload = held.get(symbol, (None, None))
-        if fetched and str(fetched)[:10] >= today.isoformat():
+        if not again and fetched and str(fetched)[:10] >= today.isoformat():
             continue
         try:
             end = _date((json.loads(payload or "null") or {}).get("period_end"))

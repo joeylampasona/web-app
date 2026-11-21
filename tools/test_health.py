@@ -148,6 +148,24 @@ for i in range(29):
 check("an answer in between starts the count again", cboe.standing_down(), False)
 check("and so does a company that simply has no quote", cboe.OUTCOMES.get("not_asked", 0), 0)
 
+# ------------------------------- asking SEC again the same day
+import json  # noqa: E402
+
+from data import fundamentals  # noqa: E402
+
+book = sqlite3.connect(":memory:")
+book.row_factory = sqlite3.Row
+book.execute("CREATE TABLE fundamentals_xbrl(symbol TEXT PRIMARY KEY, fetched_at TEXT, payload TEXT)")
+today = dt.date(2026, 11, 21)
+book.execute("INSERT INTO fundamentals_xbrl VALUES (?,?,?)",
+             ("WSM", "2026-11-21 07:30:00", json.dumps({"period_end": "2026-08-02"})))
+book.execute("INSERT INTO fundamentals_xbrl VALUES (?,?,?)",
+             ("VVV", "2026-11-21 07:30:00", json.dumps({"period_end": "2026-09-30"})))
+told = {"WSM": [dt.date(2026, 11, 19)], "VVV": [dt.date(2026, 11, 19)]}
+check("the nightly's rule: asked today is not asked again", fundamentals.due(book, told, today), [])
+check("the daytime runs ask again, and only those still on the old quarter",
+      fundamentals.due(book, told, today, again=True), ["WSM"])
+
 print()
 if failures:
     print(f"FAILED ({len(failures)}): " + ", ".join(failures))

@@ -1403,7 +1403,7 @@ def _reads_as_filed(args, out, day: dt.date, state_path, today=()) -> None:
     for symbol in today:
         if symbol in set(universe):
             recent[symbol] = [day] + [d for d in recent.get(symbol, []) if d != day]
-    waiting = fundamentals.due(conn, recent, day)
+    waiting = fundamentals.due(conn, recent, day, again=True)
     _banner(f"Reads as filed — {len(recent)} reported in the last "
             f"{discord.READ_WINDOW_DAYS} days, {len(waiting)} still waiting on a 10-Q")
     if not waiting:
