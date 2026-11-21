@@ -441,8 +441,18 @@ def report_day_quotes(symbols: Sequence[str]) -> dict[str, dict]:
                         return None
                     return round(value, 2) if value == value else None
 
+                # The day Yahoo has the report on, in New York. It moves on to
+                # the next quarter some time after the release, so it can say
+                # a company reports today but not that it does not.
+                due_on = None
+                stamp = _positive(row.get("earningsTimestamp"))
+                if stamp:
+                    due_on = (dt.datetime.fromtimestamp(stamp, dt.timezone.utc)
+                              .astimezone(_new_york()).date().isoformat())
                 out[symbol] = {
-                    "name": row.get("shortName") or row.get("longName") or "",
+                    # The long name: the short one is cut off at thirty letters.
+                    "name": row.get("longName") or row.get("shortName") or "",
+                    "due_on": due_on,
                     "market_cap": _positive(row.get("marketCap")) or None,
                     "session_pct": pct("regularMarketChangePercent"),
                     "pre_pct": pct("preMarketChangePercent"),

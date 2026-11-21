@@ -1273,12 +1273,21 @@ def cmd_reporters(args) -> int:
     except (OSError, ValueError) as exc:
         print(f"No published calendar to read ({exc}).")
         return 1
-    due = sorted({e["ticker"] for e in upcoming.get("events") or []
-                  if e.get("type") == "earnings" and e.get("date") == day.isoformat()
-                  and not e.get("readthrough")})
+    def listed(on: dt.date) -> set[str]:
+        return {e["ticker"] for e in upcoming.get("events") or []
+                if e.get("type") == "earnings" and e.get("date") == on.isoformat()
+                and not e.get("readthrough")}
+
+    due = sorted(listed(day))
+    # The calendar's date for a report can be a day out: it is refreshed
+    # weekly and companies move. So the days either side are asked about too,
+    # and kept only where Yahoo has the report on today.
+    nearby = sorted((listed(day - dt.timedelta(days=1))
+                     | listed(day + dt.timedelta(days=1))) - set(due))
     _banner(f"Reporters — {day.isoformat()}, the {'morning' if run == 'pre' else 'evening'} run")
-    print(f"  {len(due)} due today, {len(posted)} already named")
-    if not due:
+    print(f"  {len(due)} due today by the calendar, {len(nearby)} listed a day either "
+          f"side, {len(posted)} already named")
+    if not due and not nearby:
         return 0
 
     # Every screen's names, public and gated: the room is private.
@@ -1302,7 +1311,11 @@ def cmd_reporters(args) -> int:
     except Exception as exc:                       # noqa: BLE001
         print(f"  gated screens unavailable: {type(exc).__name__}")
 
-    quotes = yfmod.report_day_quotes(due)
+    quotes = yfmod.report_day_quotes(due + nearby)
+    moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()]
+    if moved:
+        print(f"  {len(moved)} of those Yahoo has on today: {', '.join(moved)}")
+        due = sorted(set(due) | set(moved))
     named = discord.reporters_to_name(due, quotes, on_screen, set(posted))
     tables: dict[str, dict | None] = {}
     for symbol in named:
