@@ -74,6 +74,14 @@ def main(argv: list[str] | None = None) -> int:
                                 "morning line, earnings reads")
     p_edition.add_argument("--behind", type=int, default=0,
                            help="sessions the data is behind, to say so in the post")
+    p_rep = sub.add_parser("reporters",
+                           help="who reported today and the reaction, for Discord")
+    p_rep.add_argument("--when", choices=("auto", "pre", "post"), default="auto",
+                       help="the morning run, the evening run, or by the New York clock")
+    p_rep.add_argument("--send", action="store_true", help="post it")
+    p_rep.add_argument("--state", help="the last run's reporters.json, so a company "
+                                       "is named once a day")
+    p_rep.add_argument("--day", help="YYYY-MM-DD, for trying it against another day")
     p_rooms = sub.add_parser("rooms", help="which Discord rooms are wired")
     p_rooms.add_argument("--send", action="store_true",
                          help="post a one-line test to each room")

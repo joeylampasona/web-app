@@ -435,3 +435,20 @@ beyond the free sample may be posted there.
   posted against: held above, or fell back under. Once a day. The stop press
   note on the quotes branch now keeps that level beside each name. The hourly
   backstop for the quotes job gained a 4:41pm New York firing for it.
+
+## Earnings in two parts: the reaction on the day, the read when it is filed (2026-11-21)
+
+- **A read waits for its filing.** The read of a quarter is built from the
+  10-Q, which is filed days after the print. Until then the read on file is of
+  the quarter before, and the first cards sent to the earnings room included
+  three of those under the date of the new report. Only a read that covers the
+  reported quarter is posted now, within a fortnight of the report, and each
+  card says which quarter its figures are from.
+- **The reaction is posted on the day** (`earnings.yml`, `cli reporters`):
+  about 9:20 in New York for the companies set to report before the bell, with
+  the price before the bell, and about 18:00 for the rest, with the price after
+  it. The figure against the estimate is given when Yahoo has it and said to
+  be missing when it does not. Names on a screen first, then the largest;
+  thirty looked up a run; each company once a day, kept on a `reporters`
+  branch. The command picks its run from the New York clock and says nothing
+  outside its two windows, so a schedule delivered late posts nothing.

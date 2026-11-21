@@ -1227,6 +1227,113 @@ def _edition_extras(out, meta: dict, *, send: bool) -> None:
                      json.dumps(discord.remember_reads(posted, rows, as_of)))
 
 
+def cmd_reporters(args) -> int:
+    """Who reported today and how the price took it, for the earnings room.
+
+    Twice a day: before the open for the companies that report before the
+    bell, and in the evening for the rest. It reads the published calendar for
+    who is due, asks Yahoo for the prices and the figure against the estimate,
+    and names each company once a day. The full read of the quarter is a
+    different post: it waits for the 10-Q.
+    """
+    import pathlib
+    import time
+
+    from catalysts import yf as yfmod
+    from publish import discord, gated as gatedmod
+
+    out = settings.out_dir()
+    now = dt.datetime.now(dt.timezone.utc)
+    local = now.astimezone(discord.NEW_YORK)
+    day = (dt.date.fromisoformat(args.day) if getattr(args, "day", None) else local.date())
+    wanted = getattr(args, "when", "auto") or "auto"
+    run = wanted if wanted in ("pre", "post") else discord.which_run(now)
+
+    posted: list[str] = []
+    state_path = getattr(args, "state", None)
+    if state_path:
+        try:
+            kept = json.loads(pathlib.Path(state_path).read_text())
+            if kept.get("date") == day.isoformat():
+                posted = list(kept.get("posted") or [])
+        except (OSError, ValueError):
+            pass
+
+    def keep() -> None:
+        (out / "reporters.json").write_text(json.dumps(
+            {"date": day.isoformat(), "posted": sorted(set(posted))}))
+
+    keep()
+    if run is None:
+        print(f"  {local.strftime('%-I:%M %p')} New York is outside both windows; nothing to do.")
+        return 0
+
+    try:
+        upcoming = json.loads((out / "catalysts" / "upcoming.json").read_text())
+    except (OSError, ValueError) as exc:
+        print(f"No published calendar to read ({exc}).")
+        return 1
+    due = sorted({e["ticker"] for e in upcoming.get("events") or []
+                  if e.get("type") == "earnings" and e.get("date") == day.isoformat()
+                  and not e.get("readthrough")})
+    _banner(f"Reporters — {day.isoformat()}, the {'morning' if run == 'pre' else 'evening'} run")
+    print(f"  {len(due)} due today, {len(posted)} already named")
+    if not due:
+        return 0
+
+    # Every screen's names, public and gated: the room is private.
+    on_screen: dict[str, str] = {}
+
+    def absorb(payload: dict) -> None:
+        for stage in (payload.get("setups") or {}).values():
+            for row in stage:
+                if row.get("symbol"):
+                    on_screen.setdefault(row["symbol"], payload.get("name") or "a screen")
+
+    for path in sorted((out / "screens").glob("*.json")):
+        if path.stem != "diff":
+            try:
+                absorb(json.loads(path.read_text()))
+            except (OSError, ValueError):
+                continue
+    try:
+        for payload in gatedmod.fetch("screens/").values():
+            absorb(payload)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  gated screens unavailable: {type(exc).__name__}")
+
+    quotes = yfmod.report_day_quotes(due)
+    named = discord.reporters_to_name(due, quotes, on_screen, set(posted))
+    tables: dict[str, dict | None] = {}
+    for symbol in named:
+        tables[symbol] = yfmod.report_row(symbol, day)
+        time.sleep(0.4)
+    rows = discord.reporter_rows(run, named, quotes, tables, on_screen)
+    others = len([s for s in due if s not in posted]) - len(named)
+    print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
+          f"{sum(1 for t in tables.values() if t)} with a line for today; "
+          f"{len(rows)} to name in this run")
+    message = discord.reporters_message(run, rows, day, local.strftime("%-I:%M %p"),
+                                        others=max(0, others))
+    if not message:
+        print("  nobody to name in this run.")
+        return 0
+    print(message)
+    if not getattr(args, "send", False):
+        return 0
+    try:
+        if discord.post("earnings", message, username="The Tape · earnings"):
+            posted += [row["symbol"] for row in rows]
+            keep()
+            print("\nSent to Discord.")
+        else:
+            print("\nNo Discord webhook is set; nothing was sent.")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\nDiscord refused the post: {type(exc).__name__}")
+        return 1
+    return 0
+
+
 def cmd_rooms(args) -> int:
     """Say which Discord rooms are wired, and with --send post a line to each.
 

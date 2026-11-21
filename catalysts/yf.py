@@ -402,3 +402,89 @@ def quotes(symbols: Sequence[str]) -> dict[str, dict]:
         out.update(rest)
     QUOTE_OUTCOMES["missing"] += len(wanted) - len(out)
     return out
+
+
+# ------------------------------------------------------- the day of a report
+
+def report_day_quotes(symbols: Sequence[str]) -> dict[str, dict]:
+    """For companies reporting today: the price in and out of the session.
+
+    The same endpoint as the delayed quotes, read for different fields. Before
+    the bell it carries the pre-market price, after it the post-market one,
+    and either way the session's own move. Absent names are absent; never
+    raises.
+    """
+    yf = _yf()
+    wanted = list(dict.fromkeys(str(s).upper() for s in symbols if s))
+    if yf is None or not wanted:
+        return {}
+    out: dict[str, dict] = {}
+    try:
+        from yfinance.data import YfData            # noqa: PLC0415 - optional
+        data = YfData()
+        spelled = {yahoo_symbol(s): s for s in wanted}
+        asked = list(spelled)
+        for start in range(0, len(asked), QUOTE_BATCH):
+            response = data.get(QUOTE_URL,
+                                params={"symbols": ",".join(asked[start:start + QUOTE_BATCH])})
+            if response.status_code != 200:
+                continue
+            for row in (response.json().get("quoteResponse") or {}).get("result") or []:
+                symbol = spelled.get(str(row.get("symbol") or "").upper())
+                if not symbol:
+                    continue
+
+                def pct(key: str) -> float | None:
+                    try:
+                        value = float(row.get(key))
+                    except (TypeError, ValueError):
+                        return None
+                    return round(value, 2) if value == value else None
+
+                out[symbol] = {
+                    "name": row.get("shortName") or row.get("longName") or "",
+                    "market_cap": _positive(row.get("marketCap")) or None,
+                    "session_pct": pct("regularMarketChangePercent"),
+                    "pre_pct": pct("preMarketChangePercent"),
+                    "post_pct": pct("postMarketChangePercent"),
+                    "state": row.get("marketState") or "",
+                }
+    except Exception as exc:                        # noqa: BLE001
+        log.debug("report-day quotes failed: %s", exc)
+    return out
+
+
+def report_row(symbol: str, day: dt.date) -> dict | None:
+    """The line for `day` in a company's earnings table, or None.
+
+    The hour it was set for, in New York, and the figure against the estimate
+    once Yahoo has it, which can be hours after the release. One request a
+    company, so the caller asks only about the ones it means to name.
+    """
+    yf = _yf()
+    if yf is None:
+        return None
+    try:
+        frame = yf.Ticker(yahoo_symbol(symbol)).get_earnings_dates(limit=6)
+        if frame is None or frame.empty:
+            return None
+        for stamp, row in frame.iterrows():
+            local = stamp.tz_convert(_new_york()) if getattr(stamp, "tzinfo", None) else stamp
+            if local.date() != day:
+                continue
+
+            def number(key: str) -> float | None:
+                value = row.get(key)
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    return None
+                return value if value == value else None
+
+            return {"hour": local.time().replace(tzinfo=None),
+                    "eps": number("Reported EPS"),
+                    "estimate": number("EPS Estimate"),
+                    "surprise_pct": number("Surprise(%)")}
+    except Exception as exc:                        # noqa: BLE001
+        log.debug("earnings table failed for %s: %s", symbol, exc)
+    return None

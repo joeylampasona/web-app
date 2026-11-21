@@ -246,17 +246,27 @@ def morning_line(upcoming: dict, releases: dict, on_screen: dict[str, str],
 # ------------------------------------------------------- earnings reads
 
 READS_A_NIGHT = 6
-READ_WINDOW_DAYS = 5
+READ_WINDOW_DAYS = 14
 READ_MEMORY_DAYS = 45
 
 
 def reads_to_post(reads: list[dict], on_screen: dict[str, str], as_of: dt.date,
                   posted: dict[str, str]) -> list[dict]:
-    """Tonight's reads for the earnings room: reported in the last few days
-    and not posted before, names on a screen first."""
+    """Tonight's reads for the earnings room: reported in the last fortnight,
+    the filing for that report in hand, and not posted before; names on a
+    screen first.
+
+    Only a read that covers the quarter just reported. A read is built from
+    the 10-Q, which is filed days after the print, and until it is the read
+    on file is of the quarter before. The first cards this room was sent
+    included three of those under the date of the new report, which says the
+    opposite of what it should. They wait for the filing now, which is why
+    the window is a fortnight and not a few days.
+    """
     cutoff = (as_of - dt.timedelta(days=READ_WINDOW_DAYS)).isoformat()
     fresh = [r for r in reads
              if r.get("symbol") and str(r.get("report_date") or "") >= cutoff
+             and r.get("covers") is True
              and posted.get(r["symbol"]) != r.get("report_date")]
     # Newest report first, then whether it is on a screen. Stable, so the
     # file's own order decides the rest.
@@ -290,6 +300,11 @@ def read_embed(read: dict, on_screen: dict[str, str]) -> dict:
         lines.append(read["test"])
     reported = dt.date.fromisoformat(read["report_date"])
     foot = f"Reported {reported.month}/{reported.day}"
+    try:
+        ended = dt.date.fromisoformat(str((read.get("glance") or {}).get("end")))
+        foot += f" · quarter ended {ended.month}/{ended.day}"
+    except ValueError:
+        pass
     if symbol in on_screen:
         foot += f" · on {on_screen[symbol]}"
     name = company_name(str(read.get("name") or ""))
@@ -307,6 +322,98 @@ def remember_reads(posted: dict[str, str], rows: list[dict], as_of: dt.date) -> 
     kept = {symbol: day for symbol, day in posted.items() if str(day) >= cutoff}
     kept.update({row["symbol"]: row["report_date"] for row in rows})
     return kept
+
+
+# -------------------------------------------- who reported, and the reaction
+
+BELL_OPEN, BELL_CLOSE = dt.time(9, 30), dt.time(16, 0)
+#: The two windows a run may post in, New York time. Outside them a run says
+#: nothing: a "before the open" post that arrives at eleven is wrong twice.
+PRE_WINDOW = (dt.time(8, 30), dt.time(9, 30))
+POST_WINDOW = (dt.time(17, 30), dt.time(20, 30))
+#: How many companies a run looks up one at a time, and names.
+REPORTERS_NAMED = 30
+
+
+def which_run(now: dt.datetime) -> str | None:
+    """"pre", "post" or None, from the New York clock on a weekday."""
+    local = now.astimezone(NEW_YORK)
+    if local.weekday() >= 5:
+        return None
+    clock = local.time()
+    if PRE_WINDOW[0] <= clock < PRE_WINDOW[1]:
+        return "pre"
+    if POST_WINDOW[0] <= clock < POST_WINDOW[1]:
+        return "post"
+    return None
+
+
+def reporters_to_name(symbols: list[str], quotes: dict[str, dict],
+                      on_screen: dict[str, str], already: set[str]) -> list[str]:
+    """Who to look up and name: not yet posted, names on a screen first, then
+    the largest companies."""
+    fresh = [s for s in dict.fromkeys(symbols) if s not in already]
+    fresh.sort(key=lambda s: -((quotes.get(s) or {}).get("market_cap") or 0.0))
+    fresh.sort(key=lambda s: s not in on_screen)
+    return fresh[:REPORTERS_NAMED]
+
+
+def reporter_rows(run: str, named: list[str], quotes: dict[str, dict],
+                  tables: dict[str, dict | None], on_screen: dict[str, str]) -> list[dict]:
+    """The lines for one run. Before the open: the companies set to report
+    before the bell. After the close: everybody else due today."""
+    rows = []
+    for symbol in named:
+        table = tables.get(symbol)
+        if not table:
+            continue                     # no line for today: not reporting, or unknown
+        early = table["hour"] < BELL_OPEN
+        late = table["hour"] >= BELL_CLOSE
+        if run == "pre" and not early:
+            continue
+        quote = quotes.get(symbol) or {}
+        if run == "pre":
+            move, when = quote.get("pre_pct"), "before the bell"
+        elif late:
+            move, when = quote.get("post_pct"), "after the bell"
+        else:
+            # Reported in the morning or mid-session and not caught earlier:
+            # the session's own move is the reaction.
+            move, when = quote.get("session_pct"), "on the day"
+        rows.append({"symbol": symbol, "name": company_name(quote.get("name") or ""),
+                     "move": move, "when": when, "screen": on_screen.get(symbol),
+                     "eps": table.get("eps"), "estimate": table.get("estimate"),
+                     "surprise_pct": table.get("surprise_pct")})
+    return rows
+
+
+def reporters_message(run: str, rows: list[dict], day: dt.date, read_at: str,
+                      others: int = 0) -> str | None:
+    if not rows:
+        return None
+    head = "Reported before the open" if run == "pre" else "Reported after the close"
+    lines = [f"**{head}**: {day.strftime('%A')} {day.month}/{day.day}, "
+             f"prices read {read_at} ET"]
+    for row in rows:
+        parts = []
+        if row["move"] is not None:
+            parts.append(f"{row['move']:+.1f}% {row['when']}")
+        if row["eps"] is not None and row["estimate"] is not None:
+            beat = (f" ({row['surprise_pct']:+.1f}%)"
+                    if row["surprise_pct"] is not None else "")
+            parts.append(f"EPS {row['eps']:.2f} against {row['estimate']:.2f} expected{beat}")
+        elif row["eps"] is not None:
+            parts.append(f"EPS {row['eps']:.2f}")
+        else:
+            parts.append("EPS not in yet")
+        if row["screen"]:
+            parts.append(f"on {row['screen']}")
+        name = f" {row['name']}" if row["name"] else ""
+        lines.append(f"`{row['symbol']}`{name}: " + " · ".join(parts))
+    if others > 0:
+        lines.append(f"{others:,} more in the universe are due today and were not looked up.")
+    lines.append("_Delayed prices. The read on each follows here once its 10-Q is filed._")
+    return "\n".join(lines)
 
 
 # ------------------------------------------------------------ stop press

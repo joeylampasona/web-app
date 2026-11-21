@@ -276,18 +276,26 @@ check("then the data due, the Fed first", line[3],
 check("a morning with nothing on a screen and no data says nothing",
       discord.morning_line({"events": upcoming["events"][1:2]}, {}, {}, friday), None)
 
-reads = [{"symbol": "OLD", "report_date": "2026-11-10"},
+reads = [{"symbol": "OLD", "report_date": "2026-11-01", "covers": True},
+         {"symbol": "PRIOR", "report_date": "2026-11-19", "covers": False},
          {"symbol": "WSM", "report_date": "2026-11-19", "name": "Williams-Sonoma, Inc.",
+          "covers": True, "glance": {"end": "2026-11-01"},
           "takeaway": "Profitable; the question is growth.",
           "flags": [{"text": "Revenue +6.7% year over year"}],
           "verdict": {"growth": "FLAT", "proof": "SHOWN", "question": "Can it hold?"},
           "test": "The next test is whether the quarter repeats."},
-         {"symbol": "WMT", "report_date": "2026-11-19", "name": "Walmart Inc. Common Stock"},
-         {"symbol": "ROST", "report_date": "2026-11-20", "name": "Ross Stores Inc"}]
+         {"symbol": "WMT", "report_date": "2026-11-19", "covers": True,
+          "name": "Walmart Inc. Common Stock"},
+         {"symbol": "ROST", "report_date": "2026-11-20", "covers": True,
+          "name": "Ross Stores Inc"}]
 rows = discord.reads_to_post(reads, {"WMT": "Flat base"}, friday, {"ROST": "2026-11-20"})
 check("reads: recent, not posted before, a name on a screen first",
       [r["symbol"] for r in rows], ["WMT", "WSM"])
-embed = discord.read_embed(reads[1], {})
+check("a read of the quarter before the report waits for the filing",
+      "PRIOR" in [r["symbol"] for r in rows], False)
+embed = discord.read_embed(reads[2], {})
+check("a card says which quarter its figures are from", embed["footer"]["text"],
+      "Reported 11/19 · quarter ended 11/1")
 check("a read's card leads with the company and the takeaway", embed["title"],
       "WSM Williams-Sonoma: Profitable; the question is growth.")
 check("then the figures, the verdict and the question", embed["description"].splitlines(),
@@ -298,11 +306,58 @@ check("a share class is not part of a company's name",
        discord.company_name("Warner Music Group Corp. Class A Common Stock")),
       ("Walmart Inc.", "Warner Music Group Corp."))
 check("and the card says when it reported and what screen it is on",
-      discord.read_embed(reads[2], {"WMT": "Flat base"})["footer"]["text"],
+      discord.read_embed(reads[3], {"WMT": "Flat base"})["footer"]["text"],
       "Reported 11/19 · on Flat base")
 memory = discord.remember_reads({"ANC": "2026-09-01", "ROST": "2026-11-20"}, rows, friday)
 check("what was posted is remembered, and the old forgotten", memory,
       {"ROST": "2026-11-20", "WMT": "2026-11-19", "WSM": "2026-11-19"})
+
+# ------------------------------------------- who reported, and the reaction
+def utc(hour, minute, day=23):
+    return dt.datetime(2026, 11, day, hour, minute, tzinfo=dt.timezone.utc)
+
+
+check("9:20 in New York is the morning run", discord.which_run(utc(14, 20)), "pre")
+check("an hour early in winter is neither", discord.which_run(utc(13, 20)), None)
+check("after the open is too late for the morning run", discord.which_run(utc(14, 31)), None)
+check("6:00 in the evening is the evening run", discord.which_run(utc(23, 0)), "post")
+check("5:00 is not yet", discord.which_run(utc(22, 0)), None)
+check("a Saturday is neither", discord.which_run(utc(14, 20, day=21)), None)
+
+rq = {"BIG": {"name": "Big Co. Common Stock", "market_cap": 9e11, "pre_pct": 2.14,
+              "post_pct": 0.3, "session_pct": 1.0},
+      "SCR": {"name": "Screen Inc", "market_cap": 1e9, "pre_pct": -3.0, "post_pct": 6.25,
+              "session_pct": -1.0},
+      "MID": {"name": "Mid Corp", "market_cap": 5e10, "pre_pct": None, "post_pct": -4.0,
+              "session_pct": 0.5},
+      "DAY": {"name": "Day Ltd", "market_cap": 2e10, "session_pct": 3.3}}
+named = discord.reporters_to_name(["BIG", "DAY", "MID", "SCR", "OLD"], rq, {"SCR": "VCP"}, {"OLD"})
+check("names on a screen first, then the largest, never one already named",
+      named, ["SCR", "BIG", "MID", "DAY"])
+tables = {"BIG": {"hour": dt.time(6, 0), "eps": 0.65, "estimate": 0.64, "surprise_pct": 2.16},
+          "SCR": {"hour": dt.time(16, 5), "eps": None, "estimate": 1.0, "surprise_pct": None},
+          "MID": {"hour": dt.time(16, 0), "eps": 1.91, "estimate": 1.87, "surprise_pct": 2.21},
+          "DAY": None}
+pre = discord.reporter_rows("pre", named, rq, tables, {"SCR": "VCP"})
+check("the morning run names only those set for before the bell",
+      [(r["symbol"], r["move"], r["when"]) for r in pre], [("BIG", 2.14, "before the bell")])
+post = discord.reporter_rows("post", named, rq, tables, {"SCR": "VCP"})
+check("the evening run names the rest: after the bell, or the day's move for a morning one",
+      [(r["symbol"], r["move"], r["when"]) for r in post],
+      [("SCR", 6.25, "after the bell"), ("BIG", 1.0, "on the day"), ("MID", -4.0, "after the bell")])
+check("a company with no line for today is not named", "DAY" in [r["symbol"] for r in post], False)
+text = discord.reporters_message("pre", pre, dt.date(2026, 11, 23), "9:21 AM", others=4).splitlines()
+check("the post says which run, the day and when prices were read", text[0],
+      "**Reported before the open**: Monday 11/23, prices read 9:21 AM ET")
+check("a line has the move, the figure against the estimate and no share class", text[1],
+      "`BIG` Big Co.: +2.1% before the bell · EPS 0.65 against 0.64 expected (+2.2%)")
+check("and says how many were not looked up", text[2],
+      "4 more in the universe are due today and were not looked up.")
+check("a figure Yahoo does not have yet is said, with the screen",
+      discord.reporters_message("post", post, dt.date(2026, 11, 23), "6:01 PM").splitlines()[1],
+      "`SCR` Screen Inc: +6.2% after the bell · EPS not in yet · on VCP")
+check("nobody to name says nothing",
+      discord.reporters_message("pre", [], dt.date(2026, 11, 23), "9:21 AM"), None)
 
 # -------------------------------------------------------------- the wrap
 follow = {"screens": {
