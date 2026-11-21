@@ -327,3 +327,34 @@ Market section did not. What changed, and why each is drawn the way it is:
   reliably honour a dark scheme.
 - **Share tonight's read** draws the headline, meter and barcode as one
   1200 by 675 image, from the tokens of whichever theme the reader is in.
+
+## Intraday quotes ask two sources (2026-11-21)
+
+From the evening of 2026-11-19 Cboe's delayed-quote host refused every
+request the pipeline made, 221 of 221 a run. A probe from the runner showed
+why: the host now answers only requests that look like a browser arriving
+from cboe.com (a browser's name with that page as Referer and Origin gets
+200; every name the pipeline gives itself, and a browser's name alone, gets
+403). That is a door Cboe closed on purpose, and the pipeline does not dress
+up as their website to get through it.
+
+- **Yahoo is the first source**, through the yfinance library the nightly
+  already uses. Its quote endpoint answers two hundred names a request: the
+  probe got 400 of 400 in under half a second, where one request a name took
+  six minutes. The library's batch download stands behind the endpoint, since
+  the endpoint is reached through the library's internals.
+- **Cboe stays as the second source**, asked honestly and only for the names
+  Yahoo left. It is abandoned for the sweep after twelve refusals with
+  nothing answered, so a closed door costs seconds rather than eight minutes.
+- **The sweep covers every name on a screen** now, not the nearest four
+  hundred, because the cost is per request and not per name.
+- **A sweep older than the published close is ignored by the site.** The last
+  file from Thursday stayed up through Friday night and was overriding
+  Friday's closes with Thursday's prices.
+- **Headlines no longer wait on prices.** The quotes job stopped at the failed
+  price step, so the session with no prices was also a session with no new
+  headlines. Both later steps run regardless now, and the job still ends red.
+- **Not fixed here:** the nightly's option chains come from the same host and
+  have been falling back to Yahoo's shorter book since the same night, with
+  nothing in the log saying so. The index figures the site reads live from
+  Cboe at request time are refused too and fall back to the sweep.

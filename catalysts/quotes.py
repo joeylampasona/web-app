@@ -11,28 +11,78 @@ So this is deliberately small: one number per name, for the names already on
 a screen, written to its own file. Nothing here feeds the detectors, and the
 figures it writes are never mixed into the nightly tree — a delayed quote and
 a settled close are different things and the page says which it is showing.
+
+Two sources, asked in order. On 2026-11-19 the only one there was began
+refusing every request, 221 of 221 a run, and the site went a whole session
+without an intraday price because nothing stood behind it.
 """
 from __future__ import annotations
 
 import datetime as dt
 import time
 
-from catalysts import cboe
+from catalysts import cboe, yf
 
-#: How many names one sweep will ask about. The cap has to leave the job
-#: finishing well inside its own cadence: at roughly half a second a name it
-#: is a few minutes, and a run still going when the next one starts is a run
-#: that never publishes.
-MAX_SYMBOLS = 400
+#: How many names a batched source is asked about. It answers two hundred a
+#: request, so the cap is there to bound the file, not the clock.
+MAX_SYMBOLS = 2000
 
+#: How many names a source that takes one request a name is asked about. At
+#: roughly half a second each this is a few minutes, and a run still going
+#: when the next one starts is a run that never publishes.
+MAX_ONE_BY_ONE = 400
 
-#: How long one sweep may spend before it stops and publishes what it has.
-#: The job it runs in has its own timeout, and being killed by that means
-#: publishing nothing — the first paced run was cut off holding four hundred
-#: perfectly good quotes. Stopping early with a partial file is strictly
-#: better, and because the names are in priority order the ones dropped are
-#: the ones furthest from mattering.
+#: How long the one-request-a-name sweep may spend before it stops and
+#: publishes what it has. The job it runs in has its own timeout, and being
+#: killed by that means publishing nothing — the first paced run was cut off
+#: holding four hundred perfectly good quotes. Stopping early with a partial
+#: file is strictly better, and because the names are in priority order the
+#: ones dropped are the ones furthest from mattering.
 TIME_BUDGET_SECONDS = 8 * 60
+
+#: How many refusals in a row, with nothing answered yet, before the
+#: one-request-a-name source is left alone for this sweep. The session it
+#: refused everything, each run spent its whole eight minutes being told no.
+REFUSALS_BEFORE_GIVING_UP = 12
+
+
+def _one_by_one(symbols, notice) -> tuple[dict[str, dict], int, bool]:
+    """Cboe, a request a name. Returns the rows, how many were asked, and
+    whether the clock rather than the list ended it."""
+    # Reset per call: these counts describe this sweep, and a process that
+    # fetched chains earlier would otherwise fold its own tally into them.
+    cboe.OUTCOMES.clear()
+    rows: dict[str, dict] = {}
+    asked = 0
+    started = time.monotonic()
+    ran_out = False
+    for symbol in symbols:
+        if time.monotonic() - started > TIME_BUDGET_SECONDS:
+            ran_out = True
+            break
+        if not rows and asked >= REFUSALS_BEFORE_GIVING_UP \
+                and cboe.OUTCOMES.get("throttled", 0) >= asked:
+            if notice:
+                notice(f"quotes: cboe refused the first {asked} names and was "
+                       f"not asked about the rest.")
+            break
+        asked += 1
+        if notice and asked % 100 == 0:
+            notice(f"quotes: cboe {asked:,}/{len(symbols):,} asked, {len(rows):,} "
+                   f"answered, {time.monotonic() - started:.0f}s elapsed")
+        found = cboe.quote(symbol)
+        if found is not None:
+            rows[symbol] = found
+    if ran_out and notice:
+        notice(f"quotes: cboe stopped at {asked:,} of {len(symbols):,} after "
+               f"{TIME_BUDGET_SECONDS}s and published what was in hand. The "
+               f"names left out are the ones furthest from their pivot.")
+    return rows, asked, ran_out
+
+
+def _tally(counter) -> str:
+    return ", ".join(f"{k} {v:,}" for k, v in
+                     sorted(counter.items(), key=lambda kv: -kv[1])) or "none recorded"
 
 
 def collect(symbols, notice=None) -> dict:
@@ -43,9 +93,6 @@ def collect(symbols, notice=None) -> dict:
     alphabetically, which is a ranking by nothing, and spent its budget on the
     letter A while the names actually near a breakout sat past the cut.
     """
-    # Reset per call: these counts describe this sweep, and a process that
-    # fetched chains earlier would otherwise fold its own tally into them.
-    cboe.OUTCOMES.clear()
     seen: set[str] = set()
     wanted: list[str] = []
     for symbol in symbols:
@@ -56,34 +103,37 @@ def collect(symbols, notice=None) -> dict:
         wanted.append(upper)
         if len(wanted) >= MAX_SYMBOLS:
             break
-    rows: dict[str, dict] = {}
-    asked = 0
-    started = time.monotonic()
-    ran_out = False
-    for symbol in wanted:
-        if time.monotonic() - started > TIME_BUDGET_SECONDS:
-            ran_out = True
-            break
-        asked += 1
-        if notice and asked % 100 == 0:
-            notice(f"quotes: {asked:,}/{len(wanted):,} asked, {len(rows):,} answered, "
-                   f"{time.monotonic() - started:.0f}s elapsed")
-        found = cboe.quote(symbol)
-        if found is not None:
-            rows[symbol] = found
 
-    if ran_out and notice:
-        notice(f"quotes: stopped at {asked:,} of {len(wanted):,} after "
-               f"{TIME_BUDGET_SECONDS}s and published what was in hand. The "
-               f"names left out are the ones furthest from their pivot.")
+    rows: dict[str, dict] = {}
+    by_source: dict[str, int] = {}
+
+    # Yahoo first: every name in a handful of requests.
+    found = yf.quotes(wanted)
+    if found:
+        rows.update(found)
+        by_source["yahoo-delayed"] = len(found)
+    if notice:
+        notice(f"quotes: yahoo answered {len(found):,} of {len(wanted):,} "
+               f"({_tally(yf.QUOTE_OUTCOMES)})")
+
+    # Then Cboe for whatever is left, nearest its pivot first. With Yahoo
+    # answering that is a few names it does not carry; with Yahoo down it is
+    # the whole list, cut to what one request a name can cover.
+    left = [s for s in wanted if s not in rows][:MAX_ONE_BY_ONE]
+    ran_out = False
+    if left:
+        more, asked, ran_out = _one_by_one(left, notice)
+        if more:
+            rows.update(more)
+            by_source["cboe-delayed"] = len(more)
+        if notice:
+            # Always, not only on failure. A hit rate that quietly slides from
+            # ninety per cent to twelve is exactly what happened the first
+            # time this ran, and a bare success count cannot show it.
+            notice(f"quotes: cboe answered {len(more):,} of {asked:,} asked "
+                   f"({_tally(cboe.OUTCOMES)})")
 
     if notice:
-        # Always, not only on failure. A hit rate that quietly slides from
-        # ninety per cent to twelve is exactly what happened the first time
-        # this ran, and a bare success count cannot show it.
-        outcomes = ", ".join(f"{k} {v:,}" for k, v in
-                             sorted(cboe.OUTCOMES.items(), key=lambda kv: -kv[1]))
-        notice(f"quotes: outcomes — {outcomes or 'none recorded'}")
         if rows:
             share = 100.0 * len(rows) / max(1, len(wanted))
             notice(f"quotes: {len(rows):,} of {len(wanted):,} names answered "
@@ -99,15 +149,16 @@ def collect(symbols, notice=None) -> dict:
     return {
         "fetched_at": now.isoformat(timespec="seconds"),
         "count": len(rows),
-        "asked": asked,
+        "asked": len(wanted),
         "wanted": len(wanted),
-        # True when the clock stopped the sweep rather than the list running
+        # True when the clock stopped a sweep rather than the list running
         # out, so a short file can be told from a quiet market.
         "truncated": ran_out,
-        "source": "cboe-delayed",
+        "source": "+".join(by_source) or "none",
+        "sources": by_source,
         # Said once, here, so every surface that reads this file has to carry
         # it rather than quietly presenting delayed prices as live ones.
-        "note": ("Delayed by roughly fifteen minutes. The screens themselves "
+        "note": ("Delayed by fifteen to twenty minutes. The screens themselves "
                  "are end-of-day; this is only the price beside them."),
         "quotes": rows,
     }

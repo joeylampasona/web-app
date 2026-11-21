@@ -501,6 +501,21 @@ def probe_cboe_refusals(agent: str) -> None:
         except Exception as exc:                      # noqa: BLE001
             print(f"   quote endpoint: {type(exc).__name__}: {str(exc)[:160]}")
 
+    # The sweep itself, called the way the quotes job calls it. Everything
+    # above asks the sources directly; this is the code that will run, and it
+    # publishes nothing and sends nothing from here.
+    print("\n-- the sweep itself, as the quotes job runs it --")
+    try:
+        from catalysts import quotes as sweep
+        ordered = ["SPY", "QQQ", "BRK.B"] + [s for s in wanted if s not in ("SPY", "QQQ", "BRK.B")]
+        payload = sweep.collect(ordered, notice=lambda m: print(f"   → {m}"))
+        print(f"   count {payload['count']}, source {payload['source']!r}, "
+              f"by source {payload['sources']}, truncated {payload['truncated']}")
+        for symbol in ("SPY", "QQQ", "BRK.B", ordered[3] if len(ordered) > 3 else "SPY"):
+            print(f"   {symbol}: {payload['quotes'].get(symbol)}")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {str(exc)[:200]}")
+
     print("\n-- Stooq light CSV, a hundred names in one request --")
     hundred = ("aapl msft nvda amzn googl meta tsla avgo jpm v xom unh ma hd pg cost jnj "
                "abbv bac ko crm nflx amd cvx mrk wmt pep tmo orcl adbe lin csco acn mcd "

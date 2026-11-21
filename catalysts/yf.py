@@ -6,6 +6,7 @@ missing earnings date costs a badge, a failed nightly run costs the whole site.
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import logging
 from collections.abc import Sequence
@@ -243,4 +244,154 @@ def reported_dates(conn, symbols, as_of: dt.date) -> dict[str, list[dt.date]]:
             out.setdefault(row[0], []).append(dt.date.fromisoformat(row[1]))
         except (TypeError, ValueError):
             continue
+    return out
+
+
+# ------------------------------------------------------------------ quotes
+
+#: The endpoint Yahoo's own pages read a watchlist from. It answers for a few
+#: hundred names in one request, which is the whole reason to use it: a probe
+#: from the runner got 400 of 400 in under half a second, where one request a
+#: name against the previous source took six minutes on a good day.
+QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+QUOTE_BATCH = 200
+
+#: What happened to every name asked in this process, by how it was answered.
+QUOTE_OUTCOMES: "collections.Counter[str]" = collections.Counter()
+
+_NEW_YORK = None
+
+
+def _new_york():
+    global _NEW_YORK                                # noqa: PLW0603
+    if _NEW_YORK is None:
+        from zoneinfo import ZoneInfo               # noqa: PLC0415
+        _NEW_YORK = ZoneInfo("America/New_York")
+    return _NEW_YORK
+
+
+def yahoo_symbol(symbol: str) -> str:
+    """Yahoo's spelling of a ticker. Class shares take a dash: BRK.B is BRK-B."""
+    return symbol.strip().upper().replace(".", "-")
+
+
+def _positive(value) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return number if number == number and number > 0 else 0.0
+
+
+def quote_row(last, previous, traded_at=None) -> dict | None:
+    """One published quote, in the shape every reader of the file expects."""
+    last = _positive(last)
+    if last <= 0:
+        return None
+    previous = _positive(previous)
+    at = None
+    stamp = _positive(traded_at)
+    if stamp:
+        # New York wall time without an offset, because that is what the file
+        # has always carried and what the page prints as it stands.
+        at = (dt.datetime.fromtimestamp(stamp, dt.timezone.utc)
+              .astimezone(_new_york()).replace(tzinfo=None)
+              .isoformat(timespec="seconds"))
+    return {
+        "last": round(last, 4),
+        "prev_close": round(previous, 4) if previous else None,
+        # None rather than zero with nothing to compare against: unknown must
+        # not read as unchanged.
+        "change_pct": round(100.0 * (last / previous - 1.0), 2) if previous else None,
+        "at": at,
+    }
+
+
+def _quotes_from_endpoint(yf, symbols: Sequence[str]) -> dict[str, dict]:
+    """The quote endpoint, two hundred names a request."""
+    from yfinance.data import YfData                # noqa: PLC0415 - optional
+    data = YfData()
+    spelled = {yahoo_symbol(s): s for s in symbols}
+    asked = list(spelled)
+    out: dict[str, dict] = {}
+    for start in range(0, len(asked), QUOTE_BATCH):
+        batch = asked[start:start + QUOTE_BATCH]
+        try:
+            response = data.get(QUOTE_URL, params={"symbols": ",".join(batch)})
+            if response.status_code != 200:
+                QUOTE_OUTCOMES[f"batch_http_{response.status_code}"] += 1
+                continue
+            rows = (response.json().get("quoteResponse") or {}).get("result") or []
+        except Exception as exc:                    # noqa: BLE001
+            QUOTE_OUTCOMES["batch_error"] += 1
+            log.debug("yahoo quote batch failed: %s", exc)
+            continue
+        for row in rows:
+            symbol = spelled.get(str(row.get("symbol") or "").upper())
+            if not symbol:
+                continue
+            found = quote_row(row.get("regularMarketPrice"),
+                              row.get("regularMarketPreviousClose"),
+                              row.get("regularMarketTime"))
+            if found is not None:
+                out[symbol] = found
+    return out
+
+
+def _quotes_from_download(yf, symbols: Sequence[str]) -> dict[str, dict]:
+    """The library's own batch download: the last two daily closes.
+
+    Slower and with no trade time, but it is the library's public surface. The
+    endpoint above is reached through its internals, which have moved before;
+    when they move again this still answers.
+    """
+    spelled = {yahoo_symbol(s): s for s in symbols}
+    out: dict[str, dict] = {}
+    try:
+        frame = yf.download(list(spelled), period="5d", interval="1d", threads=True,
+                            progress=False, auto_adjust=False, group_by="ticker")
+    except Exception as exc:                        # noqa: BLE001
+        QUOTE_OUTCOMES["download_error"] += 1
+        log.debug("yahoo download failed: %s", exc)
+        return out
+    for yahoo, symbol in spelled.items():
+        try:
+            closes = [float(v) for v in frame[yahoo]["Close"].dropna().tolist()]
+        except Exception:                           # noqa: BLE001
+            continue
+        if not closes:
+            continue
+        found = quote_row(closes[-1], closes[-2] if len(closes) > 1 else None)
+        if found is not None:
+            out[symbol] = found
+    return out
+
+
+def quotes(symbols: Sequence[str]) -> dict[str, dict]:
+    """A delayed price for many companies at once. Missing names are absent.
+
+    Never raises: an empty answer sends the caller to its next source.
+    """
+    QUOTE_OUTCOMES.clear()
+    wanted = list(dict.fromkeys(str(s).upper() for s in symbols if s))
+    yf = _yf()
+    if yf is None or not wanted:
+        return {}
+    out: dict[str, dict] = {}
+    try:
+        out = _quotes_from_endpoint(yf, wanted)
+    except Exception as exc:                        # noqa: BLE001
+        QUOTE_OUTCOMES["endpoint_unavailable"] += 1
+        log.debug("yahoo quote endpoint unavailable: %s", exc)
+    QUOTE_OUTCOMES["endpoint"] += len(out)
+    missing = [s for s in wanted if s not in out]
+    # Only when a request failed or a real share is missing. A handful of
+    # names Yahoo does not carry is ordinary and not worth a second pass.
+    failed = any(key.startswith(("batch_", "endpoint_unavailable"))
+                 for key in QUOTE_OUTCOMES)
+    if missing and (failed or len(missing) > max(5, len(wanted) // 20)):
+        rest = _quotes_from_download(yf, missing)
+        QUOTE_OUTCOMES["download"] += len(rest)
+        out.update(rest)
+    QUOTE_OUTCOMES["missing"] += len(wanted) - len(out)
     return out
