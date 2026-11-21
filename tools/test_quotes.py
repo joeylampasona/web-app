@@ -127,6 +127,8 @@ def cboe_refuses(symbol):
     cboe_asked.append(symbol)
     cboe.OUTCOMES["throttled"] += 1
     cboe.OUTCOMES["http_403"] += 1
+    # What the real fetch does on a refusal: the stand-down counts names.
+    cboe._refused_in_a_row += 1
     return None
 
 

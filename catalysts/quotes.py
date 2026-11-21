@@ -40,11 +40,6 @@ MAX_ONE_BY_ONE = 400
 #: ones dropped are the ones furthest from mattering.
 TIME_BUDGET_SECONDS = 8 * 60
 
-#: How many refusals in a row, with nothing answered yet, before the
-#: one-request-a-name source is left alone for this sweep. The session it
-#: refused everything, each run spent its whole eight minutes being told no.
-REFUSALS_BEFORE_GIVING_UP = 12
-
 
 def _one_by_one(symbols, notice) -> tuple[dict[str, dict], int, bool]:
     """Cboe, a request a name. Returns the rows, how many were asked, and
@@ -52,6 +47,7 @@ def _one_by_one(symbols, notice) -> tuple[dict[str, dict], int, bool]:
     # Reset per call: these counts describe this sweep, and a process that
     # fetched chains earlier would otherwise fold its own tally into them.
     cboe.OUTCOMES.clear()
+    cboe.reset()
     rows: dict[str, dict] = {}
     asked = 0
     started = time.monotonic()
@@ -60,11 +56,10 @@ def _one_by_one(symbols, notice) -> tuple[dict[str, dict], int, bool]:
         if time.monotonic() - started > TIME_BUDGET_SECONDS:
             ran_out = True
             break
-        if not rows and asked >= REFUSALS_BEFORE_GIVING_UP \
-                and cboe.OUTCOMES.get("throttled", 0) >= asked:
+        if cboe.standing_down():
             if notice:
-                notice(f"quotes: cboe refused the first {asked} names and was "
-                       f"not asked about the rest.")
+                notice(f"quotes: cboe refused {cboe.REFUSALS_BEFORE_STANDING_DOWN} "
+                       f"names in a row and was not asked about the rest.")
             break
         asked += 1
         if notice and asked % 100 == 0:

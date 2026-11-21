@@ -238,9 +238,20 @@ def cmd_catalysts(args) -> int:
     # means a steady night asks about a seventh of the universe and keeps what
     # arrives. Insider filings and implied volatility stay on `population`:
     # those genuinely cost a request each.
+    from publish import health
+    heard = health.Listener(lambda m: print(f"  → {m}", flush=True))
+    heard.keep("earnings_dates", "names fetched tonight")
     calendar = ev.build(market, market.universe, adapter, desk_earnings=desk_dates,
-                        conn=conn, notice=lambda m: print(f"  → {m}", flush=True))
+                        conn=conn, notice=heard)
     ev.attach(calendar, result.all_setups())
+    if "earnings_dates" in heard.kept:
+        # The stage's own sentence, kept word for word. Its "N of M" is how
+        # many names have a date at all, which is the figure that matters.
+        sentence = heard.kept["earnings_dates"].split(": ", 1)[-1]
+        have, total = health.counted(sentence)
+        health.record(conn, "earnings_dates", market.as_of,
+                      sentence[:1].upper() + sentence[1:],
+                      asked=total, answered=have)
 
     # Form 4s for the names on a screen. Filings never change once filed, so
     # this only ever fetches ones we have not read; the first run is the slow
@@ -297,6 +308,9 @@ def cmd_catalysts(args) -> int:
     dropped = newsmod.prune(conn)
     print(f"  → {rows:,} headline rows written, {dropped:,} stale ones dropped.",
           flush=True)
+    health.record(conn, "news", market.as_of,
+                  f"{rows:,} headline rows written, {dropped:,} stale ones dropped.",
+                  status="ok" if rows else "down")
 
     _banner(f"Upcoming events — {len(population)} tickers on a screen")
     upcoming = sorted(
@@ -325,15 +339,52 @@ def cmd_catalysts(args) -> int:
     # name at once, which is exactly how the earnings scrape got itself
     # throttled before it was given one.
     from catalysts import forecast as forecastmod
-    forecastmod.fetch(conn, market.universe, limit=400,
-                      notice=lambda m: print(f"  → {m}", flush=True),
-                      priority=market.caps)
+    asked_forecasts, kept_forecasts = forecastmod.fetch(
+        conn, market.universe, limit=400,
+        notice=lambda m: print(f"  → {m}", flush=True),
+        priority=market.caps)
+    health.record(conn, "forecasts", market.as_of,
+                  (f"{kept_forecasts:,} of {asked_forecasts:,} asked about tonight "
+                   f"came back with data." if asked_forecasts else
+                   "Every name still had a fresh forecast; none asked about tonight."),
+                  asked=asked_forecasts, answered=kept_forecasts)
 
     from catalysts import gamma as gammamod
     gamma_profiles: dict = {}
     iv_stats: dict = {}
     rows = ivmod.compute(calendar, population, names, adapter,
                          gamma_out=gamma_profiles, stats=iv_stats)
+    # Said every night, not only on a bad one. The night the full-book source
+    # began refusing, the fallback answered, both sections filled, and the
+    # only trace was a slower run.
+    wanted_chains = iv_stats.get("asked", 0) - iv_stats.get("no_event", 0)
+    full = iv_stats.get("from_cboe", 0)
+    short = iv_stats.get("from_yahoo", 0)
+    other = iv_stats.get("chain_ok", 0) - full - short
+    none = max(0, wanted_chains - iv_stats.get("chain_ok", 0))
+    detail = (f"{full:,} full books from Cboe, {short:,} shorter books from "
+              f"Yahoo, {none:,} with none.")
+    if other > 0:
+        detail = (f"{iv_stats.get('chain_ok', 0):,} of {wanted_chains:,} chains "
+                  f"arrived, {none:,} with none.")
+    status = None
+    if wanted_chains and short > full:
+        # Answered, but mostly by the source that carries eight expiries.
+        status = "partial"
+    health.record(conn, "options", market.as_of, detail, asked=wanted_chains,
+                  answered=iv_stats.get("chain_ok", 0), status=status)
+    print(f"  → option chains: {detail}", flush=True)
+    try:
+        from catalysts import cboe as cboemod
+        tally = ", ".join(f"{k} {v:,}" for k, v in sorted(
+            cboemod.OUTCOMES.items(), key=lambda kv: -kv[1]))
+        if tally:
+            print(f"  → cboe outcomes: {tally}", flush=True)
+        if cboemod.standing_down():
+            print(f"  → cboe refused {cboemod.REFUSALS_BEFORE_STANDING_DOWN} names "
+                  f"in a row and was not asked about the rest.", flush=True)
+    except Exception:                             # noqa: BLE001
+        pass
     # Persist before printing. This is the only stage allowed to reach the
     # network, so if these rows are not kept here they do not exist.
     if rows:
@@ -808,6 +859,14 @@ def cmd_publish(args) -> int:
         settled=(earnings_iv or {}).get("settled"), signals=desk_rows)
     print(f"  → Earnings reads for {len(earnings_reads):,} recent reporters.", flush=True)
 
+    from publish import health
+    sources = health.report(conn, market.as_of, desk_run,
+                            provider=str(settings.get("data.provider", "") or ""))
+    for line in health.summary(sources):
+        print(f"  → source report: {line}", flush=True)
+    if sources and not health.summary(sources):
+        print(f"  → source report: all {len(sources)} sources ok.", flush=True)
+
     written = writer.publish(market, bundle, result, calendar, iv_rows, changes, backtests,
                              follow=follow, insiders=insider_rows,
                              news=news_rows, desk=desk_rows, desk_run=desk_run,
@@ -822,7 +881,8 @@ def cmd_publish(args) -> int:
                              earnings_iv=earnings_iv,
                              holders=holders,
                              fundamentals=filed,
-                             earnings_reads=earnings_reads)
+                             earnings_reads=earnings_reads,
+                             sources=sources)
 
     out = settings.out_dir()
     # Tonight's front page kept as an edition, and the archive written out
@@ -1020,6 +1080,16 @@ def cmd_fundamentals(args) -> int:
     print(f"  asked {result['asked']}: {result['stored']} with figures, "
           f"{result['empty']} with none in US GAAP, {result.get('refused', 0)} refused; "
           f"{result['remaining']} still to fetch")
+    try:
+        from publish import health
+        refused = int(result.get("refused", 0) or 0)
+        health.record(
+            conn, "filings", store.last_session(conn),
+            (f"Asked about {result['asked']:,} companies: {result['stored']:,} with "
+             f"figures, {result['empty']:,} with none in US GAAP, {refused:,} refused."),
+            asked=result["asked"], answered=result["asked"] - refused)
+    except Exception as exc:                      # noqa: BLE001 - never cost the stage
+        print(f"  source report not kept: {type(exc).__name__}")
     return 0
 
 

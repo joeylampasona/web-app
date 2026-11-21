@@ -42,6 +42,9 @@ if _ROOT not in sys.path:
 
 TIMEOUT = 30
 RULE = "─" * 68
+# What every host but SEC is told. The contact agent carries an address and
+# goes to SEC, which requires it, and nowhere else.
+PLAIN_AGENT = "tape-research"
 
 
 def _get(url: str, agent: str, as_json: bool = True):
@@ -344,8 +347,6 @@ def probe_cboe_refusals(agent: str) -> None:
     names = (
         ("as the quotes job sends it (tape-research)",
          {"User-Agent": "tape-research", "Accept": "application/json"}),
-        ("as the nightly sends it (the contact agent)",
-         {"User-Agent": agent, "Accept": "application/json"}),
         ("the library's own default name", {"Accept": "application/json"}),
         ("a browser's name alone", {"User-Agent": browser, "Accept": "application/json"}),
         ("a browser's name, arriving from cboe.com",
@@ -552,12 +553,12 @@ def main() -> int:
             if s.strip()}
     sections = (
         ("shares", lambda: probe_shares(agent)),
-        ("open_interest", lambda: probe_open_interest(agent)),
+        ("open_interest", lambda: probe_open_interest(PLAIN_AGENT)),
         ("flags", probe_flag_gates),
-        ("quotes", lambda: probe_quote_sources(agent)),
+        ("quotes", lambda: probe_quote_sources(PLAIN_AGENT)),
         ("universe", probe_universe_trace),
         ("splits", probe_splits),
-        ("cboe", lambda: probe_cboe_refusals(agent)),
+        ("cboe", lambda: probe_cboe_refusals(PLAIN_AGENT)),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

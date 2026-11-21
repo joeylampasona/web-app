@@ -159,6 +159,10 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
             counts["chain_empty"] += 1
         else:
             counts["chain_ok"] += 1
+            # Which source answered. Gamma built from the shorter book is a
+            # different reading, and the night it changed nothing said so.
+            origin = f"from_{getattr(chain, 'source', '') or 'unnamed'}"
+            counts[origin] = counts.get(origin, 0) + 1
         # Before the IV-specific tests below. A chain whose expiries do not
         # bracket the event still has open interest at strikes, and that is a
         # separate reading from whether the event is priced richly.

@@ -461,6 +461,14 @@ jobs:
           fomc = meta.get("fomc") or {}
           if fomc.get("stale"):
               lines.append(f"\n⚠️ {fomc.get('message', 'The FOMC list needs attention.')}")
+          # Any source that was not itself tonight. Two failed in one week and
+          # the only trace of either was a line missing from this log.
+          unwell = [s for s in (meta.get("sources") or []) if s.get("status") != "ok"]
+          if unwell:
+              lines.append("\n⚠️ Sources not at full strength tonight:")
+              for source in unwell:
+                  lines.append(f"  {source['label']} ({source['status']}): "
+                               f"{source['detail']}")
 
           request = urllib.request.Request(
               os.environ["DISCORD_WEBHOOK_URL"],

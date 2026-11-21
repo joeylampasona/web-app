@@ -64,3 +64,7 @@ class OptionChain:
     # Every contract, not just the near-the-money summary above. Empty when the
     # source gave no usable rows, which the caller reports rather than hides.
     rows: list[OptionContract] = field(default_factory=list)
+    # Which source answered: "cboe" carries every listed expiry, "yahoo" the
+    # nearest eight. Gamma is a statement about the whole book, so a reading
+    # built from the shorter one has to be able to say so.
+    source: str = ""

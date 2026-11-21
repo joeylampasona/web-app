@@ -88,7 +88,8 @@ def option_chain(symbol: str) -> OptionChain | None:
                 rows.append(OptionExpiry(expiry, sum(ivs) / len(ivs), len(ivs)))
         if not rows and not contracts:
             return None
-        return OptionChain(symbol=symbol, spot=spot, expiries=rows, rows=contracts)
+        return OptionChain(symbol=symbol, spot=spot, expiries=rows, rows=contracts,
+                           source="yahoo")
     except Exception as exc:                      # noqa: BLE001
         log.debug("option chain failed for %s: %s", symbol, exc)
         return None
@@ -334,6 +335,12 @@ def _quotes_from_endpoint(yf, symbols: Sequence[str]) -> dict[str, dict]:
                               row.get("regularMarketPreviousClose"),
                               row.get("regularMarketTime"))
             if found is not None:
+                # Shares so far today and an ordinary day's, so a page can say
+                # whether a move through a pivot has volume behind it.
+                found["volume"] = int(_positive(row.get("regularMarketVolume"))) or None
+                found["avg_volume"] = int(_positive(
+                    row.get("averageDailyVolume3Month")
+                    or row.get("averageDailyVolume10Day"))) or None
                 out[symbol] = found
     return out
 

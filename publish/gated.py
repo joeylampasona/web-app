@@ -178,6 +178,8 @@ def gamma_documents(board_rows: list[dict], gamma: dict[str, dict] | None,
                           {"as_of": as_of.isoformat(),
                            "count": len(board_rows) if total is None else total,
                            "board_rows": len(board_rows),
+                           "partial_rows": sum(1 for row in board_rows
+                                               if row.get("book") == "partial"),
                            "rows": board_rows},
                           as_of)]
     for symbol, payload in sorted((gamma or {}).items()):

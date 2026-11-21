@@ -358,3 +358,33 @@ up as their website to get through it.
   have been falling back to Yahoo's shorter book since the same night, with
   nothing in the log saying so. The index figures the site reads live from
   Cboe at request time are refused too and fall back to the sweep.
+
+## Every source says how its night went (2026-11-21)
+
+Two sources failed in one week and neither said anything: the quote host
+refused a whole session, the option-chain host did the same and the nightly
+fell back to a shorter book, and the Market Desk stopped publishing while the
+site carried on with its last file. Each showed only as a line missing from a
+thousand-line log.
+
+- **One row a source, in `meta.json` under `sources`.** Prices, option
+  chains, earnings dates, forecasts, filings, the Market Desk and headlines:
+  each with a status (`ok`, `partial`, `behind`, `down`), a sentence, and the
+  date it covers. Stages record their own row as they run (`publish/health.py`
+  keeps them in the key-value table, since stages are separate processes);
+  publish judges prices and the desk itself, from the stored bars and the date
+  of the desk's newest run.
+- **Three readers of the one list**: the nightly log, the Discord summary
+  (which now names any source not at full strength) and the colophon page.
+- **Gamma says which book it was built from.** A chain carries its source, and
+  a profile built from the shorter one is published with `book: "partial"`.
+  The page marks those rows and says once at the top what that means:
+  concentrations are understated and the peak strike can differ. Rows stored
+  before this change carry no label until they are fetched again.
+- **Cboe is left alone after twelve refusals in a row.** The nightly was being
+  told no about twelve hundred times a night, twice each, with a pause
+  between. Now it stops asking for the rest of the run and says so.
+- **Cboe is given a plain client name.** It had been sent the contact string
+  SEC requires, which carries an address and belongs with SEC only.
+- **Quote rows carry volume** where the source has it (shares so far and an
+  ordinary day's), so a move through a pivot can be read against its volume.

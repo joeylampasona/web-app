@@ -161,6 +161,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             news: dict[str, list[dict]] | None = None,
             desk: dict[str, list[dict]] | None = None,
             desk_run: dict | None = None,
+            sources: list[dict] | None = None,
             releases: list | None = None,
             gamma: dict[str, dict] | None = None,
             insider_recent: list[dict] | None = None,
@@ -689,6 +690,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "total_net": payload["total_net"],
             "flip": payload["flip"],
             "stale": payload.get("stale", False),
+            "book": payload.get("book"),
             # The single strike carrying the most gamma, and where it sits
             # relative to spot. That pair is the whole reading at a glance.
             "peak_strike": peak["strike"],
@@ -713,6 +715,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # being withheld is the honest version of a paywall, and the page needs
         # the figure to say it.
         "count": len(gamma_rows),
+        # How many of them were built from the shorter book, so the page can
+        # say so once at the top as well as on each row.
+        "partial_rows": sum(1 for row in gamma_rows if row.get("book") == "partial"),
         "rows": [row for row in board if row["symbol"] in gamma_free],
         "gated": True,
         "free_rows": gatedmod.FREE_GAMMA_ROWS,
@@ -794,6 +799,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # Which of the desk's scanners worked. An empty signal set means
         # nothing at all if the scanner that produces it failed.
         "desk_run": desk_run,
+        # What each source did tonight: one row apiece, with a status and a
+        # sentence. The colophon page, the log and the nightly's own message
+        # all read this list, so a source that fails says so in three places.
+        "sources": list(sources or []),
         # The one hand-kept list on the site, and how much runway it has left.
         # Carried in meta so the nightly's own summary can shout about it: a
         # list that runs out quietly is indistinguishable from a quiet calendar.

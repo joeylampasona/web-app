@@ -99,6 +99,10 @@ def bs_gamma(spot: float, strike: float, sigma: float, years: float,
         return 0.0
 
 
+#: How much of the listed book each chain source carries.
+BOOKS = {"cboe": "full", "yahoo": "partial"}
+
+
 @dataclass
 class StrikeLevel:
     strike: float
@@ -129,10 +133,17 @@ class GammaProfile:
     contracts: int = 0
     open_interest: int = 0
     expiries: int = 0
+    # Which source the chain came from; see OptionChain.source.
+    source: str = ""
 
     def to_json(self) -> dict:
         return {
             "symbol": self.symbol,
+            # "partial" when the chain was the shorter one: concentrations are
+            # understated and the peak strike can differ from the full book's.
+            # None for a source that says nothing about its depth.
+            "source": self.source or None,
+            "book": BOOKS.get(self.source),
             "spot": round(self.spot, 4),
             "as_of": self.as_of.isoformat(),
             "levels": [level.to_json() for level in self.levels],
@@ -210,6 +221,7 @@ def profile(chain: OptionChain, as_of: dt.date, rate: float = 0.0,
         contracts=contracts,
         open_interest=total_oi,
         expiries=len(expiries),
+        source=getattr(chain, "source", "") or "",
     )
 
 

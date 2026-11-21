@@ -27,7 +27,6 @@ import time
 
 import requests
 
-from data import settings
 from data.types import OptionChain, OptionContract, OptionExpiry
 
 log = logging.getLogger(__name__)
@@ -35,6 +34,7 @@ log = logging.getLogger(__name__)
 BASE = "https://cdn.cboe.com/api/global/delayed_quotes/options"
 QUOTE_BASE = "https://cdn.cboe.com/api/global/delayed_quotes/quotes"
 TIMEOUT = 30
+AGENT = "tape-research"
 
 # A thousand-odd names go through here, one request each. A tenth of a second
 # was too fast: the first intraday run answered for sixty names beginning with
@@ -53,6 +53,14 @@ THROTTLED = (429, 403, 503)
 # killed by its own job timeout holding four hundred good quotes.
 THROTTLE_PAUSE = 1.5
 
+# How many names in a row may be refused, with none answered in between,
+# before the rest of the process stops asking. On 2026-11-19 the host began
+# refusing every request that did not come from a browser on its own site.
+# The nightly asks about twelve hundred names; without this it spent twenty
+# minutes a night being told no twelve hundred times, twice each, and the
+# only trace was a slower run.
+REFUSALS_BEFORE_STANDING_DOWN = 12
+
 # One connection, reused. Establishing a TLS session per name would cost more
 # than the requests themselves.
 #: What happened to every request made in this process. Counted because the
@@ -63,6 +71,18 @@ OUTCOMES: "collections.Counter[str]" = collections.Counter()
 
 _SESSION: requests.Session | None = None
 _LOCK = threading.Lock()
+_refused_in_a_row = 0
+
+
+def standing_down() -> bool:
+    """True once the host has refused enough names in a row to stop asking."""
+    return _refused_in_a_row >= REFUSALS_BEFORE_STANDING_DOWN
+
+
+def reset() -> None:
+    """Forget the refusals. For a new sweep in the same process, and tests."""
+    global _refused_in_a_row                       # noqa: PLW0603
+    _refused_in_a_row = 0
 
 
 def _session() -> requests.Session:
@@ -113,9 +133,14 @@ def _fetch(symbol: str) -> dict | None:
 
 
 def _fetch_json(url: str, symbol: str) -> dict | None:
-    agent = (settings.get("edgar.user_agent")
-             or settings.env("EDGAR_USER_AGENT", "")
-             or "tape-research")
+    global _refused_in_a_row                       # noqa: PLW0603
+    # A plain name of our own. This used to send the contact string SEC
+    # requires, which carries an address and is nobody's business but SEC's.
+    agent = AGENT
+    if standing_down():
+        # Counted, so the tally still adds up to the names asked about.
+        OUTCOMES["not_asked"] += 1
+        return None
     headers = {"User-Agent": str(agent), "Accept": "application/json"}
     for attempt in (1, 2):
         try:
@@ -124,11 +149,17 @@ def _fetch_json(url: str, symbol: str) -> dict | None:
             code = response.status_code
             if code == 200:
                 OUTCOMES["ok"] += 1
+                _refused_in_a_row = 0
                 return response.json()
             if code in THROTTLED and attempt == 1:
                 OUTCOMES["throttled"] += 1
                 time.sleep(THROTTLE_PAUSE)
                 continue
+            if code in THROTTLED:
+                _refused_in_a_row += 1
+            elif code == 404:
+                # A company with no listed options is an answer, not a refusal.
+                _refused_in_a_row = 0
             # 404 is ordinary: plenty of companies have no listed options and
             # no quote here. It is the one miss that means something about the
             # company rather than about us.
@@ -240,4 +271,4 @@ def chain(symbol: str, as_of: dt.date | None = None) -> OptionChain | None:
         ))
 
     return OptionChain(symbol=symbol.upper(), spot=spot,
-                       expiries=expiries, rows=rows)
+                       expiries=expiries, rows=rows, source="cboe")
