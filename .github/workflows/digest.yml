@@ -48,7 +48,8 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      # The operations room when there is one; see nightly.yml.
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_OPS || secrets.DISCORD_WEBHOOK_URL }}
       SITE_URL: https://thetape.cc
       DIGEST_FROM: "The Tape <noreply@thetape.cc>"
     steps:

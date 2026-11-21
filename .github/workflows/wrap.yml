@@ -1,0 +1,50 @@
+# The week's wrap, to Discord on a Saturday.
+#
+# What broke out this week and whether it held, from the follow-through the
+# nightly already publishes. It reads the published tree and nothing else: no
+# database, no market data, nothing written back.
+name: Weekly wrap
+
+on:
+  schedule:
+    # Saturday 14:07 UTC, which is mid-morning in New York all year. Friday's
+    # session is published in the small hours of Saturday, so by now the tree
+    # holds the whole week.
+    - cron: "7 14 * * 6"
+  workflow_dispatch:
+    inputs:
+      send:
+        description: "Post it to Discord (false prints it only)"
+        required: false
+        default: "true"
+
+jobs:
+  wrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -q -r requirements.txt
+      - name: Fetch the published tree
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone --depth 1 --branch data --single-branch \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" out
+          rm -rf out/.git
+      - name: Write the wrap
+        env:
+          DISCORD_WEBHOOK_EDITION: ${{ secrets.DISCORD_WEBHOOK_EDITION || secrets.DISCORD_WEBHOOK_URL }}
+          SITE_URL: https://thetape.cc
+          SEND: ${{ github.event_name == 'schedule' || inputs.send == 'true' }}
+        run: |
+          if [ "$SEND" = "true" ]; then
+            python -m cli wrap --send
+          else
+            python -m cli wrap
+          fi

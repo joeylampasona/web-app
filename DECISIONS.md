@@ -388,3 +388,30 @@ thousand-line log.
   SEC requires, which carries an address and belongs with SEC only.
 - **Quote rows carry volume** where the source has it (shares so far and an
   ordinary day's), so a move through a pivot can be read against its volume.
+
+## Discord has three rooms, and cards have addresses (2026-11-21)
+
+One webhook was carrying the nightly counts, the draft for X and every
+failure notice. The server is private, which is also the only reason names
+beyond the free sample may be posted there.
+
+- **Three rooms, each a webhook of its own**: `DISCORD_WEBHOOK_EDITION`,
+  `DISCORD_WEBHOOK_STOP_PRESS` and `DISCORD_WEBHOOK_OPS`. Each falls back to
+  the original `DISCORD_WEBHOOK_URL` until it is set, so nothing changes on
+  the day and a room starts working the moment its secret exists.
+- **The edition is a picture.** The nightly posts the read as a card (headline,
+  checks, a link to the back issue) with the screen counts under it. The card
+  is drawn by the site, so the command waits up to seven minutes for the site
+  to carry the session and posts without the picture rather than with last
+  night's. Anything amiss goes to operations, with the draft for X.
+- **Stop press** is posted from the intraday quotes job: a forming long setup
+  now through its pivot, on a quote stamped today, with volume at least one and
+  a half times an ordinary day's pace. Each name once a day, six a run at most.
+  What has been posted rides on the quotes branch as `stop_press.json`, the
+  job's only memory between runs. It uses the alert sweep's own detection, so
+  a crossing in Discord and one in a subscriber's email are the same judgement.
+- **A wrap on Saturday** (`wrap.yml`): the read each night, the market's
+  breakouts against failed tests, and the week's base breakouts with how many
+  still sit above their pivot. It reads the published tree only.
+- **Cards are drawn by the server** so a link pasted anywhere unfurls into its
+  card, and the same image serves the Discord post.

@@ -367,8 +367,13 @@ def cmd_catalysts(args) -> int:
     if other > 0:
         detail = (f"{iv_stats.get('chain_ok', 0):,} of {wanted_chains:,} chains "
                   f"arrived, {none:,} with none.")
-    status = None
-    if wanted_chains and short > full:
+    # Judged by which book answered, not by the share that answered: plenty
+    # of companies have no listed options at all, and counting those as
+    # misses would call an ordinary night partial every night.
+    status = "ok"
+    if wanted_chains and not iv_stats.get("chain_ok", 0):
+        status = "down"
+    elif short > full:
         # Answered, but mostly by the source that carries eight expiries.
         status = "partial"
     health.record(conn, "options", market.as_of, detail, asked=wanted_chains,
@@ -768,6 +773,13 @@ def cmd_quotes(args) -> int:
         except Exception as exc:  # noqa: BLE001 - never cost the quotes
             alert_failures = 1
             print(f"  alerts failed: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
+    if getattr(args, "stop_press", False):
+        _banner("Stop press")
+        try:
+            _stop_press(args, out, full_lists, quotes)
+        except Exception as exc:  # noqa: BLE001 - never cost the quotes
+            print(f"  stop press failed: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
+
     locked = {symbol: quote for symbol, quote in quotes.items()
               if symbol not in free}
     payload["quotes"] = {symbol: quote for symbol, quote in quotes.items()
@@ -803,6 +815,61 @@ def cmd_quotes(args) -> int:
     # A file of nothing is worse than no file: the page would show a delayed
     # price section that is permanently empty and say nothing about why.
     return 0 if (payload["count"] or locked) else 1
+
+
+def _stop_press(args, out, full_lists: list[dict], quotes: dict[str, dict]) -> None:
+    """Post the session's new crossings to Discord, each name once a day.
+
+    What has been posted is kept in a small file that rides on the quotes
+    branch: the job has no other memory between runs.
+    """
+    import pathlib
+
+    from digest import alerts as alertsmod
+    from publish import discord
+
+    now = dt.datetime.now(dt.timezone.utc)
+    local = now.astimezone(alertsmod.NEW_YORK)
+    today = local.date()
+    posted: set[str] = set()
+    state_path = getattr(args, "stop_press_state", None)
+    if state_path:
+        try:
+            kept = json.loads(pathlib.Path(state_path).read_text())
+            if kept.get("date") == today.isoformat():
+                posted = set(kept.get("posted") or [])
+        except (OSError, ValueError):
+            pass
+
+    def keep() -> None:
+        (out / "stop_press.json").write_text(json.dumps(
+            {"date": today.isoformat(), "posted": sorted(posted)}))
+
+    keep()
+    if not alertsmod.in_session(now):
+        print("  outside the regular session; nothing posted.")
+        return
+    names = {row["symbol"]: row.get("name") or ""
+             for payload in full_lists
+             for stage in (payload.get("setups") or {}).values()
+             for row in stage if row.get("symbol")}
+    levels = alertsmod.forming_levels(full_lists)
+    events = alertsmod.detect(levels, quotes, list(levels))
+    rows = discord.crossings(events, quotes, names, session=today, already=posted)
+    crossed = sum(1 for e in events if e.kind == "crossed")
+    print(f"  {crossed} name(s) through a pivot, {len(rows)} new with volume behind them")
+    if not rows:
+        return
+    message = discord.stop_press_message(rows, local.strftime("%-I:%M %p"))
+    print(message)
+    if not getattr(args, "send_stop_press", False):
+        return
+    if discord.post("stop_press", message, username="The Tape · stop press"):
+        posted.update(row["symbol"] for row in rows)
+        keep()
+        print("  sent to Discord.")
+    else:
+        print("  no Discord webhook is set; nothing was sent.")
 
 
 def cmd_publish(args) -> int:
@@ -995,23 +1062,107 @@ def cmd_briefing(args) -> int:
 
     if not getattr(args, "send", False):
         return 0
-    hook = os.environ.get("DISCORD_WEBHOOK_URL") or ""
-    if not hook:
-        print("\nDISCORD_WEBHOOK_URL is not set; the draft was not sent.")
-        return 1
-
+    from publish import discord
     # The post alone, as its own message, so copying it copies nothing else.
-    # Discord's edge refuses the default Python-urllib agent with a 403.
-    request = urllib.request.Request(
-        hook,
-        data=json.dumps({"content": post,
-                         "username": "The Tape · X draft"}).encode(),
-        headers={"Content-Type": "application/json",
-                 "User-Agent": "base-and-breakout-nightly/1.0"})
+    # To the operations room: it is a draft for whoever posts it, not reading
+    # for everybody.
     try:
-        urllib.request.urlopen(request, timeout=20)
+        if not discord.post("ops", post, username="The Tape · X draft"):
+            print("\nNo Discord webhook is set; the draft was not sent.")
+            return 1
     except Exception as exc:                       # noqa: BLE001
         print(f"\nDiscord refused the draft: {exc}")
+        return 1
+    print("\nSent to Discord.")
+    return 0
+
+
+def cmd_edition(args) -> int:
+    """Tonight's read to the edition room, and anything amiss to operations.
+
+    Run by the nightly after the site has been told to rebuild. The picture is
+    drawn by the site, so this waits for the rebuild before posting; if the
+    site has not caught up in time the post goes out without the picture
+    rather than with last night's.
+    """
+    from publish import discord
+
+    out = settings.out_dir()
+    try:
+        meta = json.loads((out / "meta.json").read_text())
+    except (OSError, ValueError) as exc:
+        print(f"No published tree to post from ({exc}). Run publish first.")
+        return 1
+    try:
+        edition = json.loads((out / "editions" / f"{meta['as_of']}.json").read_text())
+    except (OSError, ValueError):
+        edition = None
+
+    send = bool(getattr(args, "send", False))
+    picture = False
+    if edition and send and not getattr(args, "no_wait", False):
+        picture = discord.site_has(meta["as_of"])
+        print(f"  site rebuilt for {meta['as_of']}: {'yes' if picture else 'not in time'}")
+    content, embeds = discord.edition_message(
+        meta, edition, behind=int(getattr(args, "behind", 0) or 0),
+        picture=picture or not send)
+    ops = discord.ops_lines(meta)
+
+    _banner(f"Discord — the edition for {meta['as_of']}")
+    print(content)
+    for embed in embeds:
+        print(f"  [card] {embed['title']}  {embed.get('image', {}).get('url', 'no picture')}")
+    if ops:
+        print("\n".join(ops))
+    if not send:
+        return 0
+
+    together = discord.same_room("edition", "ops")
+    if together and ops:
+        # One room for everything: one message, as it always was.
+        content = content + "\n\n" + "\n".join(ops)
+    if not discord.post("edition", content, embeds=embeds):
+        print("\nNo Discord webhook is set; nothing was sent.")
+        return 1
+    if ops and not together:
+        discord.post("ops", f"**{meta['as_of']}**\n" + "\n".join(ops))
+    print("\nSent to Discord.")
+    return 0
+
+
+def cmd_wrap(args) -> int:
+    """The week's wrap: what broke out and whether it held.
+
+    Reads the published tree and nothing else, so it can run on its own on a
+    Saturday without the database.
+    """
+    from publish import discord
+
+    out = settings.out_dir()
+    try:
+        meta = json.loads((out / "meta.json").read_text())
+        follow = json.loads((out / "breakouts" / "followthrough.json").read_text())
+    except (OSError, ValueError) as exc:
+        print(f"No published tree to wrap up ({exc}).")
+        return 1
+    try:
+        editions = json.loads((out / "editions" / "index.json").read_text())
+    except (OSError, ValueError):
+        editions = {}
+    message = discord.wrap_message(follow, editions, dt.date.fromisoformat(meta["as_of"]))
+    if not message:
+        print("Nothing to say about this week.")
+        return 0
+    _banner(f"The week's wrap — week of {meta['as_of']}")
+    print(message)
+    if not getattr(args, "send", False):
+        return 0
+    try:
+        if not discord.post("edition", message, username="The Tape · the week"):
+            print("\nNo Discord webhook is set; nothing was sent.")
+            return 1
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\nDiscord refused the wrap: {exc}")
         return 1
     print("\nSent to Discord.")
     return 0

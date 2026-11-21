@@ -56,6 +56,20 @@ jobs:
           rm -rf out/.git
           echo "screens: $(ls out/screens/*.json 2>/dev/null | wc -l | tr -d ' ')"
 
+      # What the last run left on the quotes branch. Two uses: the note of
+      # which names stop press has already posted today, since the job has no
+      # other memory between runs, and the last file of prices to carry
+      # forward if this run gets none. Absent on the very first run.
+      - name: Fetch what the last run published
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git clone -q --depth 1 --branch quotes --single-branch \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" last \
+            || mkdir -p last
+          rm -rf last/.git
+          ls last
+
       - name: Fetch delayed quotes
         id: quotes
         env:
@@ -73,7 +87,13 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           DIGEST_FROM: "The Tape <noreply@thetape.cc>"
           SITE_URL: https://thetape.cc
-        run: python -m cli quotes --alerts --send-alerts
+          # Stop press: a name through its pivot with volume behind it, posted
+          # once a day to its own room on Discord, or to the one original
+          # webhook until that room exists. The server is private.
+          DISCORD_WEBHOOK_STOP_PRESS: ${{ secrets.DISCORD_WEBHOOK_STOP_PRESS || secrets.DISCORD_WEBHOOK_URL }}
+        run: >-
+          python -m cli quotes --alerts --send-alerts
+          --stop-press --send-stop-press --stop-press-state last/stop_press.json
 
       # Headlines published since the nightly's newest, so the news on the
       # site moves during the day too. The nightly is the only other fetch,
@@ -105,12 +125,14 @@ jobs:
             # file that had any is carried forward beside the new headlines
             # rather than erased; it keeps its own timestamp, and the site
             # drops it once the nightly publishes a later close.
-            git clone -q --depth 1 --branch quotes --single-branch \
-              "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}" last \
-              && cp last/quotes.json send/quotes.json \
+            cp last/quotes.json send/quotes.json 2>/dev/null \
               || echo "no earlier quotes file to carry forward"
           fi
           if [ -f out/news_live.json ]; then cp out/news_live.json send/news_live.json; fi
+          # Which names stop press has posted today: this run's note, or the
+          # last run's if this one never got as far as writing its own.
+          cp out/stop_press.json send/stop_press.json 2>/dev/null \
+            || cp last/stop_press.json send/stop_press.json 2>/dev/null || true
           if [ -z "$(ls -A send)" ]; then
             echo "Nothing to publish: no prices, no earlier file and no headlines."
             exit 0

@@ -48,6 +48,12 @@ def main(argv: list[str] | None = None) -> int:
                      help="also check subscribers' watchlists against the quotes")
     p_q.add_argument("--send-alerts", dest="send_alerts", action="store_true",
                      help="with --alerts, actually email them (default: dry run)")
+    p_q.add_argument("--stop-press", dest="stop_press", action="store_true",
+                     help="also work out the session's new crossings for Discord")
+    p_q.add_argument("--send-stop-press", dest="send_stop_press", action="store_true",
+                     help="with --stop-press, actually post them (default: dry run)")
+    p_q.add_argument("--stop-press-state", dest="stop_press_state",
+                     help="the last run's stop_press.json, so a name is posted once a day")
     sub.add_parser("headlines",
                    help="headlines since the nightly's newest, for the hourly run")
     sub.add_parser("publish", help="write the out/ JSON tree")
@@ -57,7 +63,16 @@ def main(argv: list[str] | None = None) -> int:
     p_brief = sub.add_parser("briefing",
                              help="compose the X post draft from the published tree")
     p_brief.add_argument("--send", action="store_true",
-                         help="post the draft to DISCORD_WEBHOOK_URL")
+                         help="post the draft to the operations room on Discord")
+    p_edition = sub.add_parser("edition",
+                               help="tonight's read for Discord, from the published tree")
+    p_edition.add_argument("--send", action="store_true", help="post it")
+    p_edition.add_argument("--no-wait", dest="no_wait", action="store_true",
+                           help="do not wait for the site to be rebuilt; no picture")
+    p_edition.add_argument("--behind", type=int, default=0,
+                           help="sessions the data is behind, to say so in the post")
+    p_wrap = sub.add_parser("wrap", help="the week's wrap for Discord")
+    p_wrap.add_argument("--send", action="store_true", help="post it")
     sub.add_parser("all", help="universe, rank, scan, catalysts, backtests, publish")
 
     args = parser.parse_args(argv)

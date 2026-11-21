@@ -58,7 +58,13 @@ jobs:
       # Scheduled economic data releases. Absent, the calendar carries company
       # events only and says so on the page.
       FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      # Three rooms on Discord, each falling back to the one original webhook
+      # until it is given its own. DISCORD_WEBHOOK_URL is what every failure
+      # notice below posts to, so it is the operations room when there is one.
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_OPS || secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_OPS: ${{ secrets.DISCORD_WEBHOOK_OPS || secrets.DISCORD_WEBHOOK_URL }}
+      DISCORD_WEBHOOK_EDITION: ${{ secrets.DISCORD_WEBHOOK_EDITION || secrets.DISCORD_WEBHOOK_URL }}
+      SITE_URL: https://thetape.cc
       VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
     steps:
       - name: Has tonight's session been scanned yet?
@@ -415,70 +421,14 @@ jobs:
         # Only worth a message when something moved. A night where nothing broke
         # out and nothing new formed is a normal night, and a bot that says so
         # every evening is a bot people mute.
-        if: success() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_URL != ''
-        run: |
-          python - <<'PY'
-          import json, os, pathlib, urllib.request
-
-          meta = json.loads(pathlib.Path("out/meta.json").read_text())
-          diff = {}
-          path = pathlib.Path("out/breakouts/today.json")
-          if path.exists():
-              diff = json.loads(path.read_text())
-          fresh = sum(s["stages"].get("fresh_breakout", 0) for s in meta["screens"])
-          behind = int(os.environ.get("SESSIONS_BEHIND") or 0)
-          # The session date was always in this message, but as a date you had to
-          # remember last night's to interpret. Now it says so itself.
-          stale = (f"  ⚠️ {behind} day(s) behind the last completed session — "
-                   f"a market holiday looks like this, so does a stuck scan."
-                   if behind else "")
-          lines = [f"**{meta['as_of']}** — {meta['universe_count']:,} names scanned.{stale}"]
-          for screen in meta["screens"]:
-              stages = screen["stages"]
-              lines.append(
-                  f"  {screen['name']}: {screen['total']} "
-                  f"({stages.get('fresh_breakout', 0)} fresh, "
-                  f"{stages.get('forming', 0)} forming)")
-          if fresh == 0:
-              lines.append("_Nothing broke out today. That is a reading, not a fault._")
-          # The hand-kept FOMC list, if it is running out. This is the message
-          # somebody actually reads every day, so it is where the alarm belongs.
-          # Heavily traded names that fell out of the universe for want of a
-          # share count. Meta, Alphabet and Berkshire all vanished this way and
-          # the only trace was a stage count dropping by four out of two
-          # thousand. This is the message somebody actually reads.
-          lost = meta.get("lost_leaders") or []
-          why = meta.get("lost_leader_reasons") or {}
-          if lost:
-              # With the reason, because the list alone only ever said "go and
-              # look". "SEC refused us tonight" clears itself on the next run
-              # and "SEC does not publish this" needs a code change, and for
-              # months both arrived as the same line.
-              lines.append("\n⚠️ Dropped for want of a share count, despite "
-                           "being among the most traded names:")
-              for symbol in lost:
-                  lines.append(f"  {symbol} — {why.get(symbol, 'no reason recorded')}")
-          fomc = meta.get("fomc") or {}
-          if fomc.get("stale"):
-              lines.append(f"\n⚠️ {fomc.get('message', 'The FOMC list needs attention.')}")
-          # Any source that was not itself tonight. Two failed in one week and
-          # the only trace of either was a line missing from this log.
-          unwell = [s for s in (meta.get("sources") or []) if s.get("status") != "ok"]
-          if unwell:
-              lines.append("\n⚠️ Sources not at full strength tonight:")
-              for source in unwell:
-                  lines.append(f"  {source['label']} ({source['status']}): "
-                               f"{source['detail']}")
-
-          request = urllib.request.Request(
-              os.environ["DISCORD_WEBHOOK_URL"],
-              data=json.dumps({"content": "\n".join(lines)[:1900]}).encode(),
-              # Discord's edge rejects the default Python-urllib agent with a
-              # 403. Naming ourselves is what it wants.
-              headers={"Content-Type": "application/json",
-                       "User-Agent": "base-and-breakout-nightly/1.0"})
-          urllib.request.urlopen(request, timeout=20)
-          PY
+        if: success() && steps.gate.outputs.run == 'true' && env.DISCORD_WEBHOOK_EDITION != ''
+        # The read as a picture with the counts under it, to the edition room;
+        # anything amiss (a name dropped for want of a share count, the FOMC
+        # list running out, a source that was short) to operations. With one
+        # webhook for everything it is one message, as it always was. The
+        # picture is drawn by the site, so the command waits a few minutes for
+        # the rebuild and posts without it rather than with last night's.
+        run: python -m cli edition --send --behind "${SESSIONS_BEHIND:-0}"
 
       # The X post, as a draft, to Discord. After the summary so it is the
       # last message there and the easiest to find and copy.
