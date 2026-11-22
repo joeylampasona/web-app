@@ -461,12 +461,23 @@ def week_ahead_message(upcoming: dict, on_screen: dict[str, str],
     """Who on a screen reports each day of the week to come. None when nobody
     in the universe reports at all."""
     monday, friday = coming_week(today)
-    by_day: dict[str, set[str]] = {}
+    # One day a company. The calendar can carry a confirmed date and an
+    # older tentative one for the same report, and the first run of this
+    # listed three companies on two days each. A confirmed date wins; with
+    # none confirmed, the earliest.
+    chosen: dict[str, tuple[bool, str]] = {}
     for event in upcoming.get("events") or []:
         if event.get("type") != "earnings" or event.get("readthrough"):
             continue
-        if monday.isoformat() <= str(event.get("date")) <= friday.isoformat():
-            by_day.setdefault(event["date"], set()).add(event["ticker"])
+        day = str(event.get("date"))
+        if not monday.isoformat() <= day <= friday.isoformat():
+            continue
+        rank = (event.get("confirmed") != "confirmed", day)
+        if event["ticker"] not in chosen or rank < chosen[event["ticker"]]:
+            chosen[event["ticker"]] = rank
+    by_day: dict[str, set[str]] = {}
+    for ticker, (_, day) in chosen.items():
+        by_day.setdefault(day, set()).add(ticker)
     if not by_day:
         return None
 

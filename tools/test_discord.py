@@ -399,6 +399,19 @@ check("the ± is explained when it is used", ahead[3],
       "_± is the move the options price for the report._")
 check("a week with no reports says nothing",
       discord.week_ahead_message({"events": []}, {}, {}, dt.date(2026, 11, 22)), None)
+twice = {"events": [
+    {"ticker": "SCR", "type": "earnings", "date": "2026-11-23", "confirmed": "tentative",
+     "readthrough": None},
+    {"ticker": "SCR", "type": "earnings", "date": "2026-11-24", "confirmed": "confirmed",
+     "readthrough": None},
+    {"ticker": "AAA", "type": "earnings", "date": "2026-11-25", "confirmed": "tentative",
+     "readthrough": None},
+    {"ticker": "AAA", "type": "earnings", "date": "2026-11-23", "confirmed": "tentative",
+     "readthrough": None}]}
+both = discord.week_ahead_message(twice, {"SCR": "VCP", "AAA": "Flat base"}, {},
+                                  dt.date(2026, 11, 22)).splitlines()
+check("a company listed on two days is named once: the confirmed day, else the earliest",
+      both[1:3], ["Mon 11/23: `AAA` (Flat base)", "Tue 11/24: `SCR` (VCP)"])
 
 # -------------------------------------------------------------- the wrap
 follow = {"screens": {
