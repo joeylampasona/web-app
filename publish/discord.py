@@ -358,8 +358,26 @@ def reporters_to_name(symbols: list[str], quotes: dict[str, dict],
     return fresh[:REPORTERS_NAMED]
 
 
+def implied_moves(earnings: dict) -> dict[str, float]:
+    """What the options priced for each coming report, as a percentage move
+    either way: {ticker: pct}. From the earnings file's own table; a company
+    not in it has no figure, which is most of them."""
+    out: dict[str, float] = {}
+    rows = sorted((earnings.get("priced") or {}).get("upcoming") or [],
+                  key=lambda row: str(row.get("report_date") or ""))
+    for row in rows:
+        try:
+            pct = float(row.get("implied_pct"))
+        except (TypeError, ValueError):
+            continue
+        if row.get("ticker") and pct > 0:
+            out[row["ticker"]] = pct
+    return out
+
+
 def reporter_rows(run: str, named: list[str], quotes: dict[str, dict],
-                  tables: dict[str, dict | None], on_screen: dict[str, str]) -> list[dict]:
+                  tables: dict[str, dict | None], on_screen: dict[str, str],
+                  implied: dict[str, float] | None = None) -> list[dict]:
     """The lines for one run. Before the open: the companies set to report
     before the bell. After the close: everybody else due today."""
     rows = []
@@ -382,6 +400,7 @@ def reporter_rows(run: str, named: list[str], quotes: dict[str, dict],
             move, when = quote.get("session_pct"), "on the day"
         rows.append({"symbol": symbol, "name": company_name(quote.get("name") or ""),
                      "move": move, "when": when, "screen": on_screen.get(symbol),
+                     "implied": (implied or {}).get(symbol),
                      "eps": table.get("eps"), "estimate": table.get("estimate"),
                      "surprise_pct": table.get("surprise_pct")})
     return rows
@@ -396,8 +415,16 @@ def reporters_message(run: str, rows: list[dict], day: dt.date, read_at: str,
              f"prices read {read_at} ET"]
     for row in rows:
         parts = []
+        # The move beside what the options had priced, so a reader can see at
+        # once whether it was a surprise: 6% is a shrug against 12% and a
+        # shock against 3%.
+        priced = (f"options priced ±{row['implied']:.1f}%"
+                  if row.get("implied") else None)
         if row["move"] is not None:
-            parts.append(f"{row['move']:+.1f}% {row['when']}")
+            parts.append(f"{row['move']:+.1f}% {row['when']}"
+                         + (f", {priced}" if priced else ""))
+        elif priced:
+            parts.append(priced)
         if row["eps"] is not None and row["estimate"] is not None:
             beat = (f" ({row['surprise_pct']:+.1f}%)"
                     if row["surprise_pct"] is not None else "")
@@ -413,6 +440,61 @@ def reporters_message(run: str, rows: list[dict], day: dt.date, read_at: str,
     if others > 0:
         lines.append(f"{others:,} more in the universe are due today and were not looked up.")
     lines.append("_Delayed prices. The read on each follows here once its 10-Q is filed._")
+    return "\n".join(lines)
+
+
+# ------------------------------------------------- the week's earnings
+
+def coming_week(today: dt.date) -> tuple[dt.date, dt.date]:
+    """Monday to Friday of the week to come: next week on a weekend, this
+    week on a weekday."""
+    if today.weekday() >= 5:
+        monday = today + dt.timedelta(days=7 - today.weekday())
+    else:
+        monday = today - dt.timedelta(days=today.weekday())
+    return monday, monday + dt.timedelta(days=4)
+
+
+def week_ahead_message(upcoming: dict, on_screen: dict[str, str],
+                       implied: dict[str, float], today: dt.date,
+                       most: int = 14) -> str | None:
+    """Who on a screen reports each day of the week to come. None when nobody
+    in the universe reports at all."""
+    monday, friday = coming_week(today)
+    by_day: dict[str, set[str]] = {}
+    for event in upcoming.get("events") or []:
+        if event.get("type") != "earnings" or event.get("readthrough"):
+            continue
+        if monday.isoformat() <= str(event.get("date")) <= friday.isoformat():
+            by_day.setdefault(event["date"], set()).add(event["ticker"])
+    if not by_day:
+        return None
+
+    lines = [f"**The week's earnings**: {monday.month}/{monday.day} to "
+             f"{friday.month}/{friday.day}, the names on a screen"]
+    for offset in range(5):
+        day = monday + dt.timedelta(days=offset)
+        due = by_day.get(day.isoformat()) or set()
+        if not due:
+            continue
+        ours = sorted(s for s in due if s in on_screen)
+        label = f"{day.strftime('%a')} {day.month}/{day.day}"
+
+        def one(symbol: str) -> str:
+            priced = f" ±{implied[symbol]:.0f}%" if symbol in implied else ""
+            return f"`{symbol}` ({on_screen[symbol]}){priced}"
+
+        others = len(due) - len(ours)
+        if ours:
+            shown = ", ".join(one(s) for s in ours[:most])
+            more = f" and {len(ours) - most} more" if len(ours) > most else ""
+            rest = f" · {others} more in the universe" if others else ""
+            lines.append(f"{label}: {shown}{more}{rest}")
+        else:
+            lines.append(f"{label}: none on a screen · {others} in the universe")
+    if any(s in implied for due in by_day.values() for s in due if s in on_screen):
+        lines.append("_± is the move the options price for the report._")
+    lines.append(f"<{site()}/market/calendar>")
     return "\n".join(lines)
 
 

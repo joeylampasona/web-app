@@ -459,3 +459,11 @@ beyond the free sample may be posted there.
   read-only, and posts the read of any that has arrived. What those runs post
   is kept in their note on the `reporters` branch; the nightly reads that note
   and the runs read the nightly's own, so a card is sent once.
+- **The move is set beside what the options priced.** Where the earnings file
+  has an implied move for a report, the reaction line says it: six per cent is
+  a shrug against twelve and a shock against three. Most companies have no
+  figure, and their lines say nothing about options.
+- **The week's earnings on Sunday evening** (`weekahead.yml`): for each day of
+  the week to come, the names on a screen that report, with the priced move
+  where known, and how many others in the universe report that day. One
+  scheduled time so it posts once. It does not know market holidays.

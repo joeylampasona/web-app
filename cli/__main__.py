@@ -85,6 +85,10 @@ def main(argv: list[str] | None = None) -> int:
     p_rep.add_argument("--reads", action="store_true",
                        help="also post the read of any recent reporter whose "
                             "10-Q has now been filed (needs the database)")
+    p_week = sub.add_parser("weekahead",
+                            help="the week's earnings for names on a screen, for Discord")
+    p_week.add_argument("--send", action="store_true", help="post it")
+    p_week.add_argument("--day", help="YYYY-MM-DD, to see it as of another day")
     p_rooms = sub.add_parser("rooms", help="which Discord rooms are wired")
     p_rooms.add_argument("--send", action="store_true",
                          help="post a one-line test to each room")

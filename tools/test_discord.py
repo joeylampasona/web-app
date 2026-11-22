@@ -359,6 +359,47 @@ check("a figure Yahoo does not have yet is said, with the screen",
 check("nobody to name says nothing",
       discord.reporters_message("pre", [], dt.date(2026, 11, 23), "9:21 AM"), None)
 
+priced = discord.implied_moves({"priced": {"upcoming": [
+    {"ticker": "SCR", "report_date": "2026-08-20", "implied_pct": 4.0},
+    {"ticker": "SCR", "report_date": "2026-11-23", "implied_pct": 12.23},
+    {"ticker": "BIG", "report_date": "2026-11-23", "implied_pct": None}]}})
+check("the implied move is the one for the newest report, and only where there is one",
+      priced, {"SCR": 12.23})
+post = discord.reporter_rows("post", named, rq, tables, {"SCR": "VCP"}, priced)
+check("the move is set beside what the options priced",
+      discord.reporters_message("post", post, dt.date(2026, 11, 23), "6:01 PM").splitlines()[1],
+      "`SCR` Screen Inc: +6.2% after the bell, options priced ±12.2% · EPS not in yet · on VCP")
+check("a company the table does not cover says nothing about options",
+      "options" in discord.reporters_message("post", post, dt.date(2026, 11, 23),
+                                             "6:01 PM").splitlines()[2], False)
+
+check("on a Sunday the week to come is next week",
+      discord.coming_week(dt.date(2026, 11, 22)), (dt.date(2026, 11, 23), dt.date(2026, 11, 27)))
+check("on a Wednesday it is the week in progress",
+      discord.coming_week(dt.date(2026, 11, 25)), (dt.date(2026, 11, 23), dt.date(2026, 11, 27)))
+week = {"events": [
+    {"ticker": "SCR", "type": "earnings", "date": "2026-11-23", "readthrough": None},
+    {"ticker": "AAA", "type": "earnings", "date": "2026-11-23", "readthrough": None},
+    {"ticker": "ZZZ", "type": "earnings", "date": "2026-11-23", "readthrough": None},
+    {"ticker": "PEER", "type": "earnings", "date": "2026-11-23", "readthrough": {"from": "SCR"}},
+    {"ticker": "QQQQ", "type": "earnings", "date": "2026-11-25", "readthrough": None},
+    {"ticker": "LATE", "type": "earnings", "date": "2026-11-30", "readthrough": None},
+    {"ticker": "DIV", "type": "dividend_ex_date", "date": "2026-11-24", "readthrough": None}]}
+ahead = discord.week_ahead_message(week, {"SCR": "VCP", "AAA": "Flat base", "PEER": "VCP"},
+                                   priced, dt.date(2026, 11, 22)).splitlines()
+check("the week's earnings names its week", ahead[0],
+      "**The week's earnings**: 11/23 to 11/27, the names on a screen")
+check("a day lists who on a screen reports, the priced move, and the rest by count", ahead[1],
+      "Mon 11/23: `AAA` (Flat base), `SCR` (VCP) ±12% · 1 more in the universe")
+check("a day with reporters but none on a screen says so", ahead[2],
+      "Wed 11/25: none on a screen · 1 in the universe")
+check("a day with no reporters is left out, and next week's are not this week's",
+      [line[:3] for line in ahead[1:3]], ["Mon", "Wed"])
+check("the ± is explained when it is used", ahead[3],
+      "_± is the move the options price for the report._")
+check("a week with no reports says nothing",
+      discord.week_ahead_message({"events": []}, {}, {}, dt.date(2026, 11, 22)), None)
+
 # -------------------------------------------------------------- the wrap
 follow = {"screens": {
     "vcp": {"name": "VCP", "breakouts": [

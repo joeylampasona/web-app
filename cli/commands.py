@@ -1232,6 +1232,71 @@ def _edition_extras(out, meta: dict, *, send: bool) -> None:
                      json.dumps(discord.remember_reads(posted, rows, as_of)))
 
 
+def _names_on_screens(out) -> dict[str, str]:
+    """Every name on a screen and the screen it is on, public and gated: the
+    rooms these go to are private. A name on several keeps the first."""
+    from publish import gated as gatedmod
+
+    on_screen: dict[str, str] = {}
+
+    def absorb(payload: dict) -> None:
+        for stage in (payload.get("setups") or {}).values():
+            for row in stage:
+                if row.get("symbol"):
+                    on_screen.setdefault(row["symbol"], payload.get("name") or "a screen")
+
+    for path in sorted((out / "screens").glob("*.json")):
+        if path.stem != "diff":
+            try:
+                absorb(json.loads(path.read_text()))
+            except (OSError, ValueError):
+                continue
+    try:
+        for payload in gatedmod.fetch("screens/").values():
+            absorb(payload)
+    except Exception as exc:                       # noqa: BLE001
+        print(f"  gated screens unavailable: {type(exc).__name__}")
+    return on_screen
+
+
+def cmd_weekahead(args) -> int:
+    """The week's earnings for the names on a screen, for the earnings room.
+
+    Run on a Sunday evening. Reads the published calendar and nothing else.
+    """
+    from publish import discord
+
+    out = settings.out_dir()
+    try:
+        upcoming = json.loads((out / "catalysts" / "upcoming.json").read_text())
+    except (OSError, ValueError) as exc:
+        print(f"No published calendar to read ({exc}).")
+        return 1
+    try:
+        implied = discord.implied_moves(json.loads((out / "market" / "earnings.json").read_text()))
+    except (OSError, ValueError):
+        implied = {}
+    today = (dt.date.fromisoformat(args.day) if getattr(args, "day", None)
+             else dt.datetime.now(discord.NEW_YORK).date())
+    message = discord.week_ahead_message(upcoming, _names_on_screens(out), implied, today)
+    if not message:
+        print("Nobody in the universe reports in the week to come.")
+        return 0
+    _banner("The week's earnings")
+    print(message)
+    if not getattr(args, "send", False):
+        return 0
+    try:
+        if not discord.post("earnings", message, username="The Tape · earnings"):
+            print("\nNo Discord webhook is set; nothing was sent.")
+            return 1
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\nDiscord refused the post: {type(exc).__name__}")
+        return 1
+    print("\nSent to Discord.")
+    return 0
+
+
 def cmd_reporters(args) -> int:
     """Who reported today and how the price took it, for the earnings room.
 
@@ -1311,26 +1376,11 @@ def cmd_reporters(args) -> int:
     if not due and not nearby:
         return 0
 
-    # Every screen's names, public and gated: the room is private.
-    on_screen: dict[str, str] = {}
-
-    def absorb(payload: dict) -> None:
-        for stage in (payload.get("setups") or {}).values():
-            for row in stage:
-                if row.get("symbol"):
-                    on_screen.setdefault(row["symbol"], payload.get("name") or "a screen")
-
-    for path in sorted((out / "screens").glob("*.json")):
-        if path.stem != "diff":
-            try:
-                absorb(json.loads(path.read_text()))
-            except (OSError, ValueError):
-                continue
+    on_screen = _names_on_screens(out)
     try:
-        for payload in gatedmod.fetch("screens/").values():
-            absorb(payload)
-    except Exception as exc:                       # noqa: BLE001
-        print(f"  gated screens unavailable: {type(exc).__name__}")
+        implied = discord.implied_moves(json.loads((out / "market" / "earnings.json").read_text()))
+    except (OSError, ValueError):
+        implied = {}
 
     quotes = yfmod.report_day_quotes(due + nearby)
     moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()]
@@ -1342,7 +1392,7 @@ def cmd_reporters(args) -> int:
     for symbol in named:
         tables[symbol] = yfmod.report_row(symbol, day)
         time.sleep(0.4)
-    rows = discord.reporter_rows(run, named, quotes, tables, on_screen)
+    rows = discord.reporter_rows(run, named, quotes, tables, on_screen, implied)
     others = len([s for s in due if s not in posted]) - len(named)
     print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
           f"{sum(1 for t in tables.values() if t)} with a line for today; "
