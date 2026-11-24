@@ -148,6 +148,14 @@ for i in range(29):
 check("an answer in between starts the count again", cboe.standing_down(), False)
 check("and so does a company that simply has no quote", cboe.OUTCOMES.get("not_asked", 0), 0)
 
+# ------------------------------------- an implied volatility that is not one
+from catalysts import iv as ivmod  # noqa: E402
+
+check("an ordinary implied volatility is believed", ivmod.plausible(0.453), True)
+check("one of a thousandth of a per cent is not", ivmod.plausible(0.00001), False)
+check("nor is nothing at all", (ivmod.plausible(None), ivmod.plausible(float("nan"))),
+      (False, False))
+
 # ------------------------------- asking SEC again the same day
 import json  # noqa: E402
 

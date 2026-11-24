@@ -82,8 +82,11 @@ def option_chain(symbol: str) -> OptionChain | None:
                 if spot and "strike" in near:
                     near["distance"] = (near["strike"] - spot).abs()
                     near = near.nsmallest(6, "distance")
+                # Above a floor, not merely above zero: an unquoted contract
+                # arrives with an implied volatility of about 0.00001, and a
+                # few of those drag an expiry's average to nothing.
                 ivs.extend(float(v) for v in near.get("impliedVolatility", [])
-                           if v == v and v > 0)
+                           if v == v and v >= 0.01)
             if ivs:
                 rows.append(OptionExpiry(expiry, sum(ivs) / len(ivs), len(ivs)))
         if not rows and not contracts:

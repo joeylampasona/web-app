@@ -94,6 +94,15 @@ def band_for(richness: float) -> tuple[str, int]:
     return "low", max(1, dots - 3)
 
 
+#: An annualised implied volatility below this is not a market's opinion of
+#: anything: it is a contract with no quote behind it.
+MIN_PLAUSIBLE_IV = 0.05
+
+
+def plausible(iv: float | None) -> bool:
+    return iv is not None and iv == iv and iv >= MIN_PLAUSIBLE_IV
+
+
 def _bracketing(chain: OptionChain, target: dt.date):
     """The expiry that brackets the event, plus its two neighbours."""
     expiries = sorted(chain.expiries, key=lambda e: e.expiry)
@@ -183,7 +192,11 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
         if bracket is None or not neighbours:
             continue
         neighbour_iv = sum(n.implied_volatility for n in neighbours) / len(neighbours)
-        if neighbour_iv <= 0:
+        if not plausible(neighbour_iv) or not plausible(bracket.implied_volatility):
+            # A reading too small to be one. The shorter chains carry
+            # contracts nobody has quoted with an implied volatility of a
+            # thousandth of a per cent; dividing by that put Avista at the
+            # top of the page, 45,313 times richer than its neighbours.
             continue
         richness = bracket.implied_volatility / neighbour_iv
         band, dots = band_for(richness)
