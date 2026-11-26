@@ -270,3 +270,22 @@ entries:
     source:
       - "patterns/followthrough.py: the comment in compute"
       - "patterns/params.py: BASE_SCREEN_KEYS and SHAPE_SCREEN_KEYS"
+
+  - id: R17
+    date: 2026-11-26
+    question: Does a stock that closes back above last week's low go on to do better than its peers?
+    measured: >
+      The reclaim rule run over two years of real prices before the screen was
+      published, with no relative-strength test: 12,947 reclaims in 2,547
+      stocks, each followed for twenty sessions and set against the median
+      session of a stock in the same good order.
+    result: >
+      No. Twenty sessions on, the median reclaim was down 0.3% where its
+      peers were up 0.6%, and a little over half closed back under the level
+      inside five sessions. No setting of any dial changed that. The screen
+      was published anyway, as a list of leaders that were shaken and held,
+      and says so; its own record is now counted forward on the record page.
+    verdict: refuted
+    source:
+      - "patterns/params.py: the reclaim screen's description"
+      - "patterns/reclaim.py"
