@@ -149,14 +149,24 @@ check("a row whose cells came out between the halves of its asset is still read"
         ("ZETA", "sell", "2026-10-21", 15001)], []))
 check("with its name put back together",
       got[0][1]["asset"], "Norwegian Cruise Line Holdings Ltd. Ordinary Shares")
+parted = (HEAD + "Veralto Corp Common StockP 10/20/202611/09/2026$1,001\n(VLTO) - $15,000 [ST]\n"
+          "F\x00 S\x00: New\nResideo Technologies, Inc. Common Stock (REZI) [ST]\n"
+          "S 10/02/202610/05/2026$344\nF\x00 S\x00: New\n" + TAIL)
+got = congress.parse(parted)[0]
+check("a band parted from its top by the ticker is made whole from the form's own bands",
+      (got[0]["ticker"], got[0]["asset"], got[0]["amount_low"], got[0]["amount_high"],
+       got[0]["amount_text"]),
+      ("VLTO", "Veralto Corp Common Stock", 1001, 15000, "$1,001 - $15,000"))
+check("a small exact figure the member wrote in is left as written",
+      (got[1]["amount_low"], got[1]["amount_high"], got[1]["amount_text"]), (344, 344, "$344"))
 broken = HEAD + "Acme Corp (ACME) [ST]\nP 10/27/2026 10/28/2026 fifteen thousand\n" + TAIL
 check("a row whose amount does not read is reported, not dropped in silence",
       (congress.parse(broken)[0], len(congress.parse(broken)[1])), ([], 1))
 check("bands, read apart from a report",
       (congress.amount_band("$1,001 -  $15,000"), congress.amount_band("$50,000,001 +"),
-       congress.amount_band("$15,001")),
+       congress.amount_band("$710")),
       ((1001, 15000, "$1,001 - $15,000"), (50000001, None, "$50,000,001 +"),
-       (15001, 15001, "$15,001")))
+       (710, 710, "$710")))
 
 # -------------------------------------------------------------- the index
 print("\nThe year's index:")

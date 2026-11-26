@@ -143,6 +143,21 @@ def amount_band(text: str) -> tuple[int | None, int | None, str]:
     return figures[0], figures[1], re.sub(r"\s*-\s*", " - ", tidy)
 
 
+#: The bands the form offers, by their lower end. They are fixed, so when a
+#: band's top was parted from its bottom on the way out of the PDF the top
+#: is known from the bottom; that is reading the form, not guessing.
+BANDS = {1001: 15000, 15001: 50000, 50001: 100000, 100001: 250000,
+         250001: 500000, 500001: 1000000, 1000001: 5000000,
+         5000001: 25000000, 25000001: 50000000}
+
+
+def whole_band(low, high, text: str) -> tuple[int | None, int | None, str]:
+    """A band whose top went missing, made whole from the form's own list."""
+    if low is not None and low == high and low in BANDS:
+        return low, BANDS[low], f"${low:,} - ${BANDS[low]:,}"
+    return low, high, text
+
+
 def lines_of(text: str) -> list[str]:
     """The filing's text as clean lines: NULs out, blanks out."""
     out = []
@@ -207,7 +222,10 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
         asset_text = before[cut + 1:].strip() if cut >= 0 else before.strip()
         if tail is not None:
             # The asset in two halves, either side of the transaction cells.
-            asset_text = f"{asset_text} {tail.strip()}"
+            # The band's top can be left behind with the second half:
+            # "... $1,001 (VLTO) - $15,000 [ST]".
+            tail = re.sub(r"\s*-\s*\$[\d,]+\s*$", "", tail.strip())
+            asset_text = f"{asset_text} {tail}"
         last_label = None
         marks = re.findall(rf"{_MARK}([A-Z]+{_RUN_ON}?)=", before)
         if marks:
@@ -230,7 +248,7 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
         after = stream[match.end():found[index + 1].start()
                        if index + 1 < len(found) else len(stream)]
         details = dict(re.findall(rf"{_MARK}([A-Z]+){_RUN_ON}?=([^{_MARK}]*){_MARK}", after))
-        low, high, band = amount_band(match["amount"])
+        low, high, band = whole_band(*amount_band(match["amount"]))
         rows.append({
             "asset": asset_text[-160:].strip(" -"),
             "ticker": ticker,
