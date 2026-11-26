@@ -500,3 +500,44 @@ beyond the free sample may be posted there.
   It was put up on purpose, in front of something Cboe sells.
 - **Still open**: whether OCC's file is as full at two in the morning as at
   eleven at night. If it is not, the chains move to an evening run.
+
+## What Market Desk sends is read whole, and dated (2026-11-25)
+
+- **Its options reads are judged by their own date.** The desk's stage list
+  does not cover its options stages. The week its chain source went dark
+  every stage said ok, and the move "priced" into Deere's report on the 25th
+  had been read on the 18th. The source report now has a second row for the
+  desk, dated by its newest chain read, and it is behind when that trails
+  the desk's own run by more than two sessions.
+- **A priced move carries the night it was read.** A read more than two
+  weekdays older than it should be is marked stale in the earnings file, on
+  the calendar's events and on the stock page, and the site says "read Nov
+  18" beside it. Discord leaves a stale read out: a line that sets a move
+  beside what options priced has no room to explain the date.
+- **Four blocks that were dropped at the door are kept** (`desk_runs.extras`):
+  dealer gamma for the index and the sector funds, the squeeze read for the
+  names the desk ranked, FINRA short interest for the names it flagged, and
+  the macro releases inside a five-session hold. Published as
+  `market/dealer_gamma.json`, `market/squeeze.json`, two fields on a stock's
+  page and one on the market context. All free: market level, or public
+  FINRA figures. A stock with no short interest shown is one the desk did
+  not flag that night, not one nobody is short.
+- **Dealer gamma is the desk's reading, not ours.** The Tape's own gamma
+  page reports concentration and labels the signed figure as resting on an
+  assumption. The desk's index and sector table is that assumption applied,
+  and the page says so.
+
+## The day's earnings figures come from Finnhub when there is a key (2026-11-25)
+
+- **Why.** Yahoo's earnings table fills in a reported figure hours after the
+  release, a request a company, and has no revenue. Finnhub's calendar is
+  one request for the day with earnings and revenue against their estimates
+  soon after the print. The desk has used it for months.
+- **How** (`catalysts/finnhub.py`, in `cli reporters`). With
+  `FINNHUB_API_KEY` set, the morning and evening runs read the day's
+  calendar first. A company it has a time and a figure for is not put to
+  Yahoo at all. Where it has no figure yet, Yahoo's is used with Yahoo's own
+  estimate, so a surprise is never one source's result against the other's
+  expectation. Revenue is Finnhub's alone. Without the key the run is as it
+  was.
+- The key travels in a header, never in the address.

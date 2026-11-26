@@ -28,6 +28,11 @@ PREFIX = "health."
 #: Below this share answered, a source is reported as partial.
 PARTIAL_BELOW = 0.8
 
+#: How many sessions the desk's options reads may trail its own run before
+#: they are called behind. One is ordinary; the chains are read after the
+#: close and a run can go out before them.
+OPTIONS_READS_MAY_LAG = 2
+
 #: The order the rows are published in, and what each is called.
 SOURCES = (
     ("prices", "Prices", "Polygon"),
@@ -36,6 +41,7 @@ SOURCES = (
     ("forecasts", "Analyst forecasts", "Yahoo"),
     ("filings", "Company filings", "SEC"),
     ("desk", "Market Desk", "Market Desk nightly"),
+    ("desk_options", "Market Desk options reads", "Market Desk nightly"),
     ("news", "Headlines", "Polygon"),
 )
 
@@ -178,6 +184,25 @@ def report(conn, session: dt.date, desk_run: dict | None = None,
             detail += f" Stages not reporting ok: {', '.join(failed)}."
             status = "partial" if status == "ok" else status
         rows["desk"] = {"status": status, "detail": detail, "as_of": covers}
+
+        # Its options reads are judged apart, by their own date. The desk's
+        # stage list does not cover them: the week its chain source went
+        # dark every stage said ok and every options figure was a week old.
+        read_on = desk_run.get("options_read_on")
+        if read_on:
+            read_on = str(read_on)
+            gap = _sessions_between(conn, read_on, covers) if read_on < covers else 0
+            if gap is None or gap <= OPTIONS_READS_MAY_LAG:
+                rows["desk_options"] = {
+                    "status": "ok", "as_of": read_on,
+                    "detail": f"Option chains last read for {read_on}."}
+            else:
+                rows["desk_options"] = {
+                    "status": "behind", "as_of": read_on,
+                    "detail": (f"Option chains last read for {read_on}, "
+                               f"{_count(gap)} sessions before the desk's last "
+                               f"run. Priced earnings moves and dealer gamma "
+                               f"are that old.")}
 
     out = []
     for key, label, origin in SOURCES:

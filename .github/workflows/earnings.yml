@@ -84,6 +84,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DISCORD_WEBHOOK_EARNINGS: ${{ secrets.DISCORD_WEBHOOK_EARNINGS || secrets.DISCORD_WEBHOOK_URL }}
+          # Optional. The day's reported figures, earnings and revenue
+          # against their estimates. Without it the run reads Yahoo alone.
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           SITE_URL: https://thetape.cc
           WHEN: ${{ inputs.when || 'auto' }}
           SEND: ${{ github.event_name == 'schedule' || inputs.send == 'true' }}

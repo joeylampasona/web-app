@@ -366,6 +366,11 @@ def implied_moves(earnings: dict) -> dict[str, float]:
     rows = sorted((earnings.get("priced") or {}).get("upcoming") or [],
                   key=lambda row: str(row.get("report_date") or ""))
     for row in rows:
+        if row.get("stale"):
+            # Read too long before the report to be called what the options
+            # priced. No figure is better than a week-old one in a line that
+            # sets the move beside it.
+            continue
         try:
             pct = float(row.get("implied_pct"))
         except (TypeError, ValueError):
@@ -402,8 +407,20 @@ def reporter_rows(run: str, named: list[str], quotes: dict[str, dict],
                      "move": move, "when": when, "screen": on_screen.get(symbol),
                      "implied": (implied or {}).get(symbol),
                      "eps": table.get("eps"), "estimate": table.get("estimate"),
-                     "surprise_pct": table.get("surprise_pct")})
+                     "surprise_pct": table.get("surprise_pct"),
+                     "revenue": table.get("revenue"),
+                     "revenue_estimate": table.get("revenue_estimate"),
+                     "revenue_surprise_pct": table.get("revenue_surprise_pct")})
     return rows
+
+
+def money(amount: float) -> str:
+    """Revenue the way a headline writes it: $4.21bn, $812m."""
+    if abs(amount) >= 1e9:
+        return f"${amount / 1e9:,.2f}bn"
+    if abs(amount) >= 1e6:
+        return f"${amount / 1e6:,.0f}m"
+    return f"${amount:,.0f}"
 
 
 def reporters_message(run: str, rows: list[dict], day: dt.date, read_at: str,
@@ -433,6 +450,13 @@ def reporters_message(run: str, rows: list[dict], day: dt.date, read_at: str,
             parts.append(f"EPS {row['eps']:.2f}")
         else:
             parts.append("EPS not in yet")
+        if row.get("revenue") and row.get("revenue_estimate"):
+            beat = (f" ({row['revenue_surprise_pct']:+.1f}%)"
+                    if row.get("revenue_surprise_pct") is not None else "")
+            parts.append(f"revenue {money(row['revenue'])} against "
+                         f"{money(row['revenue_estimate'])}{beat}")
+        elif row.get("revenue"):
+            parts.append(f"revenue {money(row['revenue'])}")
         if row["screen"]:
             parts.append(f"on {row['screen']}")
         name = f" {row['name']}" if row["name"] else ""

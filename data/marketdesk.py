@@ -163,15 +163,17 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
     earn_iv = earn_iv if isinstance(earn_iv, dict) else None
     holders = payload.get("holders")
     holders = holders if isinstance(holders, dict) and holders.get("by_ticker") else None
+    more = _extras(payload, signals)
     conn.execute(
         "INSERT OR REPLACE INTO desk_runs"
         "(as_of, generated_at, schema_version, universe_size, stage_status,"
-        " fetched_at, edge, positioning, market_context, earnings_iv, holders)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        " fetched_at, edge, positioning, market_context, earnings_iv, holders,"
+        " extras)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (stamp, str(payload.get("generated_at_utc") or ""), version,
          payload.get("universe_size"), json.dumps(stage_status), now,
          json.dumps(edge), json.dumps(positioning), json.dumps(context),
-         json.dumps(earn_iv), json.dumps(holders)))
+         json.dumps(earn_iv), json.dumps(holders), json.dumps(more)))
     if holders:
         # Half a megabyte a night, in a database the nightly caches whole.
         # Only the newest copy is ever read.
@@ -186,6 +188,80 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
             "earnings": dates, "stage_status": stage_status}
 
 
+def _extras(payload: dict, signals: list) -> dict | None:
+    """The blocks that arrive in the file and had no column: dealer gamma,
+    the squeeze read, short interest per flagged name, macro releases."""
+    gamma = payload.get("gamma")
+    gamma = gamma if isinstance(gamma, dict) and (
+        gamma.get("index") or gamma.get("sectors")) else None
+    squeeze = payload.get("squeeze")
+    squeeze = {str(k).upper(): v for k, v in squeeze.items()
+               if isinstance(v, dict)} if isinstance(squeeze, dict) else {}
+    short: dict[str, dict] = {}
+    for row in signals:
+        held = row.get("short_interest")
+        ticker = str(row.get("ticker") or "").upper()
+        if ticker and isinstance(held, dict) and held.get("shares"):
+            short[ticker] = {k: held.get(k) for k in
+                             ("settlement", "shares", "chg_pct", "days_to_cover")}
+    crossing = payload.get("events_crossing")
+    crossing = [e for e in crossing if isinstance(e, dict)] \
+        if isinstance(crossing, list) else []
+    if not (gamma or squeeze or short or crossing):
+        return None
+    return {"gamma": gamma, "squeeze": squeeze, "short_interest": short,
+            "events_crossing": crossing}
+
+
+def extras(conn: sqlite3.Connection) -> dict:
+    """The newest run's extra blocks, each empty when the desk sent none.
+
+    The newest run only. A squeeze read or a list of releases crossing a
+    hold is about that night; an older run's would be about another one.
+    Dealer gamma carries its own date and is the exception: the newest run
+    that has one, so a night the desk skipped it does not blank the panel.
+    """
+    empty = {"gamma": None, "squeeze": {}, "short_interest": {},
+             "events_crossing": []}
+    try:
+        rows = conn.execute(
+            "SELECT extras FROM desk_runs ORDER BY as_of DESC LIMIT 5").fetchall()
+    except sqlite3.Error:
+        return empty
+    out = dict(empty)
+    for index, row in enumerate(rows):
+        try:
+            value = json.loads(row["extras"] or "null")
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(value, dict):
+            continue
+        if index == 0:
+            out.update({k: value.get(k) or empty[k] for k in empty})
+        if out["gamma"] is None and value.get("gamma"):
+            out["gamma"] = value["gamma"]
+    return out
+
+
+def options_read_on(conn: sqlite3.Connection) -> str | None:
+    """The newest night the desk read option chains, as far as its file
+    shows: the date on its dealer gamma, or on its newest priced-move read.
+
+    Its `stage_status` does not cover the options stages, so on the week its
+    chain source went dark every status read "ok" while every options figure
+    it sent was a week old. This is the date that says so.
+    """
+    dates: list[str] = []
+    gamma = extras(conn).get("gamma") or {}
+    if gamma.get("d"):
+        dates.append(str(gamma["d"]))
+    priced = earnings_iv(conn) or {}
+    for row in (priced.get("upcoming") or []) + (priced.get("settled") or []):
+        if row.get("d"):
+            dates.append(str(row["d"]))
+    return max(dates) if dates else None
+
+
 def latest_run(conn: sqlite3.Connection) -> dict | None:
     row = conn.execute(
         "SELECT * FROM desk_runs ORDER BY as_of DESC LIMIT 1").fetchone()
@@ -193,7 +269,8 @@ def latest_run(conn: sqlite3.Connection) -> dict | None:
         return None
     return {"as_of": row["as_of"], "generated_at": row["generated_at"],
             "universe_size": row["universe_size"],
-            "stage_status": json.loads(row["stage_status"] or "{}")}
+            "stage_status": json.loads(row["stage_status"] or "{}"),
+            "options_read_on": options_read_on(conn)}
 
 
 def track_records(conn: sqlite3.Connection) -> dict[tuple[str, str], dict]:

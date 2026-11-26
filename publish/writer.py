@@ -173,6 +173,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             market_context: dict | None = None,
             earnings_iv: dict | None = None,
             holders: dict | None = None,
+            desk_extras: dict | None = None,
             fundamentals: dict[str, dict] | None = None,
             earnings_reads: list[dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
@@ -246,18 +247,31 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
 
     # Priced moves: the latest read per name, upcoming first. A settled read
     # is kept beside it so a page can say whether the last priced move held.
+    #
+    # Each read is marked stale when it is older than it should be. A coming
+    # report is re-read every night, so its read should be a session or two
+    # behind this edition; a settled one was last read the night before the
+    # print. The week the desk's chains went dark it kept sending the last
+    # read it had, and a move "priced" eight days before the report went out
+    # as tonight's.
     priced_next: dict[str, dict] = {}
     priced_last: dict[str, dict] = {}
-    for row in (earnings_iv or {}).get("upcoming") or []:
+    upcoming_rows = [{**row, "stale": _read_is_stale(row.get("d"), as_of)}
+                     for row in (earnings_iv or {}).get("upcoming") or []]
+    settled_rows = [{**row, "stale": _read_is_stale(row.get("d"), row.get("report_date"))}
+                    for row in (earnings_iv or {}).get("settled") or []]
+    for row in upcoming_rows:
         symbol = str(row.get("ticker") or "").upper()
         if symbol and row.get("implied_pct") and symbol not in priced_next:
             priced_next[symbol] = {k: row.get(k) for k in
-                                   ("report_date", "hour", "expiry", "implied_pct", "d")}
-    for row in (earnings_iv or {}).get("settled") or []:
+                                   ("report_date", "hour", "expiry", "implied_pct",
+                                    "d", "stale")}
+    for row in settled_rows:
         symbol = str(row.get("ticker") or "").upper()
         if symbol and row.get("implied_pct") and symbol not in priced_last:
             priced_last[symbol] = {k: row.get(k) for k in
-                                   ("report_date", "implied_pct", "realised_pct", "inside")}
+                                   ("report_date", "implied_pct", "realised_pct",
+                                    "inside", "d", "stale")}
 
     # Put/call and the desk's regime label, and the running record of how
     # often the options market's priced earnings move has held. Free: market
@@ -270,6 +284,45 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             "earnings_priced": ({**earnings_iv["tally"],
                                  "as_of": earnings_iv.get("as_of")}
                                 if (earnings_iv or {}).get("tally") else None),
+            # Scheduled macro releases inside a five-session hold taken
+            # tonight. Often empty, and empty is an answer.
+            "events_crossing": (desk_extras or {}).get("events_crossing") or [],
+            "source": "Market Desk",
+        }))
+
+    # ---- Market Desk: dealer gamma for the index and sectors, squeeze ----
+    #
+    # Both arrive in the desk's file and were dropped at the door. Free:
+    # market level, and the squeeze read is FINRA's public short volume.
+    desk_gamma = (desk_extras or {}).get("gamma") or None
+    if desk_gamma:
+        read_on = desk_gamma.get("d")
+        written.append(_write(out / "market" / "dealer_gamma.json", {
+            "as_of": as_of.isoformat(),
+            "read_on": read_on,
+            "stale": _read_is_stale(read_on, as_of),
+            "index": desk_gamma.get("index") or [],
+            "sectors": desk_gamma.get("sectors") or [],
+            "source": "Market Desk",
+        }))
+    squeeze_by_symbol = {s.upper(): row for s, row in
+                         ((desk_extras or {}).get("squeeze") or {}).items()}
+    short_by_symbol = {s.upper(): row for s, row in
+                       ((desk_extras or {}).get("short_interest") or {}).items()}
+    if squeeze_by_symbol:
+        squeeze_rows = [{"symbol": symbol,
+                         "name": (market.refs[symbol].name
+                                  if symbol in market.refs else symbol),
+                         "in_universe": symbol in market.refs,
+                         **row,
+                         "short_interest": short_by_symbol.get(symbol)}
+                        for symbol, row in squeeze_by_symbol.items()]
+        squeeze_rows.sort(key=lambda r: (-(r.get("met") or 0),
+                                         -(r.get("short_ratio") or 0.0), r["symbol"]))
+        written.append(_write(out / "market" / "squeeze.json", {
+            "as_of": as_of.isoformat(),
+            "count": len(squeeze_rows),
+            "rows": squeeze_rows,
             "source": "Market Desk",
         }))
 
@@ -288,8 +341,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     written.append(_write(out / "market" / "earnings.json", {
         "as_of": as_of.isoformat(),
         "priced": ({"as_of": earnings_iv.get("as_of"),
-                    "upcoming": earnings_iv.get("upcoming") or [],
-                    "settled": earnings_iv.get("settled") or [],
+                    "upcoming": upcoming_rows,
+                    "settled": settled_rows,
                     "tally": earnings_iv.get("tally") or {},
                     "rich": EARNINGS_RICH}
                    if earnings_iv else None),
@@ -487,6 +540,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              holders_locked=set(holder_rows),
                                              priced=(priced_next.get(symbol),
                                                      priced_last.get(symbol)),
+                                             short_interest=short_by_symbol.get(symbol),
+                                             squeeze=squeeze_by_symbol.get(symbol),
                                              fundamentals=(fundamentals or {}).get(symbol),
                                              fundamentals_known=symbol in (fundamentals or {}),
                                              leadership=layer_of.get(symbol),
@@ -1067,8 +1122,33 @@ def _with_priced(event: dict, priced: dict[str, dict]) -> dict:
     hit = priced.get(str(event.get("ticker") or "").upper())
     if (hit and event.get("type") == "earnings" and not event.get("readthrough")
             and hit.get("report_date") == event.get("date")):
-        return {**event, "priced_move_pct": hit.get("implied_pct")}
+        return {**event, "priced_move_pct": hit.get("implied_pct"),
+                "priced_read_on": hit.get("d"),
+                "priced_stale": bool(hit.get("stale"))}
     return event
+
+
+#: How many weekdays old a priced-move read may be before it is called stale.
+READ_MAY_TRAIL = 2
+
+
+def _read_is_stale(read_on, against) -> bool:
+    """Whether a desk options read is older than it should be: more than
+    READ_MAY_TRAIL weekdays before the date it is held against. Weekdays, not
+    sessions, so a holiday reads as one day staler than it is; the margin
+    covers it. False when either date is missing or unreadable."""
+    try:
+        start = dt.date.fromisoformat(str(read_on)[:10])
+        end = (against if isinstance(against, dt.date)
+               else dt.date.fromisoformat(str(against)[:10]))
+    except (TypeError, ValueError):
+        return False
+    days, day = 0, start
+    while day < end:
+        day += dt.timedelta(days=1)
+        if day.weekday() < 5:
+            days += 1
+    return days > READ_MAY_TRAIL
 
 
 def _last_move(closes) -> dict:
@@ -1130,6 +1210,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    holders: dict[str, dict] | None = None,
                    holders_locked: set[str] | None = None,
                    priced: tuple[dict | None, dict | None] = (None, None),
+                   short_interest: dict | None = None,
+                   squeeze: dict | None = None,
                    fundamentals: dict | None = None,
                    fundamentals_known: bool = False,
                    leadership: dict | None = None,
@@ -1232,6 +1314,11 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # Desk's chain read, and whether the last priced move held.
         "earnings_priced": priced[0],
         "earnings_priced_last": priced[1],
+        # FINRA's short interest, and the desk's squeeze read, for the names
+        # the desk flagged or ranked that night. Null for everyone else,
+        # which says the desk did not look and not that nobody is short.
+        "short_interest": short_interest,
+        "squeeze": squeeze,
         # How many of the desk's tracked funds hold it. Which funds is fetched
         # by subscribers.
         # Absent entirely until the desk has sent a holders table, so a page

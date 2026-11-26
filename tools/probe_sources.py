@@ -755,6 +755,45 @@ def probe_chains() -> None:
                  f"${found.total_concentration / 1e6:>8,.1f}m" if found else "nothing"))
 
 
+def probe_finnhub() -> None:
+    """Finnhub's earnings calendar for the last few sessions: is the key
+    there, does it answer, and how soon are the figures in."""
+    print()
+    print(RULE)
+    print("10. FINNHUB — the day's earnings figures")
+    print(RULE)
+    try:
+        from catalysts import finnhub
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the pipeline: {exc}")
+        return
+    if not finnhub.enabled():
+        print("   FINNHUB_API_KEY is not set in this repository's secrets. The "
+              "reporters run reads Yahoo alone until it is.")
+        return
+    print("   key configured: yes (never printed)")
+    import zoneinfo
+    today = dt.datetime.now(zoneinfo.ZoneInfo("America/New_York")).date()
+    for back in range(0, 6):
+        day = today - dt.timedelta(days=back)
+        if day.weekday() >= 5:
+            continue
+        rows = finnhub.calendar(day)
+        with_eps = [s for s, r in rows.items() if r["eps"] is not None]
+        with_revenue = [s for s, r in rows.items() if r["revenue"]]
+        timed = sum(1 for r in rows.values() if r["hour"] is not None)
+        print(f"   {day}: {len(rows):,} companies, {timed:,} with a time of day, "
+              f"{len(with_eps):,} with reported EPS, {len(with_revenue):,} with "
+              f"reported revenue")
+        for symbol in sorted(with_revenue, key=lambda s: -(rows[s]["revenue"] or 0))[:4]:
+            r = rows[symbol]
+            print(f"      {symbol:<6} EPS {r['eps']} vs {r['estimate']} "
+                  f"({r['surprise_pct']}%), revenue {r['revenue']:,.0f} vs "
+                  f"{r['revenue_estimate']} ({r['revenue_surprise_pct']}%)")
+        time.sleep(1.2)
+    print(f"   outcomes: {dict(finnhub.OUTCOMES)}")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -777,6 +816,7 @@ def main() -> int:
         ("cboe", lambda: probe_cboe_refusals(PLAIN_AGENT)),
         ("reporters", probe_reporters),
         ("chains", probe_chains),
+        ("finnhub", probe_finnhub),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

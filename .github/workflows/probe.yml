@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains). Empty runs all."
+        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub). Empty runs all."
         required: false
         default: ""
 
@@ -45,6 +45,8 @@ jobs:
           # For the universe trace's reference lookups. Never printed.
           POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
           PROBE_ONLY: ${{ inputs.only }}
+          # For the finnhub section. Never printed.
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: python tools/probe_sources.py
 
 

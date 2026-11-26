@@ -942,6 +942,7 @@ def cmd_publish(args) -> int:
     market_context = desk_mod.market_context(conn)
     earnings_iv = desk_mod.earnings_iv(conn)
     holders = desk_mod.holders(conn)
+    desk_extras = desk_mod.extras(conn)
 
     # Filed figures, from the fundamentals step's cache. Never fetched here.
     from data import fundamentals as fundamentals_mod
@@ -990,6 +991,7 @@ def cmd_publish(args) -> int:
                              market_context=market_context,
                              earnings_iv=earnings_iv,
                              holders=holders,
+                             desk_extras=desk_extras,
                              fundamentals=filed,
                              earnings_reads=earnings_reads,
                              sources=sources)
@@ -1403,16 +1405,40 @@ def cmd_reporters(args) -> int:
     except (OSError, ValueError):
         implied = {}
 
+    # Finnhub's calendar for the day: one request, every reporter, with
+    # earnings and revenue against their estimates soon after the print.
+    # Empty without a key, and then Yahoo is read alone as before.
+    from catalysts import finnhub
+    figures = finnhub.calendar(day)
+    if finnhub.enabled():
+        print(f"  finnhub: {len(figures):,} companies on the day, "
+              f"{sum(1 for r in figures.values() if r['eps'] is not None):,} "
+              f"with a reported figure ({dict(finnhub.OUTCOMES)})")
+    else:
+        print("  finnhub: no FINNHUB_API_KEY set; figures from Yahoo alone.")
+
     quotes = yfmod.report_day_quotes(due + nearby)
-    moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()]
+    moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()
+             or s in figures]
     if moved:
-        print(f"  {len(moved)} of those Yahoo has on today: {', '.join(moved)}")
+        print(f"  {len(moved)} of those are on today by Yahoo or Finnhub: "
+              f"{', '.join(moved)}")
         due = sorted(set(due) | set(moved))
     named = discord.reporters_to_name(due, quotes, on_screen, set(posted))
     tables: dict[str, dict | None] = {}
+    asked_yahoo = 0
     for symbol in named:
-        tables[symbol] = yfmod.report_row(symbol, day)
+        theirs = figures.get(symbol)
+        if finnhub.complete(theirs):
+            # When in the day and the figure are both in hand: Yahoo's table
+            # has nothing to add, and it is the slow request of the two.
+            tables[symbol] = finnhub.merged(None, theirs)
+            continue
+        tables[symbol] = finnhub.merged(yfmod.report_row(symbol, day), theirs)
+        asked_yahoo += 1
         time.sleep(0.4)
+    if finnhub.enabled():
+        print(f"  Yahoo's table was needed for {asked_yahoo} of {len(named)}.")
     rows = discord.reporter_rows(run, named, quotes, tables, on_screen, implied)
     others = len([s for s in due if s not in posted]) - len(named)
     print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
