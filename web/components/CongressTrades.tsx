@@ -30,6 +30,12 @@ const ACCOUNT: Record<string, string> = {
   child: "Dependent child",
 };
 
+const WHOSE: Record<string, string> = {
+  spouse: "a spouse\u2019s account",
+  joint: "a joint account",
+  child: "a dependent child\u2019s account",
+};
+
 /** Whole days from the trade to the report, or null when either is missing. */
 function gap(traded: string | null, filed: string | null): number | null {
   if (!traded || !filed) return null;
@@ -136,7 +142,32 @@ export function CongressCard({ trades }: { trades: CongressTrade[] | null | unde
         </div>
       ) : (
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <Rows trades={trades} withSymbol={false} />
+          {/* A list, not the table: this card sits in a narrow column on a
+              wide screen and on a phone, and seven columns fit neither. */}
+          <div className="card stack" style={{ gap: "var(--gap-sm)" }}>
+            {trades.map((t, i) => (
+              <div key={`${t.url}-${t.traded}-${t.type}-${i}`}
+                   style={i > 0 ? { borderTop: "1px solid var(--border)",
+                                    paddingTop: "var(--gap-sm)" } : undefined}>
+                <div>
+                  <Verb type={t.type} />{" "}
+                  <span className="num">{t.amount || "an unstated amount"}</span>
+                  {" · "}{t.member}
+                  {t.district && <span className="dim"> ({t.district})</span>}
+                  {t.owner && t.owner !== "self" && (
+                    <span className="dim">, {WHOSE[t.owner] ?? t.owner}</span>
+                  )}
+                </div>
+                <div className="caption dim">
+                  Traded {longDate(t.traded)} · filed {longDate(t.filed)}
+                  <Lag traded={t.traded} filed={t.filed} />
+                  {" · "}
+                  <a href={t.url} target="_blank" rel="noopener noreferrer"
+                     style={{ textDecoration: "underline" }}>the report</a>
+                </div>
+              </div>
+            ))}
+          </div>
           <p className="caption dim" style={{ margin: 0, maxWidth: "78ch" }}>{FOOTNOTE}</p>
         </div>
       )}
