@@ -84,6 +84,8 @@ export function StockDetail({ stock, run, deskNote }: {
   const setup = stock.primary_setup;
   // The shape screens publish a fitted geometry; the base screens do not.
   const shaped = stock.setups.filter((s) => s.shape);
+  // The reclaim screen publishes four prices in place of a geometry.
+  const reclaimed = stock.setups.find((s) => s.reclaim)?.reclaim ?? null;
 
   // One slice and one plan, shared by the chart and the key beneath it. Both
   // are memoised because a fresh array on every render would rebuild the chart
@@ -332,6 +334,17 @@ export function StockDetail({ stock, run, deskNote }: {
 
       <CongressCard trades={stock.congress} />
 
+      {reclaimed && (
+        <section className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <div className="eyebrow">The reclaim</div>
+          <ReclaimReadout reclaim={reclaimed} />
+          <p className="caption dim" style={{ margin: 0 }}>
+            Under last week&rsquo;s low and back above it by the close. A fact
+            about four prices on the daily chart, not a forecast.
+          </p>
+        </section>
+      )}
+
       {shaped.length > 0 && (
         <section>
           <div className="eyebrow">The geometry</div>
@@ -365,7 +378,6 @@ export function StockDetail({ stock, run, deskNote }: {
                   />
                 )}
                 <ShapeReadout shape={s.shape} />
-                <ReclaimReadout reclaim={s.reclaim} />
               </div>
             ))}
           </div>
