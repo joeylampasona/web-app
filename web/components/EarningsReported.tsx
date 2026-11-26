@@ -100,10 +100,12 @@ function Reported({ data }: { data: ReportersPayload }) {
             {data.rows.map((row) => (
               <tr key={`${row.symbol}-${row.run}`}>
                 <td className="text"><Ticker symbol={row.symbol} name={row.name} hasPage={row.has_page} /></td>
-                <td>{row.move == null ? <span className="dim">no quote</span>
-                  : <PriceChange value={row.move} digits={1} />}</td>
-                <td className="text dim">{row.when ?? "—"}</td>
-                <td><Priced implied={row.implied} /></td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {row.move == null ? <span className="dim">no quote</span>
+                    : <PriceChange value={row.move} digits={1} />}
+                </td>
+                <td className="text dim" style={{ whiteSpace: "nowrap" }}>{row.when ?? "—"}</td>
+                <td style={{ whiteSpace: "nowrap" }}><Priced implied={row.implied} /></td>
                 <td className="num" style={{ whiteSpace: "nowrap" }}><Eps row={row} /></td>
                 <td className="num" style={{ whiteSpace: "nowrap" }}><Revenue row={row} /></td>
               </tr>
@@ -154,9 +156,13 @@ function Settled({ rows }: { rows: SettledRow[] }) {
                     { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }) : "—"}
                   {row.when && <> · {row.when}</>}
                 </td>
-                <td style={{ fontWeight: 600 }}><PriceChange value={row.session_move} digits={1} /></td>
-                <td>{row.first_move == null ? <span className="dim">—</span>
-                  : <PriceChange value={row.first_move} digits={1} className="dim" />}</td>
+                <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <PriceChange value={row.session_move} digits={1} />
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {row.first_move == null ? <span className="dim">—</span>
+                    : <PriceChange value={row.first_move} digits={1} className="dim" />}
+                </td>
                 <td><Priced implied={row.implied} /></td>
                 <td className="text">
                   {row.inside === null ? <span className="dim">no priced move</span>
