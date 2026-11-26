@@ -683,3 +683,45 @@ paying. Now both.
   only state what the repository already records; an open one says what it
   is waiting for. History before November was squashed, so the earliest
   entries carry the date their result entered the repository.
+
+## An MCP endpoint, public pages only (2026-11-26)
+
+- **`/api/mcp` lets a reader's own AI ask the site.** It speaks the Model
+  Context Protocol over HTTP: a client POSTs JSON-RPC and gets JSON back.
+  Seven read-only tools: the edition, the list of screens, one screen, one
+  company, earnings, the market's state, and a company search. `/mcp` is the
+  page that explains it and carries the one-line connect command.
+- **Hand-rolled, not the SDK.** The SDK's HTTP transport is written around a
+  Node request and response and a table of sessions. A Next route handler on
+  a serverless platform has neither. What this server needs of the protocol
+  is five methods, and they are in `web/lib/mcp/protocol.ts` with no
+  dependency.
+- **Stateless.** No session id is issued, no stream is held open, GET and
+  DELETE answer 405. Revisions 2025-06-18, 2025-03-26 and 2024-11-05 are
+  accepted and a client asking for anything else is offered the newest.
+  Batches are answered, up to twenty messages: 2025-03-26 has them,
+  2025-06-18 removed them, and a server that keeps nothing between requests
+  cannot know which a client negotiated, so it takes the lenient reading.
+- **Public only, for now.** Every tool reads through the loaders the public
+  pages use, from the published tree, which never holds the paid half. A
+  screen answers with the same free rows its page shows and the true count
+  at each stage, and says how many are withheld. A test compares
+  `get_screen` with the published `screens/<key>.json` on every screen. The
+  reason is that there is nobody to check: a browser session does not travel
+  with an AI client, so the endpoint cannot tell a subscriber from anyone
+  else, and it is left open with no key.
+- **What keeps an open door safe**: nothing behind it writes; a request is
+  at most 64 KB; an answer is at most 14,000 characters, and a longer one is
+  replaced by a short message saying how to ask for less, never cut in the
+  middle; symbols and screen keys are checked against a pattern and against
+  the published list before anything is read; one address gets 120 requests
+  a minute per server instance, which is a brake on a runaway loop and not a
+  quota; answers are never cached. Any origin may call, because there are no
+  credentials for an origin to borrow.
+- **A subscriber's version is not built, and is the owner's to approve.** It
+  would need a token a subscriber copies from their settings and sends as a
+  bearer header, a table in Supabase to hold it (hashed, per subscriber,
+  revocable, with a last-used time), a check of that subscriber's standing
+  on each request, and the tools reading the paid tree for a valid token.
+  That is a change to the Supabase schema and to who can reach paid data,
+  so nothing here touches either.
