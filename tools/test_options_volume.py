@@ -201,6 +201,27 @@ check("the published reading",
        "state": "ordinary"})
 check("no VIX, no reading", volatility.reading(None, 20.0, "2026-11-25"), None)
 
+# The two quotes are not always of one session: what the runner saw at noon
+# on Thanksgiving was a VIX printed that morning beside Wednesday's VIX3M.
+holiday_vix = {"last": 26.8, "prev_close": 28.29, "at": "2026-11-26T11:30:00"}
+wednesday_far = {"last": 26.29, "prev_close": 25.47, "at": "2026-11-25T16:15:01"}
+check("a newer VIX is paired by its previous close, on the older date",
+      volatility.aligned(holiday_vix, wednesday_far),
+      {"as_of": "2026-11-25", "vix": 28.29, "vix3m": 26.29, "ratio": 1.076,
+       "state": "stressed"})
+check("two quotes of one session are paired as they stand",
+      volatility.aligned({"last": 18.42, "prev_close": 19.0, "at": "2026-11-25T16:15:00"},
+                         {"last": 20.11, "at": "2026-11-25T16:15:01"})["ratio"], 0.916)
+check("a three-month figure a week old is not paired at all",
+      volatility.aligned(holiday_vix, {"last": 24.0, "at": "2026-11-18T16:15:01"}),
+      {"as_of": "2026-11-26", "vix": 26.8, "vix3m": None, "ratio": None,
+       "state": "uneasy"})
+check("nor is one without a previous close to pair it with",
+      volatility.aligned({"last": 26.8, "at": "2026-11-26T11:30:00"}, wednesday_far)["ratio"],
+      None)
+check("no three-month quote leaves the VIX alone",
+      volatility.aligned(holiday_vix, {})["vix3m"], None)
+
 conn.execute("CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT)")
 volatility.settings.get = lambda key, default=None: "polygon" if key == "data.provider" else default
 said: list[str] = []

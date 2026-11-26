@@ -75,6 +75,84 @@ def rows(market: Market) -> list[dict[str, Any]]:
     return out
 
 
+# ---------------------------------------------------------------- divergence
+#
+# The indexes usually make their highs and lows together. When one sets a new
+# extreme and the others decline to, one of them is wrong about the market,
+# and which one is the question worth asking that day. This says only that
+# they disagree. It does not say who is right.
+
+DIVERGENCE_WINDOW = 20
+
+#: What each fund is called in a sentence. A fund not listed is its ticker.
+PLAIN_NAMES = {"SPY": "the S&P 500", "QQQ": "the Nasdaq 100",
+               "IWM": "the Russell 2000", "DIA": "the Dow",
+               "MDY": "the S&P MidCap 400", "RSP": "the equal-weight S&P 500"}
+
+
+def _extremes(closes: list[float], window: int) -> dict | None:
+    """Whether the last close is the highest or lowest of the last `window`
+    closes, itself included, and how far it sits from each."""
+    if len(closes) < window:
+        return None
+    recent = closes[-window:]
+    high, low, last = max(recent), min(recent), recent[-1]
+    if low <= 0 or high <= 0:
+        return None
+    return {"at_high": last >= high, "at_low": last <= low,
+            "above_low_pct": round(100.0 * (last / low - 1.0), 1),
+            "below_high_pct": round(100.0 * (1.0 - last / high), 1)}
+
+
+def _listed(names: list[str]) -> str:
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def divergence(series: dict[str, list[float]], window: int = DIVERGENCE_WINDOW
+               ) -> dict | None:
+    """What the indexes disagree about at an extreme, or None when they agree.
+
+    `series` is closes per fund, in the order they should be named. A
+    divergence is some of them closing at a `window`-session low, or high,
+    while the rest do not. All at one together is agreement, and so is none.
+    """
+    read = {symbol: found for symbol, closes in series.items()
+            if (found := _extremes(list(closes), window)) is not None}
+    if len(read) < 2:
+        return None
+    sentences: list[str] = []
+    kinds: list[dict] = []
+    for kind, flag, gap, word in (("low", "at_low", "above_low_pct", "above"),
+                                  ("high", "at_high", "below_high_pct", "below")):
+        alone = [s for s in read if read[s][flag]]
+        others = [s for s in read if not read[s][flag]]
+        if not alone or not others:
+            continue
+        subject = _listed([PLAIN_NAMES.get(s, s) for s in alone])
+        subject = subject[0].upper() + subject[1:]
+        rest = _listed([PLAIN_NAMES.get(s, s) for s in others])
+        rest = rest[0].upper() + rest[1:]
+        gaps = _listed([f"{read[s][gap]:.1f}%" for s in others])
+        theirs = "its own" if len(others) == 1 else "theirs"
+        sentences.append(
+            f"{subject} closed at a {window}-session {kind}. {rest} did not: "
+            f"{gaps} {word} {theirs}.")
+        kinds.append({"kind": kind, "alone": alone, "others": others})
+    if not sentences:
+        return None
+    return {"window": window, "kinds": kinds, "sentence": " ".join(sentences)}
+
+
+def divergence_for(market: Market) -> dict | None:
+    wanted = list(settings.get("rankings.divergence_indexes", None)
+                  or ["SPY", "QQQ", "IWM"])
+    series = {symbol: [b.close for b in (market.series.get(symbol) or [])]
+              for symbol in wanted}
+    return divergence({s: c for s, c in series.items() if c})
+
+
 def regime(market: Market) -> dict[str, Any]:
     """Is the benchmark above its 200-day line?
 

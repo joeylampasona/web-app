@@ -23,7 +23,9 @@ from dataclasses import asdict, dataclass
 
 from backtest import engine
 from data.market import Market
-from patterns.params import BASE_SCREEN_KEYS, SCREENS, Params
+from patterns import reclaim as reclaimmod
+from patterns.indicators import sma
+from patterns.params import BASE_SCREEN_KEYS, LEVEL_SCREEN_KEYS, SCREENS, Params
 
 # Six months. Long enough that a base has had time to resolve, short enough that
 # it describes the market someone is looking at rather than the one before it.
@@ -76,11 +78,17 @@ def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) ->
     # Base screens only. This reuses engine.candidates to re-derive breakouts
     # historically, and the engine can only rebuild a base — see
     # BASE_SCREEN_KEYS. A shape screen's history is not reconstructable here.
-    for key in BASE_SCREEN_KEYS:
+    for key in BASE_SCREEN_KEYS + LEVEL_SCREEN_KEYS:
         spec = SCREENS[key]
         params = Params(key)
         rows: list[Outcome] = []
-        for symbol, found in engine.candidates(market, params, timeline).items():
+        # The base screens are replayed by the engine. A level screen's events
+        # are four prices from the bars, re-derived by its own module and
+        # passed through the same gates on their own day.
+        candidates = (reclaim_candidates(market, params, timeline)
+                      if key in LEVEL_SCREEN_KEYS
+                      else engine.candidates(market, params, timeline))
+        for symbol, found in candidates.items():
             bars = market.series.get(symbol) or []
             for cand in found:
                 if as_of and (as_of - cand.date).days > window_days:
@@ -120,6 +128,35 @@ def compute(market: Market, timeline, window_days: int = DEFAULT_WINDOW_DAYS) ->
             "benchmark": market.benchmark,
             "horizons": list(HORIZONS),
             "screens": out}
+
+
+def reclaim_candidates(market: Market, params: Params, timeline
+                       ) -> dict[str, list[engine.Candidate]]:
+    """Every reclaim in the history that passed the screen's gates on its own
+    day: in good order the session before, and a leader on the day it closed
+    back above. The entry is that close and the pivot is the level reclaimed,
+    so "failed fast" here means it closed back under last week's low."""
+    out: dict[str, list[engine.Candidate]] = {}
+    for symbol in market.universe:
+        bars = market.series.get(symbol) or []
+        if len(bars) < 120:
+            continue
+        closes = [b.close for b in bars]
+        ma50, ma200 = sma(closes, 50), sma(closes, 200)
+        found: list[engine.Candidate] = []
+        for event in reclaimmod.screened(bars, closes, ma50, ma200,
+                                         **reclaimmod.gates(params)):
+            idx = event.reclaim_idx
+            if idx is None or idx >= len(bars) - 1:
+                continue
+            rating = engine._rating_at(timeline, bars[idx].date, symbol)
+            if params.has("min_rs") and (rating is None or rating < int(params.min_rs)):
+                continue
+            found.append(engine.Candidate(symbol, idx, bars[idx].date, event.level,
+                                          bars[idx].close, rating))
+        if found:
+            out[symbol] = found
+    return out
 
 
 def _horizons(after, entry: float, day: dt.date, bench_bars, bench_at) -> dict:

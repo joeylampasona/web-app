@@ -34,6 +34,10 @@ KEPT = 60
 #: A reading older than this many days is not shown as the state of things.
 MAX_AGE_DAYS = 5
 
+#: How many days the VIX's quote may be ahead of the three-month one and the
+#: two still be paired, by way of the VIX's previous close.
+MAX_SESSION_GAP_DAYS = 4
+
 # The bands, in the order they are tried. The first that fits is the word.
 #
 #   stressed   the near month is priced at or above the three-month, or the
@@ -91,15 +95,39 @@ def _history(conn) -> list[dict]:
         return []
 
 
+def aligned(near: dict, far: dict) -> dict | None:
+    """One session's reading from the two quotes, which do not always belong
+    to the same one.
+
+    The VIX is calculated through the overnight session and on market
+    holidays; the three-month version only in regular hours. Read at two in
+    the morning, or on Thanksgiving, Yahoo's VIX is today's and its VIX3M is
+    the last close. A ratio across the two would be of nothing. So when the
+    VIX is the newer of the two, its previous close is what stands beside the
+    three-month figure, and the reading takes the three-month figure's date.
+    Where that cannot be done, the VIX is given alone, without a ratio.
+    """
+    near_day = str(near.get("at") or "")[:10] or None
+    far_day = str(far.get("at") or "")[:10] or None
+    if not far.get("last") or not far_day or near_day == far_day:
+        return reading(near.get("last"), far.get("last"), near_day)
+    if near_day and near_day > far_day:
+        try:
+            gap = (dt.date.fromisoformat(near_day) - dt.date.fromisoformat(far_day)).days
+        except ValueError:
+            gap = None
+        # Four days spans a long weekend. Further apart than that, the
+        # three-month figure is stale rather than merely last session's.
+        if gap is not None and gap <= MAX_SESSION_GAP_DAYS and near.get("prev_close"):
+            return reading(near.get("prev_close"), far.get("last"), far_day)
+    return reading(near.get("last"), None, near_day)
+
+
 def _fetch() -> dict | None:
     """Tonight's two quotes as a reading, or None when Yahoo has no VIX."""
     from catalysts import yf                       # noqa: PLC0415 - optional
     found = yf.quotes(list(SYMBOLS))
-    near, far = found.get("^VIX") or {}, found.get("^VIX3M") or {}
-    # The day the VIX last printed, in New York, which is the session the
-    # reading is of. At two in the morning that is yesterday's close.
-    day = str(near.get("at") or "")[:10] or None
-    return reading(near.get("last"), far.get("last"), day)
+    return aligned(found.get("^VIX") or {}, found.get("^VIX3M") or {})
 
 
 def refresh(conn, session: dt.date, notice=None, fetch=None) -> dict | None:

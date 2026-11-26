@@ -22,6 +22,16 @@ import type { ShapeGeometry } from "@/lib/types";
 
 export type ChartLevel = {
   price: number; touches: number; side: "support" | "resistance" | "other";
+  /** Printed on the line in place of the touch count: last week's high and
+   *  low are not three-touch levels and have no count to show. */
+  label?: string;
+};
+
+/** An anchored VWAP for the chart: aligned to its bars, null before the anchor. */
+export type ChartAnchored = {
+  /** A few letters for the crosshair line. */
+  short: string;
+  values: (number | null)[];
 };
 
 type Box = { from: string; to: string; top: number; bottom: number; label?: string };
@@ -91,8 +101,10 @@ function compactVolume(value: number): string {
 /** One session, spelled out: the line a reader gets under the crosshair. It
  *  shows the last session when nothing is pointed at, so it is never empty
  *  and the chart beneath it never moves. */
-function Readout({ bar, previous, pointed }: {
+function Readout({ bar, previous, pointed, anchored }: {
   bar: Bar; previous: Bar | undefined; pointed: boolean;
+  /** The anchored line's value on this session, when one is drawn. */
+  anchored?: { short: string; value: number | null } | null;
 }) {
   const change = previous && previous.close > 0
     ? 100 * (bar.close / previous.close - 1) : null;
@@ -111,6 +123,9 @@ function Readout({ bar, previous, pointed }: {
         </span>
       )}
       <span><i>Vol</i> {compactVolume(bar.volume)}</span>
+      {anchored && anchored.value !== null && (
+        <span><i>{anchored.short}</i> {anchored.value.toFixed(2)}</span>
+      )}
     </div>
   );
 }
@@ -156,7 +171,7 @@ function token(name: string, fallback = "transparent"): string {
 
 export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
-  movingAverages, shape, levels, readout = false, range, fallback = false,
+  movingAverages, shape, levels, anchored, readout = false, range, fallback = false,
 }: {
   bars: Bar[];
   /** Null when the stock is not on a screen: there is no pivot to draw. */
@@ -182,6 +197,10 @@ export function SetupChart({
   /** Three-touch support and resistance, drawn dotted with their touch
    *  counts. Only the stock page's levels chart passes these. */
   levels?: ChartLevel[] | null;
+  /** An anchored VWAP, one value a bar and null before its anchor. Drawn as
+   *  a long-dashed line in the page's own ink: every colour on this chart
+   *  already means something, and a dash is not a moving average. */
+  anchored?: ChartAnchored | null;
   /** A line above the chart giving the session under the crosshair: date,
    *  open, high, low, close, the change on the day and the volume. The
    *  stock's own page asks for it; a card the size of a business card does
@@ -328,6 +347,23 @@ export function SetupChart({
         line.setData(points as never);
       }
 
+      if (anchored) {
+        const points = bars
+          .map((b, i) => ({ time: b.time, value: anchored.values[i] }))
+          .filter((p) => p.value !== null && p.value !== undefined);
+        if (points.length >= 2) {
+          const line = chart.addLineSeries({
+            color: token("--chart-avwap", token("--text-secondary")),
+            lineWidth: 2,
+            lineStyle: lw.LineStyle.LargeDashed,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: false,
+          });
+          line.setData(points as never);
+        }
+      }
+
       for (const level of levels ?? []) {
         candles.createPriceLine({
           price: level.price,
@@ -337,7 +373,7 @@ export function SetupChart({
           lineWidth: level.side === "other" ? 1 : 2,
           lineStyle: lw.LineStyle.Dotted,
           axisLabelVisible: level.side !== "other",
-          title: `${level.touches}×`,
+          title: level.label ?? `${level.touches}×`,
         });
       }
 
@@ -498,14 +534,16 @@ export function SetupChart({
       cleanup();
     };
   }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady,
-      movingAverages, shape, levels, readout]);
+      movingAverages, shape, levels, anchored, readout]);
 
   const shown = pointed !== null && pointed < bars.length ? pointed : bars.length - 1;
 
   return (
     <>
     {readout && bars.length > 0 && (
-      <Readout bar={bars[shown]} previous={bars[shown - 1]} pointed={pointed !== null} />
+      <Readout bar={bars[shown]} previous={bars[shown - 1]} pointed={pointed !== null}
+               anchored={anchored ? { short: anchored.short,
+                                      value: anchored.values[shown] ?? null } : null} />
     )}
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>
       {fallback && !ready && (

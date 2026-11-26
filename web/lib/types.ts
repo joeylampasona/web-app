@@ -110,6 +110,8 @@ export interface Setup {
   direction?: string;
   /** Fitted geometry, on the shape screens only. */
   shape?: ShapeGeometry | null;
+  /** The reclaim screen only: the week whose low was broken, and how. */
+  reclaim?: ReclaimDetails | null;
   quadrant: string | null;
   /** Screen rows only: the stock's leadership layer tonight. */
   layer?: LeadershipLayer | null;
@@ -448,6 +450,12 @@ export interface StockFile {
    *  short volume for it. Null means the desk did not read this name, never
    *  that there is nothing to read. */
   options_read?: OptionsRead | null;
+  /** The session's option volume for this name, when it is one of the free
+   *  sample. Null for every other name, whether or not it has any. */
+  options_volume?: OptionsVolume | null;
+  /** This name has a day's option volume and it is behind the paywall. As
+   *  with gamma, distinct from having none to publish. */
+  options_volume_gated?: boolean;
   short_volume?: ShortVolume | null;
   /** How many of the Market Desk's tracked funds hold it. The fund list is
    *  behind the paywall when `holders_gated` is set. */
@@ -457,6 +465,8 @@ export interface StockFile {
   fundamentals?: Fundamentals | null;
   /** Prices tested three or more times in the last 120 sessions. */
   levels?: LevelsSummary | null;
+  /** Anchored VWAPs, one an anchor the stock has. From daily bars. */
+  avwap?: AnchoredVwap[];
   /** Where it sits against its own industry, and the industry against the
    *  S&P 500. Absent on files written before the layers existed. */
   leadership?: LeadershipReading | null;
@@ -523,6 +533,8 @@ export interface IndexesFile {
   as_of: string; benchmark: string;
   regime: RegimeStatus;
   rows: IndexRow[];
+  /** Null when the indexes agree; absent on older files. */
+  divergence?: IndexDivergence | null;
 }
 
 export interface BreadthCard {
@@ -1043,7 +1055,53 @@ export interface PriceLevel {
   sessions_ago: number;
 }
 
+/** One trip under a previous week's low, as the reclaim screen found it. */
+export interface ReclaimDetails {
+  /** The Monday of the week whose low was broken. */
+  week_of: string;
+  level: number;
+  undercut_date: string;
+  low: number; low_date: string; undercut_pct: number;
+  /** Null while the stock is still under the level with time left. */
+  reclaim_date: string | null;
+  /** 0 is under it and back above it in one session. */
+  sessions_to_reclaim: number | null;
+  /** Where in its own range the reclaim session closed, 0 to 100. */
+  close_position?: number | null;
+}
+
+/** The average price paid since a day that mattered, from daily bars: each
+ *  session's typical price weighted by its volume. Not a tick VWAP. */
+export interface AnchoredVwap {
+  anchor: "earnings" | "breakout" | "year";
+  label: string;
+  /** The first session counted. */
+  from: string;
+  sessions: number;
+  value: number;
+  above: boolean;
+  /** The close against the line, in percent. */
+  vs_pct: number;
+  /** Set on the session the close changed sides. */
+  crossed: "up" | "down" | null;
+  /** Running totals before the first published bar, so the browser can draw
+   *  the line from the bars it has. Both zero when the anchor is inside them. */
+  seed_money: number; seed_volume: number;
+}
+
+/** What the indexes disagree about at an extreme. */
+export interface IndexDivergence {
+  window: number;
+  kinds: { kind: "high" | "low"; alone: string[]; others: string[] }[];
+  sentence: string;
+}
+
 export interface LevelsSummary {
+  /** The average true range as a percent of the close: a normal day, top to
+   *  bottom. Absent on files written before it was published. */
+  atr_pct?: number | null;
+  /** Last calendar week's high and low. */
+  prior_week?: { week_of: string; high: number; low: number; sessions: number } | null;
   close: number; atr: number | null; lookback: number;
   support: PriceLevel | null; resistance: PriceLevel | null;
   /** Every level within 25% of the close, by price. */
@@ -1059,7 +1117,84 @@ export interface MarketContextFile {
                      as_of?: string } | null;
   /** Scheduled macro releases inside the next five sessions. Usually empty. */
   events_crossing?: { date: string; name: string; label?: string | null }[];
+  /** The VIX against its three-month version, from Yahoo. Absent in a tree
+   *  built before it was read; null on a night with no recent reading. */
+  volatility?: Volatility | null;
   source: string;
+}
+
+/** The VIX, the three-month VIX and the ratio between them for one session.
+ *  `state` is one of four plain words whose bands the page states. */
+export interface Volatility {
+  as_of: string;
+  vix: number;
+  vix3m: number | null;
+  ratio: number | null;
+  state: "calm" | "ordinary" | "uneasy" | "stressed" | string;
+  previous_vix?: number | null;
+  source?: string;
+}
+
+/** One of the busiest contracts in a company's option trading for a session. */
+export interface OptionsVolumeContract {
+  expiry: string;
+  side: "call" | "put";
+  strike: number;
+  volume: number;
+  open_interest: number;
+  /** Volume over open interest. Null where nothing was open. */
+  multiple: number | null;
+  /** Traded at least twice its open interest and at least 500 contracts. */
+  unusual: boolean;
+  vs_spot_pct: number | null;
+}
+
+/** One company's option trading for a session: what the nightly's chain read
+ *  carried, counted only where the contract traded on the latest session. */
+export interface OptionsVolume {
+  symbol: string;
+  /** The day the chain last traded, which the volume is of. */
+  session: string | null;
+  spot: number | null;
+  volume: number;
+  call_volume: number;
+  put_volume: number;
+  /** Puts for every call. Null when no calls traded. */
+  put_call: number | null;
+  open_interest: number;
+  /** The day's volume as a share of open interest. Null with no book. */
+  volume_oi: number | null;
+  contracts_traded: number;
+  /** How many contracts met the unusual rule. */
+  unusual: number;
+  expiries: number;
+  /** "occ" is the clearing house's open interest; "yahoo" the thinner book. */
+  oi_source: "occ" | "yahoo" | string;
+  top: OptionsVolumeContract[];
+  /** The edition this was stored on, and whether that is an earlier one. */
+  as_of?: string;
+  stale?: boolean;
+  /** The mean of the company's earlier stored sessions, once there are five. */
+  usual_volume?: number | null;
+  usual_sessions?: number;
+  vs_usual?: number | null;
+  name?: string | null;
+  market_cap?: number | null;
+}
+
+export interface OptionsVolumeFile {
+  as_of: string;
+  /** Every name that traded enough to be ranked, not the rows below. */
+  count: number;
+  /** Every name whose chain was read. */
+  read?: number;
+  rows: OptionsVolume[];
+  gated?: boolean;
+  free_rows?: number;
+  board_rows?: number;
+  thresholds?: { board_min_volume: number; unusual_multiple: number;
+                 unusual_min_volume: number };
+  copy: { header: string; subhead: string; footer: string };
 }
 
 /** How a stock has moved across its recent earnings reports, close before the

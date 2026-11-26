@@ -47,6 +47,10 @@ class ScreenSpec:
     description: str           # the paragraph above the card list
     params: list[ParamSpec]
     concepts: list[Concept] = field(default_factory=list)
+    #: The four stages in this screen's own words, where the usual ones would
+    #: misdescribe it. Same stage keys underneath. None uses the usual ones.
+    stage_labels: dict[str, str] | None = None
+    stage_help: dict[str, str] | None = None
 
     def defaults(self) -> dict[str, Any]:
         return {p.key: p.default for p in self.params}
@@ -326,6 +330,68 @@ def _flag_params() -> list[ParamSpec]:
     """
     return [_MIN_POLE, _MAX_POLE_SESSIONS, _MAX_CHANNEL, _POLE_VOLUME,
             _MAX_RETRACE, _MAX_FLAG, _MIN_FLAG, _MIN_RS, _FRESH]
+
+
+# ---- the reclaim screen's dials -------------------------------------------
+
+_ABOVE_50_BEFORE = ParamSpec(
+    key="require_above_50ma", label="Above its 50-day line going in",
+    kind="boolean", default=True,
+    funnel_title="In good order the session before",
+    funnel_text="It closed above its 50-day average the session before it broke "
+                "last week's low.",
+    help="Judged the session before the undercut, not on the day. On the day the "
+         "stock is under a level, which says nothing about the trend it came from.")
+
+_STACKED_BEFORE = ParamSpec(
+    key="require_50_above_200", label="50-day above the 200-day going in",
+    kind="boolean", default=True,
+    funnel_title="An uptrend, not a bounce",
+    funnel_text="Its 50-day average was above its 200-day average that session.",
+    help="A stock under a falling 200-day line breaks last week's low most weeks. "
+         "A stock with under 200 sessions of history is not judged on this.")
+
+_MAX_UNDERCUT = ParamSpec(
+    key="max_undercut_pct", label="Furthest it may go under the level",
+    kind="percent", default=4.0, minimum=0.5, maximum=15.0, step=0.5, unit="%",
+    funnel_title="A dip under it, not a break",
+    funnel_text="Its low was no more than {value}% beneath last week's low.",
+    help="Past this it is a breakdown that happened to bounce, not stops being "
+         "taken at a level.")
+
+_RECLAIM_WITHIN = ParamSpec(
+    key="max_reclaim_sessions", label="Sessions it has to close back above",
+    kind="integer", default=2, minimum=0, maximum=5, step=1, unit="sessions",
+    funnel_title="Back above it quickly",
+    funnel_text="It closed back above the level on the session it broke it, or "
+                "within {value} more.",
+    help="Zero is the strict form: under it and back above it in one session. "
+         "The longer it stays under, the less it is a sweep and the more it is "
+         "simply a lower price.")
+
+_NEAR_HIGH_BEFORE = ParamSpec(
+    key="max_from_52w_high_pct", label="Furthest below its 52-week high going in",
+    kind="percent", default=15.0, minimum=2.0, maximum=60.0, step=1.0, unit="%",
+    funnel_title="Near its highs",
+    funnel_text="That session it closed within {value}% of its 52-week high.",
+    help="A pullback in a stock near its highs. Further down than this and last "
+         "week's low is one of several floors already given up.")
+
+_CLOSE_POSITION = ParamSpec(
+    key="min_close_position_pct", label="Where in its range the reclaim closed",
+    kind="percent", default=50.0, minimum=0.0, maximum=90.0, step=5.0, unit="%",
+    funnel_title="And closed well",
+    funnel_text="The session that took it back closed in the upper part of its "
+                "own range: at least {value}% of the way from its low to its high.",
+    help="A close back above the level that is also near the session's low was "
+         "sold into. Zero turns this off.")
+
+_TRACKED = ParamSpec(
+    key="max_sessions_tracked", label="How long a reclaim stays listed",
+    kind="integer", default=20, minimum=5, maximum=60, step=5, unit="sessions",
+    funnel_title="", funnel_text="",
+    help="Twenty sessions is the middle distance its record is measured over. "
+         "After that it is a stock in a trend, which the other screens cover.")
 
 
 _NO_EDGE_NOTE = (
@@ -808,9 +874,50 @@ SCREENS: dict[str, ScreenSpec] = {
             Concept("The quiet stretch", "How long it has been this still.", "flag"),
         ],
     ),
+    # ------------------------------------------------------------ levels
+    "reclaim": ScreenSpec(
+        key="reclaim", name="Reclaim",
+        shape="Under last week's low, then back above it by the close.",
+        description=(
+            "Every other screen here watches a stock come up to a ceiling. This "
+            "one watches a floor break and not stay broken. Last week's low is a "
+            "price anyone can see, so it is where the stops are; a stock that "
+            "trades through it and closes back above has taken them out and "
+            "found nobody willing to sell lower. Only stocks that were in good "
+            "order the session before are listed: above their 50-day line, with "
+            "the 50 above the 200. The level shown is the low that was broken, "
+            "and the first bucket holds the names still under it with time left "
+            "to come back. It is four prices from the daily bars and nothing is "
+            "fitted, so what became of each one is measured from the first night "
+            "and shown on the follow-through page. It has not been tested here "
+            "before that record began. Read it as a description of what the "
+            "chart did, not as a reason to expect anything."),
+        params=[_MIN_RS, _ABOVE_50_BEFORE, _STACKED_BEFORE, _NEAR_HIGH_BEFORE,
+                _MAX_UNDERCUT, _RECLAIM_WITHIN, _CLOSE_POSITION, _TRACKED, _FRESH],
+        concepts=[
+            Concept("The level", "The lowest price of the calendar week before.",
+                    "pivot"),
+            Concept("The undercut", "A session that trades beneath it.", "undercut"),
+            Concept("The reclaim", "A close back above it, that session or within "
+                                   "two more.", "reclaim"),
+        ],
+        stage_labels={"forming": "Under the low", "fresh_breakout": "Fresh reclaims",
+                      "climbing": "Climbing", "played_out": "Played out"},
+        stage_help={"forming": "beneath last week's low, with time left to come back",
+                    "fresh_breakout": "closed back above it in the last 5 sessions",
+                    "climbing": "reclaimed earlier, still rising",
+                    "played_out": "back under the level, stopped or trailed out"},
+    ),
 }
 
 SCREEN_KEYS = list(SCREENS.keys())
+
+#: Screens whose history can be re-derived from bars alone, so the
+#: follow-through page can say what became of what they showed. The base
+#: screens through the replay engine; the reclaim through its own events,
+#: which are four prices and need no fitting.
+FOLLOWTHROUGH_KEYS = ["vcp", "blue_sky", "multi_year", "ipo", "flat_base",
+                      "cup_and_handle", "reclaim"]
 
 #: The screens the replay engine understands.
 #:
@@ -826,8 +933,13 @@ SCREEN_KEYS = list(SCREENS.keys())
 BASE_SCREEN_KEYS = ["vcp", "blue_sky", "multi_year", "ipo", "flat_base",
                     "cup_and_handle"]
 
+#: Level screens: a published price broken and taken back. No base and no
+#: fitted line; their history is re-derived from bars by their own module.
+LEVEL_SCREEN_KEYS = ["reclaim"]
+
 #: Shape screens: trendline and volatility structures, no base, not replayable.
-SHAPE_SCREEN_KEYS = [k for k in SCREEN_KEYS if k not in BASE_SCREEN_KEYS]
+SHAPE_SCREEN_KEYS = [k for k in SCREEN_KEYS
+                     if k not in BASE_SCREEN_KEYS and k not in LEVEL_SCREEN_KEYS]
 
 
 def funnel_steps(screen: str, overrides: dict[str, Any] | None = None) -> list[dict]:

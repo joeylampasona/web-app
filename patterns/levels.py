@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from patterns import reclaim
+
 LOOKBACK = 120
 TOL_PCT = 0.75
 MIN_TOUCHES = 3
@@ -84,6 +86,13 @@ def summary(bars) -> dict | None:
     return {
         "close": round(close, 2),
         "atr": None if a is None else round(a, 2),
+        # The same range as a share of the price: what an ordinary session
+        # covers, top to bottom, gaps included. A stop closer than this is
+        # inside one normal day.
+        "atr_pct": None if a is None else round(100.0 * a / close, 2),
+        # Last calendar week's high and low. Not three-touch levels: two
+        # prices everybody looking at a weekly chart can see.
+        "prior_week": reclaim.prior_week(rows),
         "support": below[-1] if below else None,
         "resistance": above[0] if above else None,
         "levels": sorted(near[:MAX_SHOWN], key=lambda x: x["price"]),

@@ -14,7 +14,7 @@ import { MetricTile } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
 import { DelayedGap } from "./DelayedGap";
 import { type ChartLevel, type ChartRange, MIN_CHART_HEIGHT,
-         SetupChart } from "./SetupChart";
+         type ChartAnchored, SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
 import { TickerLink } from "./StockDrawer";
 import { WatchStar } from "./WatchStar";
@@ -50,7 +50,9 @@ export function StockCard({
                 *  It takes the place of the card's own one-line bar. */
                readout?: boolean;
                /** How much history the chart opens on. */
-               range?: ChartRange; };
+               range?: ChartRange;
+               /** An anchored VWAP, on the stock's own page. */
+               anchored?: ChartAnchored | null; };
   chartHead?: React.ReactNode;
   chartFoot?: React.ReactNode;
   /** The six readings as one ruled strip rather than a block of tiles. */
@@ -158,6 +160,7 @@ export function StockCard({
           shape={base ? setup.shape : null}
           movingAverages={overlays?.movingAverages}
           levels={overlays?.levels}
+          anchored={overlays?.anchored}
           readout={overlays?.readout}
           range={overlays?.range}
           fallback={Boolean(overlays?.readout)}

@@ -316,6 +316,12 @@ export function getVolumeHeat() {
   }>("market/volume.json");
 }
 
+/** The day's option volume against open interest, ranked. Null in a tree
+ *  built before the nightly kept the volume column. */
+export function getOptionsVolumeBoard() {
+  return read<OptionsVolumeFile>("market/options_volume.json");
+}
+
 export function getGammaBoard() {
   return read<{
     as_of: string;

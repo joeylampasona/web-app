@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from data.types import Bar
-from patterns import bases, flags, shapes as shapemod, stages, trend
+from patterns import bases, flags, reclaim as reclaimmod, shapes as shapemod, stages, trend
 from patterns.indicators import atr_pct, mean, sma
 from patterns.params import Params
 
@@ -71,6 +71,9 @@ class Setup:
     #: How many of the published checks line up, and which. Never a percentage
     #: — see the note above `criteria`.
     criteria: dict | None = None
+    #: The reclaim screen only: which week's low was broken, how far under it
+    #: the stock went, and when it closed back above. None everywhere else.
+    reclaim: dict | None = None
 
     def to_json(self) -> dict:
         out = asdict(self)
@@ -770,6 +773,67 @@ def _squeeze(sub, params):
     )
 
 
+# ---------------------------------------------------------------- reclaim
+#
+# Not a base and not a fitted shape: a level everybody can see, broken and
+# taken back. The event is adapted into a bases.Structure like a shape is, so
+# the card, the stages and the diff are the same as on every other screen.
+# The "base" it reports is the week whose low was broken, through to the
+# session that broke it.
+
+
+def detect_reclaim(series: Series, params: Params) -> Setup | None:
+    bars = series.bars
+    if len(bars) < 60:
+        return None
+    closes = [b.close for b in bars]
+    ma50 = sma(closes, 50)
+    ma200 = sma(closes, 200)
+    found = reclaimmod.screened(bars, closes, ma50, ma200, **reclaimmod.gates(params))
+    if not found:
+        return None
+    # The newest one, and only while it is news. A reclaim is followed for as
+    # long as its record is measured over; after that it is a stock in a
+    # trend, which is the other screens' business.
+    event = found[-1]
+    last = len(bars) - 1
+    tracked = int(params.get("max_sessions_tracked", 20))
+    if event.reclaim_idx is not None and last - event.reclaim_idx > tracked:
+        return None
+    structure = bases.Structure(
+        start_idx=event.week_start_idx,
+        end_idx=event.undercut_idx,
+        pivot=event.level,
+        depth_pct=event.undercut_pct,
+        weeks=(event.undercut_idx - event.week_start_idx + 1) / 5.0,
+        low=event.low,
+        contractions=[],
+        breakout_idx=event.reclaim_idx,
+    )
+    stage = stages.classify(bars, ma50, event.reclaim_idx,
+                            int(params.fresh_breakout_sessions), bars[-1].date.year)
+    if stage is None:
+        return None
+    # A close back under the level ends it, whatever the 50-day line says and
+    # however fresh it is: the one thing the screen claimed has stopped being
+    # true. Whichever ending came first is the one reported.
+    lost = reclaimmod.lost_level(event, bars)
+    if lost is not None and stage.stage != stages.PLAYED_OUT:
+        entry = bars[event.reclaim_idx].close
+        stage = stages.StageResult(
+            stages.PLAYED_OUT, stage.breakout_date, stage.sessions_since,
+            round(100.0 * (bars[lost].close - entry) / entry, 2) if entry else None,
+            "lost the level")
+    if stage.stage != stages.PLAYED_OUT and not _gate_rs(series, params):
+        return None
+    setup = _build(series, params, structure, stage)
+    # The two pivot cautions read a ceiling: "pushed above it and closed back
+    # under" is, here, simply what an undercut looks like from the other side.
+    setup.flags = [flag for flag in setup.flags if flag == "cooling"]
+    setup.reclaim = reclaimmod.details(event, bars)
+    return setup
+
+
 DETECTORS = {
     "vcp": detect_vcp,
     "blue_sky": detect_blue_sky,
@@ -789,6 +853,7 @@ DETECTORS = {
     "descending_triangle": _shape_screen({shapemod.DESCENDING}, stages.SHORT,
                                          _converging),
     "squeeze": _shape_screen({shapemod.SQUEEZE}, stages.LONG, _squeeze),
+    "reclaim": detect_reclaim,
 }
 
 #: Which way each screen reads its level. Anything that counts breakouts across
@@ -808,6 +873,7 @@ SCREEN_DIRECTION = {
     "triangle": stages.LONG,
     "descending_triangle": stages.SHORT,
     "squeeze": stages.LONG,
+    "reclaim": stages.LONG,
 }
 
 

@@ -90,6 +90,8 @@ const PAGES: PaletteDestination[] = [
   // listed here by hand or the search would not know it exists.
   { href: "/colophon", title: "How this edition was made",
     blurb: "Colophon: what each source gave tonight, and what is carried over.", section: "About" },
+  { href: "/mcp", title: "Ask with your own AI",
+    blurb: "Connect Claude, Cursor or any MCP client to these pages with one line.", section: "About" },
 ];
 
 function dateline(tape: TapeData | null): string | null {
@@ -206,6 +208,9 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
               </Link>
               <Link href="/colophon" className="caption dim" style={{ textDecoration: "underline" }}>
                 How this edition was made
+              </Link>
+              <Link href="/mcp" className="caption dim" style={{ textDecoration: "underline" }}>
+                Ask with your own AI
               </Link>
             </div>
           </div>
