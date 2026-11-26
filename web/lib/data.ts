@@ -4,7 +4,7 @@ import path from "node:path";
 import type {
   Edition, EditionIndex, LeadershipLayer,
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  BreadthBarcode, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  BreadthBarcode, CongressFile, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 
@@ -349,6 +349,12 @@ export function getDealerGamma() {
  *  volume and short interest. Null on a night it ranked none. */
 export function getSqueeze() {
   return read<SqueezeFile>("market/squeeze.json");
+}
+
+/** Trades by members of the House in the names this site follows, filed
+ *  lately. Null before the Clerk's reports have ever been read. */
+export function getCongress() {
+  return read<CongressFile>("market/congress.json");
 }
 
 export function getFollowThrough() {

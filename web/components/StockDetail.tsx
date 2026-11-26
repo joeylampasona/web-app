@@ -19,6 +19,7 @@ import { StockPassport } from "./StockPassport";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
 import { InsiderPanel } from "./InsiderPanel";
+import { CongressCard } from "./CongressTrades";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
 import { PeerBars } from "./PeerBars";
@@ -298,6 +299,8 @@ export function StockDetail({ stock, run, deskNote }: {
         <div className="eyebrow">Insiders</div>
         <InsiderPanel insiders={stock.insiders} />
       </section>
+
+      <CongressCard trades={stock.congress} />
 
       {shaped.length > 0 && (
         <section>

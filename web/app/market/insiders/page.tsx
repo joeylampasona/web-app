@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { InsiderCalendar } from "@/components/InsiderCalendar";
 import { MarketCTA } from "@/components/MarketCTA";
-import { getInsiderCalendar, getMeta, hasData } from "@/lib/data";
+import { CongressRecent } from "@/components/CongressTrades";
+import { getCongress, getInsiderCalendar, getMeta, hasData } from "@/lib/data";
 import { SITE_NAME } from "@/lib/copy";
 
 export const metadata: Metadata = {
@@ -34,6 +35,8 @@ export default function InsidersPage() {
       )}
 
       <p className="caption dim" style={{ marginTop: "var(--pad-lg)" }}>{file.copy.footer}</p>
+
+      <CongressRecent file={getCongress()} />
       <MarketCTA />
     </div>
   );

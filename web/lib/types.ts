@@ -417,6 +417,10 @@ export interface StockFile {
   primary_setup: Setup | null;
   base_history: BaseStructure[];
   insiders: InsiderSummary | null;
+  /** Trades in this stock by members of the House over the last year,
+   *  newest first. Null (or absent) before the reports have ever been read,
+   *  which is not the same as an empty list. */
+  congress?: CongressTrade[] | null;
   gamma: GammaProfile | null;
   /** This name has gamma and it is behind the paywall. Distinct from `gamma`
    *  being null, which means there was nothing to publish — most of the
@@ -775,6 +779,39 @@ export interface SqueezeRow extends SqueezeRead {
   /** Whether this site has a page for the name. */
   in_universe: boolean;
   short_interest: ShortInterest | null;
+}
+
+/** One transaction from a periodic transaction report filed with the Clerk
+ *  of the House. The amount is the band the form offers, never a figure. */
+export interface CongressTrade {
+  member: string;
+  district: string;
+  type: "buy" | "sell" | "partial sale" | "exchange" | string;
+  /** Whose account, when the report lets it be told: null when it does not. */
+  owner: "self" | "spouse" | "joint" | "child" | null;
+  traded: string | null;
+  notified: string | null;
+  filed: string | null;
+  amount_low: number | null;
+  /** Null for the open-ended top band. */
+  amount_high: number | null;
+  /** The band as the form states it. */
+  amount: string;
+  /** The Clerk's own PDF of the report. */
+  url: string;
+}
+
+export interface CongressFile {
+  as_of: string;
+  days: number;
+  count: number;
+  rows: (CongressTrade & { symbol: string; name: string })[];
+  by_ticker: Record<string, number>;
+  filings_read: number | null;
+  filings_unread: number | null;
+  newest_filed: string | null;
+  copy?: { header: string; footer: string };
+  source: string;
 }
 
 export interface SqueezeFile {
