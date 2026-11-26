@@ -151,6 +151,9 @@
   --chart-ma-21:      #C084FC;  /* purple */
   --chart-ma-50:      #60A5FA;  /* blue   */
   --chart-ma-200:     #F472B6;  /* pink   */
+  /* The anchored VWAP. Ink, not a fifth hue: it is told from the averages by
+     its dash, and every colour here already means something. */
+  --chart-avwap:      #D5DBD7;
   --chart-vol-up:     rgba(45,181,107,0.55);
   --chart-vol-down:   rgba(234,90,69,0.45);
   --chart-grid:       #1D2220;
@@ -303,6 +306,7 @@
   --chart-ma-21:      #9333EA;  /* purple */
   --chart-ma-50:      #2563EB;  /* blue   */
   --chart-ma-200:     #DB2777;  /* pink   */
+  --chart-avwap:      #2B3330;
 
   --warn:             #A16207;
   --warn-bg:          rgba(161,98,7,0.10);

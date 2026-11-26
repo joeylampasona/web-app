@@ -4,7 +4,7 @@ import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import { MarketContext } from "@/components/MarketContext";
 import { longDate } from "@/lib/format";
-import { getBarcode, getBreadth, getMarketContext, getMeta, hasData } from "@/lib/data";
+import { getBarcode, getBreadth, getIndexes, getMarketContext, getMeta, hasData } from "@/lib/data";
 import { breadthCard } from "@/lib/cards/cards";
 import { cardMetadata } from "@/lib/cards/metadata";
 import { PageShare } from "@/lib/cards/share";
@@ -23,6 +23,8 @@ export default function BreadthPage() {
   const breadth = getBreadth();
   const meta = getMeta();
   if (!breadth) return <NoData />;
+  // One sentence, and only on a night the indexes disagree at an extreme.
+  const divergence = getIndexes()?.divergence ?? null;
 
   return (
     <div className="page">
@@ -35,6 +37,18 @@ export default function BreadthPage() {
         part, as of {longDate(breadth.as_of)}. These are counts of what happened, not
         signals about what happens next.
       </p>
+      {divergence && (
+        <div className="card" style={{ margin: "var(--pad-lg) 0 0",
+                                       padding: "var(--pad-sm) var(--pad-md)",
+                                       borderLeft: "3px solid var(--warn)" }}>
+          <div className="caption muted">The indexes disagree</div>
+          <p style={{ margin: "2px 0 0" }}>{divergence.sentence}</p>
+          <p className="caption dim" style={{ margin: "4px 0 0" }}>
+            Closing prices over the last {divergence.window} sessions. It says
+            they have parted, not which of them is right.
+          </p>
+        </div>
+      )}
       <div style={{ margin: "var(--pad-lg) 0 var(--pad-xl)" }}>
         <BreadthBarcode strip={getBarcode()} />
       </div>

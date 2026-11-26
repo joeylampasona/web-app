@@ -361,13 +361,23 @@ _MAX_UNDERCUT = ParamSpec(
 
 _RECLAIM_WITHIN = ParamSpec(
     key="max_reclaim_sessions", label="Sessions it has to close back above",
-    kind="integer", default=2, minimum=0, maximum=5, step=1, unit="sessions",
+    kind="integer", default=1, minimum=0, maximum=5, step=1, unit="sessions",
     funnel_title="Back above it quickly",
     funnel_text="It closed back above the level on the session it broke it, or "
                 "within {value} more.",
     help="Zero is the strict form: under it and back above it in one session. "
          "The longer it stays under, the less it is a sweep and the more it is "
          "simply a lower price.")
+
+_RECLAIM_RS = ParamSpec(
+    key="min_rs", label="Lowest RS rating we'll accept", kind="integer",
+    default=80, minimum=1, maximum=99, step=1, unit="",
+    funnel_title="Leadership",
+    funnel_text="Relative strength rating of {value} or better.",
+    help="Ten points stricter than the base screens. Every stock in an uptrend "
+         "dips under last week's low a few times a year, so the level itself "
+         "narrows nothing; relative strength is the filter with published "
+         "support behind it, and here it does the narrowing.")
 
 _NEAR_HIGH_BEFORE = ParamSpec(
     key="max_from_52w_high_pct", label="Furthest below its 52-week high going in",
@@ -884,26 +894,35 @@ SCREENS: dict[str, ScreenSpec] = {
             "price anyone can see, so it is where the stops are; a stock that "
             "trades through it and closes back above has taken them out and "
             "found nobody willing to sell lower. Only stocks that were in good "
-            "order the session before are listed: above their 50-day line, with "
-            "the 50 above the 200. The level shown is the low that was broken, "
-            "and the first bucket holds the names still under it with time left "
-            "to come back. It is four prices from the daily bars and nothing is "
-            "fitted, so what became of each one is measured from the first night "
-            "and shown on the follow-through page. It has not been tested here "
-            "before that record began. Read it as a description of what the "
-            "chart did, not as a reason to expect anything."),
-        params=[_MIN_RS, _ABOVE_50_BEFORE, _STACKED_BEFORE, _NEAR_HIGH_BEFORE,
+            "order the session before are listed: above their 50-day line, the "
+            "50 above the 200, within 15% of their high, and rated 80 or better "
+            "for relative strength. The level shown is the low that was broken, "
+            "and the first bucket holds the names still under it with a session "
+            "left to come back. A reclaim is listed for twenty sessions, and a "
+            "close back under the level ends it. Before this screen was "
+            "published it was run over two years of real prices: 12,947 "
+            "reclaims in 2,547 stocks, with no relative-strength test. Twenty "
+            "sessions on, the median one was down 0.3%, where the median "
+            "session of a stock in the same good order was up 0.6%, and a "
+            "little over half had closed back under the level inside five "
+            "sessions. No setting of any dial changed that. So read this as a "
+            "list of leaders that were just shaken and held, which is a fact "
+            "about the chart, and not as a reason to expect anything. What "
+            "becomes of each one is counted from the first night on the "
+            "follow-through page."),
+        params=[_RECLAIM_RS, _ABOVE_50_BEFORE, _STACKED_BEFORE, _NEAR_HIGH_BEFORE,
                 _MAX_UNDERCUT, _RECLAIM_WITHIN, _CLOSE_POSITION, _TRACKED, _FRESH],
         concepts=[
             Concept("The level", "The lowest price of the calendar week before.",
                     "pivot"),
             Concept("The undercut", "A session that trades beneath it.", "undercut"),
-            Concept("The reclaim", "A close back above it, that session or within "
-                                   "two more.", "reclaim"),
+            Concept("The reclaim", "A close back above it, that session or the "
+                                   "next, in the upper half of its range.",
+                    "reclaim"),
         ],
         stage_labels={"forming": "Under the low", "fresh_breakout": "Fresh reclaims",
                       "climbing": "Climbing", "played_out": "Played out"},
-        stage_help={"forming": "beneath last week's low, with time left to come back",
+        stage_help={"forming": "beneath last week's low, with a session left to come back",
                     "fresh_breakout": "closed back above it in the last 5 sessions",
                     "climbing": "reclaimed earlier, still rising",
                     "played_out": "back under the level, stopped or trailed out"},

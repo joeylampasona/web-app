@@ -175,6 +175,12 @@ def latest(conn, as_of: dt.date) -> dict | None:
     out = dict(newest)
     out["previous_vix"] = history[-2]["vix"] if len(history) > 1 else None
     out["source"] = "Yahoo"
+    # The bands go out with the word, so a page can say what it means.
+    out["bands"] = {
+        "stressed": {"ratio": STRESSED_RATIO, "vix": STRESSED_VIX},
+        "uneasy": {"ratio": UNEASY_RATIO, "vix": UNEASY_VIX},
+        "calm": {"ratio": CALM_RATIO, "vix": CALM_VIX},
+    }
     return out
 
 

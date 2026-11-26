@@ -4,7 +4,7 @@ import path from "node:path";
 import type {
   Edition, EditionIndex, LeadershipLayer,
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  BreadthBarcode, CongressFile, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  BreadthBarcode, CongressFile, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, OptionsVolumeFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 

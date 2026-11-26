@@ -1132,6 +1132,9 @@ export interface Volatility {
   ratio: number | null;
   state: "calm" | "ordinary" | "uneasy" | "stressed" | string;
   previous_vix?: number | null;
+  /** The thresholds the word was chosen by: at or above for stressed and
+   *  uneasy (either figure), below for calm (both). */
+  bands?: Record<"stressed" | "uneasy" | "calm", { ratio: number; vix: number }>;
   source?: string;
 }
 

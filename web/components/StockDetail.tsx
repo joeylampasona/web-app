@@ -14,10 +14,12 @@ import { EarningsPriced } from "./EarningsPriced";
 import { FundamentalsPanel } from "./FundamentalsPanel";
 import { GatedHolders } from "./Holders";
 import { levelLines, LevelsPanel } from "./LevelsPanel";
+import { PriceMarkers, ReclaimReadout, VwapKey, weekLines } from "./PriceMarkers";
 import { StockLeadership } from "./Leadership";
 import { StockPassport } from "./StockPassport";
 import { GatedXRay } from "./GatedXRay";
 import { GatedGammaPanel } from "./GatedGammaPanel";
+import { GatedOptionsVolume } from "./GatedOptionsVolume";
 import { InsiderPanel } from "./InsiderPanel";
 import { CongressCard } from "./CongressTrades";
 import { MovingAverageKey } from "./MovingAverageKey";
@@ -28,6 +30,7 @@ import { ShapeReadout } from "./ShapeReadout";
 import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
 import { rsText } from "@/lib/format";
+import { anchoredLine, anchorOf } from "@/lib/avwap";
 import { planMovingAverages } from "@/lib/movingAverages";
 import type { DeskRun, StockFile } from "@/lib/types";
 
@@ -101,8 +104,20 @@ export function StockDetail({ stock, run, deskNote }: {
     [chartBars, stock.sma200],
   );
 
-  const lines = useMemo(() => levelLines(stock.levels), [stock.levels]);
-  const [layers, setLayers] = useState({ base: true, averages: true, levels: false });
+  // Last week's high and low ride on the levels switch: two more prices on
+  // the same layer, told apart by their labels.
+  const lines = useMemo(() => [...levelLines(stock.levels), ...weekLines(stock.levels)],
+                        [stock.levels]);
+  // The earnings VWAP, drawn from the bars already here. The other anchors
+  // are figures in the levels block; three more lines on this chart would
+  // be three too many.
+  const earningsVwap = anchorOf(stock.avwap, "earnings");
+  const vwapLine = useMemo(
+    () => (earningsVwap
+      ? { short: "VWAP", values: anchoredLine(chartBars, earningsVwap) } : null),
+    [chartBars, earningsVwap]);
+  const [layers, setLayers] = useState({ base: true, averages: true, levels: false,
+                                         vwap: true });
   // How much history the chart opens on. A formation frames itself, so a
   // stock on a shape screen starts with no range chosen and the chart shows
   // the formation; everything else opens on six months.
@@ -128,6 +143,12 @@ export function StockDetail({ stock, run, deskNote }: {
         <button type="button" aria-pressed={layers.levels} onClick={() => flip("levels")}>
           <span aria-hidden className="swatch" style={{ borderTop: "2px dotted var(--text-secondary)" }} />
           Levels <span className="num dim">{lines.length}</span>
+        </button>
+      )}
+      {vwapLine && (
+        <button type="button" aria-pressed={layers.vwap} onClick={() => flip("vwap")}>
+          <span aria-hidden className="swatch" style={{ borderTop: "2px dashed var(--chart-avwap, var(--text-secondary))" }} />
+          Earnings VWAP
         </button>
       )}
       {ranges.length > 1 && (
@@ -159,10 +180,16 @@ export function StockDetail({ stock, run, deskNote }: {
                      overlays={{ base: layers.base,
                                  movingAverages: layers.averages ? maPlan : null,
                                  levels: layers.levels ? lines : null,
+                                 anchored: layers.vwap ? vwapLine : null,
                                  readout: true, range }}
                      chartHead={toggles}
-                     chartFoot={layers.averages
-                       ? <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} /> : null} />
+                     chartFoot={(layers.averages || (layers.vwap && earningsVwap)) ? (
+                       <div className="stack" style={{ gap: "var(--gap-xs)" }}>
+                         {layers.averages
+                           && <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} />}
+                         {layers.vwap && earningsVwap && <VwapKey row={earningsVwap} />}
+                       </div>
+                     ) : null} />
         ) : (
           <div id="structure" className="stack" style={{ gap: "var(--gap-sm)", scrollMarginTop: 120 }}>
             <StructureCheck rows={stock.structure_check} name={stock.symbol} />
@@ -180,11 +207,13 @@ export function StockDetail({ stock, run, deskNote }: {
                   height="responsive"
                   movingAverages={layers.averages ? maPlan : null}
                   levels={layers.levels ? lines : null}
+                  anchored={layers.vwap ? vwapLine : null}
                   readout
                   range={range}
                   fallback
                 />
                 {layers.averages && <MovingAverageKey plan={maPlan} />}
+                {layers.vwap && earningsVwap && <VwapKey row={earningsVwap} />}
               </div>
             )}
           </div>
@@ -199,6 +228,7 @@ export function StockDetail({ stock, run, deskNote }: {
                          setLayers((held) => ({ ...held, levels: true }));
                          document.getElementById("chart")?.scrollIntoView({ behavior: "smooth" });
                        }} />
+          <PriceMarkers summary={stock.levels} avwap={stock.avwap} />
         </section>
       )}
 
@@ -335,6 +365,7 @@ export function StockDetail({ stock, run, deskNote }: {
                   />
                 )}
                 <ShapeReadout shape={s.shape} />
+                <ReclaimReadout reclaim={s.reclaim} />
               </div>
             ))}
           </div>
@@ -358,6 +389,14 @@ export function StockDetail({ stock, run, deskNote }: {
         <section>
           <div className="eyebrow">The options read</div>
           <OptionsRead read={stock.options_read} />
+        </section>
+      )}
+
+      {(stock.options_volume || stock.options_volume_gated) && (
+        <section>
+          <div className="eyebrow">Options volume</div>
+          <GatedOptionsVolume symbol={stock.symbol} volume={stock.options_volume ?? null}
+                              locked={Boolean(stock.options_volume_gated)} />
         </section>
       )}
 

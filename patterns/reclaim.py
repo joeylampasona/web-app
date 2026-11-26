@@ -79,7 +79,7 @@ class Event:
 
 
 def events(bars: Sequence[Bar], max_undercut_pct: float = 4.0,
-           max_reclaim_sessions: int = 2) -> list[Event]:
+           max_reclaim_sessions: int = 1) -> list[Event]:
     """Every sweep of a previous week's low in the history, oldest first.
 
     One a week at most: the first session of a week to trade under the week
@@ -159,7 +159,7 @@ def close_position(bar: Bar) -> float:
 
 def screened(bars: Sequence[Bar], closes: Sequence[float],
              sma50: Sequence[float | None], sma200: Sequence[float | None], *,
-             max_undercut_pct: float = 4.0, max_reclaim_sessions: int = 2,
+             max_undercut_pct: float = 4.0, max_reclaim_sessions: int = 1,
              above_50: bool = True, stacked: bool = True,
              max_from_high_pct: float | None = None,
              min_close_position: float = 0.0) -> list[Event]:
@@ -191,7 +191,7 @@ def gates(params) -> dict:
     limit = params.get("max_from_52w_high_pct")
     return {
         "max_undercut_pct": float(params.get("max_undercut_pct", 4.0)),
-        "max_reclaim_sessions": int(params.get("max_reclaim_sessions", 2)),
+        "max_reclaim_sessions": int(params.get("max_reclaim_sessions", 1)),
         "above_50": bool(params.get("require_above_50ma", True)),
         "stacked": bool(params.get("require_50_above_200", True)),
         "max_from_high_pct": None if limit is None else float(limit),

@@ -232,6 +232,10 @@ volatility.refresh(conn, DAY, said.append,
 newest = volatility.latest(conn, DAY)
 check("the newest reading, with the one before it and where it came from",
       (newest["vix"], newest["previous_vix"], newest["source"]), (18.42, 17.0, "Yahoo"))
+check("and the bands the word was chosen by go out with it",
+      newest["bands"], {"stressed": {"ratio": 1.0, "vix": 30.0},
+                        "uneasy": {"ratio": 0.95, "vix": 20.0},
+                        "calm": {"ratio": 0.9, "vix": 15.0}})
 check("the log says the levels and the word",
       said[-1], "volatility: VIX 18.42, three-month 20.11, ratio 0.92: ordinary (2026-11-25).")
 

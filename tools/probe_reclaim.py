@@ -23,8 +23,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from patterns import reclaim                         # noqa: E402
 from patterns.indicators import sma                  # noqa: E402
 
-BASE = dict(max_undercut_pct=4.0, max_reclaim_sessions=2, above_50=True,
+BASE = dict(max_undercut_pct=4.0, max_reclaim_sessions=1, above_50=True,
             stacked=True, max_from_high_pct=15.0, min_close_position=50.0)
+
+#: The lowest RS rating the screen lists tonight. History is not rated here:
+#: a rating on a past date needs the whole market replayed to that date,
+#: which the follow-through page does every night and this sweep does not.
+MIN_RS = 80
 
 SWEEPS = (
     ("no trend test at all", dict(above_50=False, stacked=False,
@@ -34,14 +39,16 @@ SWEEPS = (
     ("+ within 25% of the high", dict(max_from_high_pct=25.0, min_close_position=0.0)),
     ("+ within 15% of the high", dict(min_close_position=0.0)),
     ("+ within 10% of the high", dict(max_from_high_pct=10.0, min_close_position=0.0)),
-    ("AS SHIPPED (15%, closed upper half)", dict()),
+    ("AS SHIPPED", dict()),
     ("closed in the top third instead", dict(min_close_position=66.0)),
     ("undercut at most 2%", dict(max_undercut_pct=2.0)),
     ("undercut at most 6%", dict(max_undercut_pct=6.0)),
     ("undercut at most 10%", dict(max_undercut_pct=10.0)),
     ("same session only", dict(max_reclaim_sessions=0)),
-    ("within 1 more session", dict(max_reclaim_sessions=1)),
+    ("within 2 more sessions", dict(max_reclaim_sessions=2)),
     ("within 4 more sessions", dict(max_reclaim_sessions=4)),
+    ("RS 70 or better tonight", dict(min_rs=70)),
+    ("RS 90 or better tonight", dict(min_rs=90)),
 )
 
 
@@ -53,7 +60,7 @@ def _wins(values) -> str:
     return f"{100.0 * sum(1 for v in values if v > 0) / len(values):3.0f}%" if values else " n/a"
 
 
-def report(series: dict, ratings: dict | None = None, min_rs: int = 70,
+def report(series: dict, ratings: dict | None = None, min_rs: int = MIN_RS,
            fresh: int = 5, tracked: int = 20) -> dict:
     """Print the sweep. Returns the shipped row's figures, for a test or a caller."""
     panels = {}
@@ -85,6 +92,7 @@ def report(series: dict, ratings: dict | None = None, min_rs: int = 70,
     for label, over in SWEEPS:
         kw = dict(BASE)
         kw.update(over)
+        floor = int(kw.pop("min_rs", min_rs))
         count = lost = 0
         r5, r20 = [], []
         under = new = held = failed = leaders = 0
@@ -105,7 +113,7 @@ def report(series: dict, ratings: dict | None = None, min_rs: int = 70,
                 continue
             event = found[-1]
             rated = ratings is None or (isinstance(ratings.get(symbol), int)
-                                        and ratings[symbol] >= min_rs)
+                                        and ratings[symbol] >= floor)
             if event.reclaim_idx is None:
                 under += rated
             elif last - event.reclaim_idx <= tracked:
@@ -127,8 +135,9 @@ def report(series: dict, ratings: dict | None = None, min_rs: int = 70,
     print("\n   'tonight' is names the screen would list: still under the level,"
           " reclaimed in the\n   last 5 sessions, reclaimed 6 to 20 ago and"
           " holding, and closed back under since."
-          + ("" if ratings is None else f" The first\n   three are RS {min_rs} or better;"
-                                        " the last is not rated, as on the site."))
+          + ("" if ratings is None else f" The first\n   three are RS {min_rs} or better"
+                                        " unless the row says otherwise; the last is"
+                                        " not rated,\n   as on the site."))
     return shipped
 
 

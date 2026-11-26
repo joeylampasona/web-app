@@ -162,6 +162,16 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/screens/reclaim": {
+    label: "Under last week's low, then back above it",
+    // A floor, a dip through it, and the close back over: the V is the idea.
+    art: (
+      <>
+        <path d="M2.5 13 L21 13" strokeDasharray="2.5 2" />
+        <path d="M3.5 6 L8 10.5 L12 18.5 L16 11 L20.5 6.5" />
+      </>
+    ),
+  },
   // ---- market pages. Same rule as the screens above: draw the idea, not a
   // generic chart squiggle, and keep each one distinguishable from its
   // neighbours at 24px.
@@ -457,7 +467,7 @@ const SHORT_SCREENS = new Set([
 ]);
 const LONG_SCREENS = new Set([
   "/screens/bull_flag", "/screens/falling_wedge", "/screens/triangle",
-  "/screens/squeeze",
+  "/screens/squeeze", "/screens/reclaim",
 ]);
 
 /** A small arrow saying which way the screen is read. Only on the seven shape
