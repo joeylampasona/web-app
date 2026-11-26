@@ -363,6 +363,19 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/options-volume": {
+    label: "Option volume against open interest",
+    // The day's trading standing over the line of what was already open:
+    // two bars under it, one through it.
+    art: (
+      <>
+        <path d="M3 10 L21 10" strokeDasharray="2 1.8" opacity={0.6} />
+        <path d="M6 20 L6 14" />
+        <path d="M12 20 L12 4.5" />
+        <path d="M18 20 L18 13" />
+      </>
+    ),
+  },
   "/market/volume": {
     label: "Unusual activity",
     art: (

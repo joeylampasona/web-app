@@ -100,8 +100,11 @@ export function OptionsVolume({ volume }: { volume: Volume | null }) {
             <tbody>
               {volume.top.map((c) => (
                 <tr key={`${c.expiry}-${c.side}-${c.strike}`}>
-                  <td className="text" style={{ whiteSpace: "nowrap" }}>
-                    {contract(c)}
+                  {/* Free to wrap: this card sits in a narrow column, and on a
+                      phone the mark drops under the contract rather than
+                      pushing the figures off the card. */}
+                  <td className="text">
+                    <span style={{ whiteSpace: "nowrap" }}>{contract(c)}</span>
                     {c.unusual && (
                       <>{" "}<CarriedOver title={UNUSUAL_RULE}>Unusual</CarriedOver></>
                     )}

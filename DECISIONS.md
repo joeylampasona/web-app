@@ -725,3 +725,41 @@ paying. Now both.
   on each request, and the tools reading the paid tree for a valid token.
   That is a change to the Supabase schema and to who can reach paid data,
   so nothing here touches either.
+
+## Price levels, a reclaim screen, and when the indexes disagree (2026-11-26)
+
+- **Anchored VWAP** (`patterns/avwap.py`): the average price paid since the
+  last report, since a live setup cleared its level, and since the year's
+  first session. Computed from daily bars, each session's typical price
+  weighted by its volume, and labelled "from daily bars" wherever it is
+  shown, since a true VWAP needs every trade. The report's session is the
+  heavier of the report day and the day after, because the source gives
+  the day and not the hour. Drawn on the stock chart.
+- **Prior-week high and low** sit with a stock's levels, with its normal
+  day's range beside them.
+- **Reclaim** (`patterns/reclaim.py`, dials in `patterns/params.py`): the
+  daily version of a sweep. A session trades under the previous calendar
+  week's low and a close comes back above it. Nothing is fitted, so its
+  whole history replays from bars and its record starts measured rather
+  than empty; the replay uses the same rule on each past day's own bars.
+- **Index divergence** (`rankings/indexes.py`): one sentence on the breadth
+  page when one of the indexes closes at a 20-session extreme and the
+  others do not. Nothing when they agree.
+
+## Options volume, a volatility line, and the morning's movers (2026-11-26)
+
+- **Options volume** (`catalysts/optvol.py`): read off the chains the
+  nightly already downloads, in the same pass as gamma, so no request is
+  added. Only volume from the chain's latest session counts, since Yahoo
+  shows a contract's last day traded. A contract is unusual at twice its
+  open interest and at least 500 contracts; the board lists names with
+  2,000 or more. Gated as the gamma board is: a few rows free, the rest
+  for subscribers.
+- **VIX against VIX3M** (`catalysts/volatility.py`), one line beside the
+  regime. Calm under 15 and a ratio under 0.90; uneasy from 20 or 0.95;
+  stressed from 30 or a ratio of 1, when near-term fear is priced above
+  the three-month.
+- **Before the bell**: the morning earnings run posts the names on a screen
+  moving 3% or more before the open, up to eight each way, to the edition
+  room once a day. Discord only, since which screen a name is on is the
+  paid half, and the post says these are quotes in thin trading.

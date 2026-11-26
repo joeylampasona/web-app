@@ -71,7 +71,7 @@ export function OptionsVolumeBoard({
               <th>Traded</th>
               <th>Of open interest</th>
               <th>Puts per call</th>
-              <th>Busiest contract</th>
+              <th className="text">Busiest contract</th>
               <th>Unusual</th>
             </tr>
           </thead>

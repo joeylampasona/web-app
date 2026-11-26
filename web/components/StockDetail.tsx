@@ -405,7 +405,7 @@ export function StockDetail({ stock, run, deskNote }: {
       )}
 
       {(stock.options_volume || stock.options_volume_gated) && (
-        <section>
+        <section style={{ minWidth: 0 }}>
           <div className="eyebrow">Options volume</div>
           <GatedOptionsVolume symbol={stock.symbol} volume={stock.options_volume ?? null}
                               locked={Boolean(stock.options_volume_gated)} />

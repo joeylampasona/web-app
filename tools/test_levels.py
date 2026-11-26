@@ -130,7 +130,11 @@ mb = [bar(day, 50, 60, 55) for day in mon]
 check("a week that opens on a Tuesday is keyed to its Monday",
       [m.isoformat() for m, _, _ in reclaim.weeks(mb)], ["2026-08-31", "2026-09-07"])
 
-summary = levels.summary(tb)
+# The levels block wants thirty sessions; the same holiday, with a longer run-up.
+longer = sessions(dt.date(2026, 10, 12), 37, skip={dt.date(2026, 11, 26)})
+summary = levels.summary([bar(day, 100 - 0.1 * i, 110 + 0.1 * i, 105)
+                          for i, day in enumerate(longer)])
+check("thirty-seven sessions end on 2 December", longer[-1], dt.date(2026, 12, 2))
 check("the levels block carries last week", summary["prior_week"]["week_of"], "2026-11-23")
 check("and a normal day as a percent of the close",
       summary["atr_pct"], round(100.0 * summary["atr"] / summary["close"], 2))
@@ -279,8 +283,7 @@ check("a laggard is not listed",
       detectors.detect_reclaim(trending([(level - 1.0, 111.0, 110.6)], rs=60), params), None)
 gone = detectors.detect_reclaim(
     trending([(level - 1.0, 111.0, 110.6), (level - 2.0, 110.0, level - 0.5)]), params)
-check("back under the level the next day: played out, and said why",
-      (gone.stage, gone.exit_reason if hasattr(gone, "exit_reason") else None)[0], "played_out")
+check("back under the level the next day: played out", gone.stage, "played_out")
 old_tail = [(level - 1.0, 111.0, 110.6)] + [(110.2 + 0.2 * i, 111.4 + 0.2 * i, 111.0 + 0.2 * i)
                                             for i in range(25)]
 check("after twenty sessions it is no longer listed",
@@ -292,7 +295,7 @@ check("eleven sessions on and holding: climbing", held.stage, "climbing")
 print("\nindex divergence")
 up = [100.0 + i for i in range(30)]
 down = [200.0 - i for i in range(30)]
-middle = [100.0] * 10 + [110.0] * 10 + [105.0] * 10
+middle = [100.0] * 10 + [110.0] * 5 + [100.0] * 5 + [105.0] * 10   # at neither end
 check("all at a high together is agreement", indexes.divergence({"SPY": up, "QQQ": up}), None)
 check("none at an extreme is agreement",
       indexes.divergence({"SPY": middle, "QQQ": middle, "IWM": middle}), None)
