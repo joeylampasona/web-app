@@ -621,6 +621,22 @@ def probe_chains() -> None:
     except Exception as exc:                          # noqa: BLE001
         print(f"   no database here ({exc}); the fixed {len(names)} names only.")
 
+    # What OCC says about a company with no listed options, and about a
+    # symbol that does not exist. Both have to be told from a block page.
+    print("\n   OCC on a company without options, and on a symbol nobody has:")
+    for symbol in ("WINA", "ATLC", "ZZZZQ"):
+        try:
+            reply = requests.get(occ.URL, params={"symbolType": "U", "symbol": symbol},
+                                 headers={"User-Agent": occ.AGENT,
+                                          "Accept": "text/plain, */*"}, timeout=45)
+            body = " | ".join(line.strip() for line in reply.text.splitlines()
+                              if line.strip())[:260]
+            print(f"      {symbol}: HTTP {reply.status_code}, "
+                  f"{reply.headers.get('content-type')}, {len(reply.text)} chars: {body}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"      {symbol}: {type(exc).__name__}: {exc}")
+        time.sleep(0.3)
+
     today = chains.today()
     horizon = today + dt.timedelta(days=90)
 
