@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { DataBanner, NoData } from "@/components/DataBanner";
+import { DealerGamma } from "@/components/DealerGamma";
 import { GatedGammaBoard } from "@/components/GatedGammaBoard";
 import { MarketCTA } from "@/components/MarketCTA";
-import { getGammaBoard, getMeta, hasData } from "@/lib/data";
+import { getDealerGamma, getGammaBoard, getMeta, hasData } from "@/lib/data";
 import { SITE_NAME } from "@/lib/copy";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function GammaPage() {
   if (!hasData()) return <NoData />;
   const board = getGammaBoard();
   if (!board) return <NoData />;
+  const dealer = getDealerGamma();
 
   return (
     <div className="page">
@@ -23,6 +25,11 @@ export default function GammaPage() {
       <h1>Gamma concentration</h1>
       <p className="muted footnote">{board.copy.header}</p>
       <p className="caption dim">{board.copy.subhead}</p>
+
+      <DealerGamma file={dealer} />
+      {dealer && (dealer.index.length + dealer.sectors.length > 0) && (
+        <div className="eyebrow" style={{ marginTop: "var(--pad-lg)" }}>Company by company</div>
+      )}
 
       {board.rows.length === 0 ? (
         <div className="card muted footnote" style={{ marginTop: "var(--gap-md)" }}>

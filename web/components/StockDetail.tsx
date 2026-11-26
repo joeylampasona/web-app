@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
+import { ShortInterestBlock } from "./ShortPressure";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { GatedForecastPanel } from "./GatedForecastPanel";
 import { GatedEarningsMoves } from "./EarningsMoves";
@@ -241,7 +242,10 @@ export function StockDetail({ stock, run, deskNote }: {
       <section>
         <div className="eyebrow">Flagged by the market sweep</div>
         {deskNote}
-        <DeskSignals signals={stock.desk_signals} run={run} />
+        <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+          <DeskSignals signals={stock.desk_signals} run={run} />
+          <ShortInterestBlock held={stock.short_interest} squeeze={stock.squeeze} />
+        </div>
       </section>
 
       <section>

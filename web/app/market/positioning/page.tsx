@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { MarketCTA } from "@/components/MarketCTA";
 import { GatedPositioning } from "@/components/Positioning";
-import { getMeta, getPositioning, hasData } from "@/lib/data";
+import { ShortPressure } from "@/components/ShortPressure";
+import { getMeta, getPositioning, getSqueeze, hasData } from "@/lib/data";
 import { SITE_NAME } from "@/lib/copy";
 
 export const metadata: Metadata = {
   title: `Positioning — ${SITE_NAME}`,
-  description: "How hedge funds and speculators are positioned in futures, and how stretched it is.",
+  description: "How hedge funds and speculators are positioned in futures, how stretched "
+               + "it is, and where short selling in stocks is heaviest.",
 };
 
 function weekOf(iso: string): string {
@@ -52,6 +54,8 @@ export default function PositioningPage() {
         the percentile against the same group&apos;s own history is what says
         whether it is unusual. Source: CFTC, via the Market Desk.
       </p>
+
+      <ShortPressure file={getSqueeze()} />
       <MarketCTA />
     </div>
   );

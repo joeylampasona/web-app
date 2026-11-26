@@ -69,7 +69,7 @@ const TABS: {
       { href: "/market/volume", title: "Relative volume", blurb: "Who traded unusually heavily today." },
       { href: "/market/insiders", title: "Insider activity", blurb: "What officers and directors actually bought and sold." },
       { href: "/market/seasonals", title: "Seasonals", blurb: "What each month did, year by year." },
-      { href: "/market/positioning", title: "Positioning", blurb: "How hedge funds are positioned in futures, and how stretched." },
+      { href: "/market/positioning", title: "Positioning", blurb: "How hedge funds are positioned in futures, and where stocks are sold short." },
     ],
   },
   {
