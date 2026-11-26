@@ -547,7 +547,7 @@ beyond the free sample may be posted there.
   was.
 - The key travels in a header, never in the address.
 
-## Ten things added after the cross-check (2026-11-26)
+## What was added after the cross-check (2026-11-26)
 
 - **Quotes have a working second source.** Yahoo, then Finnhub for the names
   Yahoo does not answer for, then Cboe. Finnhub is a request a company at
