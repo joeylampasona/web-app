@@ -94,6 +94,8 @@ const PAGES: PaletteDestination[] = [
     blurb: "Colophon: what each source gave tonight, and what is carried over.", section: "About" },
   { href: "/mcp", title: "Ask with your own AI",
     blurb: "Connect Claude, Cursor or any MCP client to these pages with one line.", section: "About" },
+  { href: "/principles", title: "How The Tape is made",
+    blurb: "The rules the site holds itself to, and where each one shows.", section: "About" },
 ];
 
 function dateline(tape: TapeData | null): string | null {
@@ -207,6 +209,9 @@ export function Shell({ children, tape }: { children: React.ReactNode; tape: Tap
             <div className="row wrap" style={{ gap: "var(--gap-xs) var(--gap-lg)" }}>
               <Link href="/legal" className="caption dim" style={{ textDecoration: "underline" }}>
                 What that means, in full
+              </Link>
+              <Link href="/principles" className="caption dim" style={{ textDecoration: "underline" }}>
+                How The Tape is made
               </Link>
               <Link href="/colophon" className="caption dim" style={{ textDecoration: "underline" }}>
                 How this edition was made
