@@ -359,12 +359,15 @@ def cmd_catalysts(args) -> int:
     # began refusing, the fallback answered, both sections filled, and the
     # only trace was a slower run.
     wanted_chains = iv_stats.get("asked", 0) - iv_stats.get("no_event", 0)
-    full = iv_stats.get("from_cboe", 0)
+    from_cboe = iv_stats.get("from_cboe", 0)
+    joined = iv_stats.get("from_occ+yahoo", 0)
+    full = from_cboe + joined
     short = iv_stats.get("from_yahoo", 0)
     other = iv_stats.get("chain_ok", 0) - full - short
     none = max(0, wanted_chains - iv_stats.get("chain_ok", 0))
-    detail = (f"{full:,} full books from Cboe, {short:,} shorter books from "
-              f"Yahoo, {none:,} with none.")
+    detail = (f"{full:,} full books ({from_cboe:,} from Cboe, {joined:,} from "
+              f"OCC's open interest with Yahoo's quotes), {short:,} thinner "
+              f"books from Yahoo alone, {none:,} with none.")
     if other > 0:
         detail = (f"{iv_stats.get('chain_ok', 0):,} of {wanted_chains:,} chains "
                   f"arrived, {none:,} with none.")
@@ -375,7 +378,7 @@ def cmd_catalysts(args) -> int:
     if wanted_chains and not iv_stats.get("chain_ok", 0):
         status = "down"
     elif short > full:
-        # Answered, but mostly by the source that carries eight expiries.
+        # Answered, but mostly with Yahoo's own open interest.
         status = "partial"
     health.record(conn, "options", market.as_of, detail, asked=wanted_chains,
                   answered=iv_stats.get("chain_ok", 0), status=status)
@@ -389,6 +392,24 @@ def cmd_catalysts(args) -> int:
         if cboemod.standing_down():
             print(f"  → cboe refused {cboemod.REFUSALS_BEFORE_STANDING_DOWN} names "
                   f"in a row and was not asked about the rest.", flush=True)
+        from catalysts import chains as chainsmod, occ as occmod, yf as yfmod
+
+        def tallied(counter) -> str:
+            return ", ".join(f"{k} {v:,}" for k, v in sorted(
+                counter.items(), key=lambda kv: -kv[1]))
+        for label, counter in (("occ outcomes", occmod.OUTCOMES),
+                               ("yahoo chain requests", yfmod.CHAIN_OUTCOMES),
+                               ("joined chains", chainsmod.OUTCOMES)):
+            if counter:
+                print(f"  → {label}: {tallied(counter)}", flush=True)
+        if occmod.standing_down():
+            print(f"  → OCC went unanswered {occmod.FAILURES_BEFORE_STANDING_DOWN} "
+                  f"names in a row and was not asked about the rest; Yahoo's "
+                  f"own open interest stood in.", flush=True)
+        if yfmod.chains_standing_down():
+            print(f"  → Yahoo answered 'too many requests' "
+                  f"{yfmod.RATE_LIMITS_BEFORE_STANDING_DOWN} times in a row and "
+                  f"was not asked for the remaining chains.", flush=True)
     except Exception:                             # noqa: BLE001
         pass
     # Persist before printing. This is the only stage allowed to reach the

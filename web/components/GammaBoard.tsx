@@ -21,9 +21,9 @@ const PREVIEW = 20;
  * the unsigned one for the reason set out in GammaPanel: one of them depends
  * on an assumption about who holds which side and the other does not.
  */
-export const PARTIAL_BOOK = "Built from a shorter option book, the nearest eight expiries, "
-  + "because the full-book source was unavailable. Concentrations are understated "
-  + "and the peak strike may differ.";
+export const PARTIAL_BOOK = "Built from a thinner option book, one source's own open "
+  + "interest, because the clearing house's figures were unavailable. "
+  + "Concentrations are understated and the peak strike may differ.";
 export const CARRIED_BOOK = "This book was read on an earlier night. The source did not "
   + "answer for it on this run.";
 
@@ -58,9 +58,10 @@ export function GammaBoard({
           {partial >= total && total > 0
             ? "Every row tonight was"
             : `${partial.toLocaleString()} of ${total.toLocaleString()} rows were`}{" "}
-          built from a shorter option book, the nearest eight expiries, because
-          the full-book source was unavailable. Concentrations on those rows are
-          understated and the peak strike may differ.
+          built from a thinner option book, one source&rsquo;s own open
+          interest, because the clearing house&rsquo;s figures were unavailable.
+          Concentrations on those rows are understated and the peak strike may
+          differ.
         </p>
       )}
       {carried > 0 && (

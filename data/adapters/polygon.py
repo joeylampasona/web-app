@@ -155,16 +155,21 @@ class PolygonGroupedAdapter(DataAdapter):
         statement about where the whole book anchors, and it was being built
         out of a few dozen strikes.
 
-        Yahoo remains behind it, not as a formality: this is the section that
-        has already been empty for weeks, and a single source with no fallback
-        is how it got that way.
+        Behind it, OCC's open interest with Yahoo's quotes (catalysts/chains),
+        and behind that Yahoo alone. Not a formality: this is the section
+        that has already been empty for weeks, and a single source with no
+        fallback is how it got that way.
         """
         from catalysts.cboe import chain as cboe_chain    # lazy: network only
         found = cboe_chain(symbol)
         if found is not None and found.rows:
             return found
-        from catalysts.yf import option_chain  # lazy: yfinance is optional
-        return option_chain(symbol)
+        # Cboe has refused since 2026-11-19 and stands down after a dozen
+        # names, so on most nights this is the path every company takes: the
+        # clearing house's open interest, joined to Yahoo's implied
+        # volatilities. Yahoo's own open interest only if OCC is silent.
+        from catalysts import chains           # lazy: yfinance is optional
+        return chains.build(symbol)
 
     # ------------------------------------------------------------ helpers
 

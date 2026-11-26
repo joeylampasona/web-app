@@ -56,7 +56,8 @@ check("the first summary is the one kept", heard.kept["earnings_dates"][:19], "e
 
 # --------------------------------------------------------- the report
 health.record(conn, "options", session,
-              "0 full books from Cboe, 1,150 shorter books from Yahoo, 58 with none.",
+              "0 full books (0 from Cboe, 0 from OCC's open interest with Yahoo's "
+              "quotes), 1,150 thinner books from Yahoo alone, 58 with none.",
               asked=1208, answered=1150, status="partial")
 health.record(conn, "forecasts", session, "394 of 400 asked about tonight came back with data.",
               asked=400, answered=394)
@@ -105,6 +106,8 @@ def chain(source: str) -> OptionChain:
 
 
 check("a Cboe chain is the full book", gamma.profile(chain("cboe"), session).to_json()["book"], "full")
+check("OCC's open interest with Yahoo's quotes is the full book",
+      gamma.profile(chain("occ+yahoo"), session).to_json()["book"], "full")
 check("a Yahoo chain is a partial book", gamma.profile(chain("yahoo"), session).to_json()["book"],
       "partial")
 check("a source that says nothing is not labelled", gamma.profile(chain(""), session).to_json()["book"],

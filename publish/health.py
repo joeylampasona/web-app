@@ -31,7 +31,7 @@ PARTIAL_BELOW = 0.8
 #: The order the rows are published in, and what each is called.
 SOURCES = (
     ("prices", "Prices", "Polygon"),
-    ("options", "Option chains", "Cboe, then Yahoo"),
+    ("options", "Option chains", "Cboe, then OCC with Yahoo"),
     ("earnings_dates", "Earnings dates", "Yahoo"),
     ("forecasts", "Analyst forecasts", "Yahoo"),
     ("filings", "Company filings", "SEC"),

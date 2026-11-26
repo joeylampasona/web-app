@@ -46,9 +46,10 @@ export function GammaPanel({ gamma }: { gamma: GammaProfile | null }) {
           {gamma.book === "partial" && (
             <p className="footnote book-note" style={{ margin: 0 }}>
               <CarriedOver>Partial book</CarriedOver>{" "}
-              Built from a shorter option book, the nearest eight expiries,
-              because the full-book source was unavailable. The concentrations
-              below are understated and the peak strike may differ.
+              Built from a thinner option book, one source&rsquo;s own open
+              interest, because the clearing house&rsquo;s figures were
+              unavailable. The concentrations below are understated and the
+              peak strike may differ.
             </p>
           )}
           {gamma.stale && (

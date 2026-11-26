@@ -100,7 +100,10 @@ def bs_gamma(spot: float, strike: float, sigma: float, years: float,
 
 
 #: How much of the listed book each chain source carries.
-BOOKS = {"cboe": "full", "yahoo": "partial"}
+# OCC's open interest is the cleared book itself, so a chain joined from it
+# is full inside the ninety days gamma looks at. Yahoo's own open interest
+# covers a fraction of it.
+BOOKS = {"cboe": "full", "occ+yahoo": "full", "yahoo": "partial"}
 
 
 @dataclass

@@ -223,8 +223,9 @@ export interface SourceReport {
   as_of: string | null;
 }
 
-/** Which option book a gamma reading was built from. `partial` is the shorter
- *  book (the nearest eight expiries) used when the full one is unavailable. */
+/** Which option book a gamma reading was built from. `full` carries the
+ *  clearing house's open interest; `partial` is one source's own, thinner
+ *  figures, used when the full one is unavailable. */
 export type GammaBook = "full" | "partial" | null;
 
 export interface Bar {
