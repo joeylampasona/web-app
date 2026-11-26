@@ -176,6 +176,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             desk_extras: dict | None = None,
             sources_history: list | None = None,
             sp500: tuple[set, str | None] | None = None,
+            options_volume: dict[str, dict] | None = None,
+            volatility: dict | None = None,
             congress: dict | None = None,
             fundamentals: dict[str, dict] | None = None,
             earnings_reads: list[dict] | None = None,
@@ -198,6 +200,22 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                     if symbol in gamma_free}
     gamma_locked = {symbol for symbol, payload in (gamma or {}).items()
                     if symbol not in gamma_free and payload and payload.get("levels")}
+
+    # The day's option volume, split the same way and for the same reason:
+    # the first few rows of the ranking are public in full, on the board and
+    # on their own stock pages, and every other company's is not, in both
+    # places. Ranked once, here, so the two cannot disagree.
+    from catalysts import optvol as optvolmod
+    volume_board = optvolmod.board(options_volume)
+    for row in volume_board:
+        ref = market.refs.get(row["symbol"])
+        row["name"] = ref.name if ref else row["symbol"]
+        row["market_cap"] = market.caps.get(row["symbol"])
+    volume_free = gatedmod.free_volume_symbols(volume_board)
+    volume_public = {symbol: payload for symbol, payload in (options_volume or {}).items()
+                     if symbol in volume_free}
+    volume_locked = {symbol for symbol, payload in (options_volume or {}).items()
+                     if symbol not in volume_free and payload}
 
     # Analyst estimates: the buy/hold/sell split is free, the targets and the
     # estimates are not. No price target appears in the free half, not even the
@@ -280,11 +298,14 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # Put/call and the desk's regime label, and the running record of how
     # often the options market's priced earnings move has held. Free: market
     # level, and the record is the honest half of the priced-move feature.
-    if market_context or (earnings_iv or {}).get("tally"):
+    if market_context or (earnings_iv or {}).get("tally") or volatility:
         written.append(_write(out / "market" / "context.json", {
             "as_of": as_of.isoformat(),
             "put_call": (market_context or {}).get("put_call"),
             "regime": (market_context or {}).get("regime"),
+            # The VIX against its three-month version, read by this site from
+            # Yahoo, with the day it is of. Not the desk's: its own source.
+            "volatility": volatility,
             "earnings_priced": ({**earnings_iv["tally"],
                                  "as_of": earnings_iv.get("as_of")}
                                 if (earnings_iv or {}).get("tally") else None),
@@ -557,6 +578,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              calendar, limit, insiders, news, desk,
                                              gamma_public, forecast_public,
                                              gamma_locked=gamma_locked,
+                                             options_volume=volume_public.get(symbol),
+                                             options_volume_locked=symbol in volume_locked,
                                              forecast_locked=forecast_locked,
                                              moves=moves_public,
                                              moves_locked=moves_locked,
@@ -837,6 +860,30 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "copy": GAMMA_COPY,
     }))
 
+    # ---- option volume, where the day's trading was large ---------------
+    #
+    # The board was ranked at the top, where the free set was decided. The
+    # whole of it goes behind the wall and the first few rows also stay
+    # public, as with gamma, so a subscriber renders from one document.
+    if options_volume is not None:
+        volume_rows = volume_board[:optvolmod.BOARD_ROWS]
+        gated_documents.extend(gatedmod.options_volume_documents(
+            volume_rows, options_volume, volume_free, as_of, total=len(volume_board)))
+        written.append(_write(out / "market" / "options_volume.json", {
+            "as_of": as_of.isoformat(),
+            # Every name that cleared the floor, and every name read at all.
+            "count": len(volume_board),
+            "read": len(options_volume),
+            "rows": [row for row in volume_rows if row["symbol"] in volume_free],
+            "gated": True,
+            "free_rows": gatedmod.FREE_VOLUME_ROWS,
+            "board_rows": len(volume_rows),
+            "thresholds": {"board_min_volume": optvolmod.BOARD_MIN_VOLUME,
+                           "unusual_multiple": optvolmod.UNUSUAL_MULTIPLE,
+                           "unusual_min_volume": optvolmod.UNUSUAL_MIN_VOLUME},
+            "copy": optvolmod.COPY,
+        }))
+
     # ---- learn --------------------------------------------------------
     for key, spec in param_module.SCREENS.items():
         written.append(_write(out / "learn" / f"{key}.json", {
@@ -883,6 +930,25 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     # ---- what happened to the breakouts we showed ---------------------
     if follow:
         written.append(_write(out / "breakouts" / "followthrough.json", follow))
+
+    # ---- the record: one scoreboard, and which screens are on watch ----
+    # Counted from the follow-through above and nothing else, so the two
+    # cannot disagree. Every screen gets a row, including the ones whose
+    # past cannot be rebuilt, which say so. Aggregate and public: counts
+    # and rates, never a name.
+    from publish import record as record_mod       # noqa: PLC0415
+    written.append(_write(out / "market" / "record.json", record_mod.build(
+        follow,
+        [(key, spec.name) for key, spec in param_module.SCREENS.items()],
+        replayable=set(param_module.BASE_SCREEN_KEYS))))
+
+    # ---- the research ledger: every question tested, failures kept -----
+    # The file in the repository is the source of truth; this checks it and
+    # copies it. A ledger that does not validate is a broken build here,
+    # where someone will see it, and not a blank page later.
+    from publish import ledger as ledger_mod       # noqa: PLC0415
+    written.append(_write(out / "research" / "ledger.json",
+                          {"as_of": as_of.isoformat(), **ledger_mod.load()}))
 
     # ---- meta ---------------------------------------------------------
     provider = settings.get("data.provider", "polygon")
@@ -1271,6 +1337,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    gamma: dict[str, dict] | None = None,
                    forecasts: dict[str, dict] | None = None,
                    gamma_locked: set[str] | None = None,
+                   options_volume: dict | None = None,
+                   options_volume_locked: bool = False,
                    forecast_locked: set[str] | None = None,
                    moves: dict[str, dict] | None = None,
                    moves_locked: set[str] | None = None,
@@ -1376,6 +1444,12 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # is fetched from the gated store by anyone entitled to it.
         "gamma": (gamma or {}).get(symbol),
         "gamma_gated": symbol in (gamma_locked or set()),
+        # The day's option trading for the company: contracts, calls against
+        # puts, the busiest strikes. Gated like gamma: the payload is here
+        # for the free sample only, and `_gated` says one exists behind the
+        # wall. Both absent for a name whose chain was not read.
+        "options_volume": options_volume,
+        "options_volume_gated": options_volume_locked,
         # Analyst price targets and estimates. Somebody else's opinion, not a
         # reading of ours, which is why it is labelled as such on the page.
         # The ratings split only. Targets and estimates are fetched by anyone
