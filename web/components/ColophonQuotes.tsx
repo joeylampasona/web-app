@@ -19,13 +19,18 @@ const NEW_YORK_DAY = new Intl.DateTimeFormat("en-CA", {
 
 const FEEDS: Record<string, string> = {
   "yahoo-delayed": "Yahoo",
+  // Asked only about the names Yahoo did not answer for, and only when the
+  // nightly's repository holds a key for it.
+  "finnhub": "Finnhub",
   "cboe-delayed": "Cboe",
 };
 
 function feedName(source: string | null): string | null {
   if (!source || source === "none") return null;
   const names = source.split("+").map((part) => FEEDS[part] ?? part);
-  return names.join(" and ");
+  // Up to three now: "Yahoo", "Yahoo and Finnhub", "Yahoo, Finnhub and Cboe".
+  if (names.length <= 2) return names.join(" and ");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 export function ColophonQuotes({ asOf }: { asOf: string }) {
@@ -72,7 +77,10 @@ export function ColophonQuotes({ asOf }: { asOf: string }) {
     <div className="colophon-row" role="row">
       <span role="cell" className="stack" style={{ gap: 2 }}>
         <span className="colophon-name">Intraday prices</span>
-        <span className="caption dim">A delayed quote sweep, hourly through the session</span>
+        <span className="caption dim">
+          A delayed quote sweep, hourly through the session: Yahoo, then Finnhub
+          for what Yahoo misses, then Cboe
+        </span>
       </span>
       <span role="cell" className="colophon-status">
         <span className="colophon-swatch" aria-hidden style={{ background: tone }} />

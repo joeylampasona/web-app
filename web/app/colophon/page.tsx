@@ -171,6 +171,21 @@ export default function ColophonPage() {
             out companies that have since delisted.</>
           )}
         </p>
+        {meta.sp500 && (
+          <p className="footnote muted" style={{ margin: 0, maxWidth: "70ch" }}>
+            The S&amp;P 500 tag on a company&rsquo;s page and the filter on a screen
+            come from the public constituents list kept at{" "}
+            <a href="https://github.com/datasets/s-and-p-500-companies"
+               rel="noopener noreferrer" style={{ textDecoration: "underline" }}>
+              github.com/datasets</a>, fetched once a week. It is a convenience
+            copy and not S&amp;P&rsquo;s own publication.
+            {meta.sp500.fetched_on && (
+              <> Last fetched {shortDay(meta.sp500.fetched_on)}: {meta.sp500.listed
+                .toLocaleString("en-US")} lines, {meta.sp500.members_in_universe
+                .toLocaleString("en-US")} of them in this universe.</>
+            )}
+          </p>
+        )}
         {/* The chart library's licence asks for its notice and a link on a
             page readers can reach. This is that page. */}
         <p className="footnote muted" style={{ margin: 0, maxWidth: "70ch" }}>

@@ -116,6 +116,9 @@ export interface Setup {
   /** Screen rows only: consecutive scanned sessions on this screen ending
    *  tonight, how many of the last `window` it was on. */
   nights?: { run: number; of: number; window: number } | null;
+  /** Screen rows only: whether the company is in the S&P 500. Present only
+   *  once the nightly has the constituents list on file. */
+  sp500?: boolean;
   breakout_date: string | null;
   sessions_since_breakout: number | null;
   breakout_metrics: {
@@ -205,6 +208,10 @@ export interface Meta {
   /** What each source gave the nightly. Absent in a tree built before the
    *  report existed, which the pages treat as "not reported", never as fine. */
   sources?: SourceReport[];
+  /** The S&P 500 list the tags and the screen filter are built from: how many
+   *  lines it has, how many of them are in this universe, and the day it was
+   *  fetched. Null before the first fetch. */
+  sp500?: { members_in_universe: number; listed: number; fetched_on: string | null } | null;
   market_wide_breakouts: number;
   screens: { key: string; name: string; total: number; stages: Record<string, number> }[];
   themes: { slug: string; name: string }[];
@@ -401,6 +408,9 @@ export interface StockFile {
   rs_rating: Rating; rs_change_m1: number | null; market_cap: number | null;
   /** "share_class" when the cap is one class's shares times its price: a floor. */
   market_cap_basis?: "company" | "share_class";
+  /** Whether it is in the S&P 500. Null until the list has been fetched
+   *  once, which is not the same as false. */
+  sp500?: boolean | null;
   quadrant: string | null;
   bars: Bar[];          // expanded from compact rows by lib/data
   setups: Setup[];
@@ -430,6 +440,11 @@ export interface StockFile {
    *  did not look at this name that night, not that nobody is short. */
   short_interest?: ShortInterest | null;
   squeeze?: SqueezeRead | null;
+  /** The desk's read of this company's option chain, and FINRA's daily
+   *  short volume for it. Null means the desk did not read this name, never
+   *  that there is nothing to read. */
+  options_read?: OptionsRead | null;
+  short_volume?: ShortVolume | null;
   /** How many of the Market Desk's tracked funds hold it. The fund list is
    *  behind the paywall when `holders_gated` is set. */
   holders?: HolderCounts | null;
@@ -692,6 +707,48 @@ export interface ShortInterest {
   shares: number | null;
   chg_pct: number | null;
   days_to_cover: number | null;
+}
+
+/** The Market Desk's nightly read of one option chain. Any field can be
+ *  null when the chain could not give it. */
+export interface OptionsRead {
+  /** At-the-money implied volatility at thirty days, in percent. */
+  iv30: number | null;
+  /** Where iv30 sits between the lowest and highest stored reads, 0 to 100.
+   *  Null, with iv_pct, until the desk holds twenty reads. */
+  iv_rank: number | null;
+  iv_pct: number | null;
+  /** How many nightly reads the rank rests on. */
+  iv_days: number | null;
+  /** The at-the-money straddle as a percent of spot, at exp_move_expiry. */
+  exp_move_pct: number | null;
+  exp_move_expiry: string | null;
+  /** Puts over calls, by open interest and by the session's volume. */
+  pc_oi: number | null;
+  pc_vol: number | null;
+  /** The strikes holding the most open interest above and below spot, and
+   *  their distance from it in percent. */
+  call_wall: number | null; call_wall_pct: number | null;
+  put_wall: number | null; put_wall_pct: number | null;
+  max_pain: number | null;
+  term: number | null;
+  skew: number | null;
+  oi_total: number | null;
+  vol_total: number | null;
+  /** The night the chain was read, and whether that is older than it
+   *  should be for this edition. */
+  d: string | null;
+  stale?: boolean;
+}
+
+/** FINRA's daily short volume for one name: the share of a session's volume
+ *  marked short (0.444 is 44.4%), and the mean of the twenty sessions
+ *  before. `sessions` is how many the mean rests on; `d` is the session. */
+export interface ShortVolume {
+  ratio: number | null;
+  ratio_20d: number | null;
+  sessions: number | null;
+  d: string | null;
 }
 
 /** The desk's squeeze read for a name its brief ranked. `short_ratio` is

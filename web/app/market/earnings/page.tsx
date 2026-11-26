@@ -2,6 +2,7 @@ import { DeskBehind } from "@/components/CarriedOver";
 import { DataBanner, NoData } from "@/components/DataBanner";
 import { EarningsPricedTable } from "@/components/EarningsPricedTable";
 import { EarningsReads } from "@/components/EarningsReads";
+import { EarningsReported } from "@/components/EarningsReported";
 import { MarketCTA } from "@/components/MarketCTA";
 import { getEarnings, getMeta, hasData } from "@/lib/data";
 import { cardMetadata } from "@/lib/cards/metadata";
@@ -26,6 +27,10 @@ export default function EarningsPage() {
       <div className="eyebrow">Market · reporting season</div>
       <h1>Earnings</h1>
       <DeskBehind meta={getMeta()} />
+
+      {/* Read in the browser from the reporters job's note; renders nothing
+          until there is something to show. */}
+      <EarningsReported />
 
       <section className="stack" style={{ marginTop: "var(--pad-lg)" }}>
         <div className="section-head">

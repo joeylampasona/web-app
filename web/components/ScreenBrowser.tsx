@@ -57,10 +57,19 @@ export function ScreenBrowser({
   const [view, setView] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState<LeadershipLayer | "">("");
+  const [members, setMembers] = useState(false);
   // Files written before the layers existed have none; no filter then.
   const hasLayers = useMemo(
     () => STAGE_ORDER.some((s) => (file.setups[s] ?? []).some((row) => row.layer)),
     [file.setups]);
+  // The flag is written only once the nightly holds the constituents list,
+  // so a tree without it has no control to offer. A filter that silently
+  // emptied every screen would read as "no large company is setting up".
+  const hasMembers = useMemo(
+    () => STAGE_ORDER.some((s) => (file.setups[s] ?? [])
+      .some((row) => typeof row.sp500 === "boolean")),
+    [file.setups]);
+  const membersOnly = members && hasMembers;
 
   const locked = stage !== null && lockedStages.includes(stage);
 
@@ -76,7 +85,8 @@ export function ScreenBrowser({
           || (s.name ?? "").toLowerCase().includes(q)
           || (s.industry ?? "").toLowerCase().includes(q))
       : all;
-    const rows = layer ? matched.filter((s) => s.layer === layer) : matched;
+    const layered = layer ? matched.filter((s) => s.layer === layer) : matched;
+    const rows = membersOnly ? layered.filter((s) => s.sp500 === true) : layered;
     const value = (setup: Setup): number | string => {
       if (sort === "symbol") return setup.symbol;
       if (sort === "rs_rating") return isRanked(setup.rs_rating) ? setup.rs_rating : -1;
@@ -92,7 +102,7 @@ export function ScreenBrowser({
         : Number(left) - Number(right);
       return descending ? -cmp : cmp;
     });
-  }, [descending, file.setups, layer, query, sort, stage]);
+  }, [descending, file.setups, layer, membersOnly, query, sort, stage]);
 
   return (
     <>
@@ -166,6 +176,17 @@ export function ScreenBrowser({
             </select>
           </label>
         )}
+        {hasMembers && (
+          <button
+            type="button"
+            className="control"
+            aria-pressed={members}
+            onClick={() => setMembers((on) => !on)}
+            title="Show only the companies in the S&P 500. The stage counts above still count every name."
+          >
+            S&amp;P 500 only
+          </button>
+        )}
         <label className="row footnote dim" style={{ gap: "var(--gap-xs)" }}>
           <span className="visually-hidden">Sort by</span>
           <select
@@ -209,7 +230,10 @@ export function ScreenBrowser({
 
       {locked ? lockedPanel : setups.length === 0 && (
         <div className="card muted footnote">
-          {layer && !query.trim()
+          {membersOnly && !query.trim() && !layer
+            ? <>No name on this list is in the S&amp;P 500 tonight.
+                {lockedStages.length > 0 && " The sample shown here is a part of the list; subscribers filter all of it."}</>
+            : layer && !query.trim()
             ? <>No name on this list is in that leadership layer tonight.</>
             : query.trim()
             ? <>Nothing on this list matches “{query.trim()}”.

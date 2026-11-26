@@ -91,6 +91,18 @@ export function StockPassport({ stock }: { stock: StockFile }) {
                 {" "}(one share class)
               </span>
             )}
+            {/* Only a yes is said. Null is "the list has not been fetched",
+                and a tag reading "not in the S&P 500" on every small company
+                would be noise. */}
+            {stock.sp500 === true && (
+              <>
+                {" · "}
+                <span className="badge" style={{ verticalAlign: "baseline" }}
+                      title="A member of the S&P 500, by the public constituents list the nightly fetches each week.">
+                  S&amp;P 500
+                </span>
+              </>
+            )}
           </div>
           <h1 className="passport-name">{stock.name}</h1>
           {stock.themes.length > 0 && (

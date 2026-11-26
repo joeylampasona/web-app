@@ -6,6 +6,7 @@ import { CatalystCountdown } from "./CatalystCountdown";
 import { CatalystTimeline } from "./CatalystTimeline";
 import { DeskSignals } from "./DeskSignals";
 import { ShortInterestBlock } from "./ShortPressure";
+import { OptionsRead } from "./OptionsRead";
 import { CriteriaMeter } from "./CriteriaMeter";
 import { GatedForecastPanel } from "./GatedForecastPanel";
 import { GatedEarningsMoves } from "./EarningsMoves";
@@ -283,7 +284,8 @@ export function StockDetail({ stock, run, deskNote }: {
         {deskNote}
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
           <DeskSignals signals={stock.desk_signals} run={run} />
-          <ShortInterestBlock held={stock.short_interest} squeeze={stock.squeeze} />
+          <ShortInterestBlock held={stock.short_interest} squeeze={stock.squeeze}
+                              volume={stock.short_volume} asOf={stock.as_of} />
         </div>
       </section>
 
@@ -348,6 +350,13 @@ export function StockDetail({ stock, run, deskNote }: {
         <GatedForecastPanel symbol={stock.symbol} forecast={stock.forecast}
                             locked={Boolean(stock.forecast_gated)} />
       </section>
+
+      {stock.options_read && (
+        <section>
+          <div className="eyebrow">The options read</div>
+          <OptionsRead read={stock.options_read} />
+        </section>
+      )}
 
       <section>
         <div className="eyebrow">Gamma concentration</div>

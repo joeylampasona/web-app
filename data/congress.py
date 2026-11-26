@@ -348,6 +348,26 @@ def refresh(conn, today: dt.date, *, limit: int = FILINGS_A_NIGHT,
     """
     out = {"listed": 0, "waiting": 0, "asked": 0, "read": 0, "no_text": 0,
            "failed": 0, "transactions": 0, "status": "ok"}
+    try:
+        import pypdf                                  # noqa: F401, PLC0415
+    except ImportError:
+        # Without the PDF reader every report would look like a scanned one
+        # and be written off for good. Read nothing instead.
+        out["status"] = "down"
+        if notice:
+            notice("congress: pypdf is not installed; no reports read tonight.")
+        return out
+    try:
+        return _refresh(conn, today, out, limit, budget_seconds, notice, sleep, clock)
+    except Exception as exc:                          # noqa: BLE001 - never the nightly
+        conn.rollback()
+        out["status"] = "down"
+        if notice:
+            notice(f"congress: {type(exc).__name__}: {str(exc)[:160]}; nothing kept tonight.")
+        return out
+
+
+def _refresh(conn, today, out, limit, budget_seconds, notice, sleep, clock) -> dict:
     first = today - dt.timedelta(days=WINDOW_DAYS)
     listed: list[dict] = []
     answered = False
@@ -469,3 +489,32 @@ def recent(loaded: dict | None, today: dt.date, days: int = RECENT_DAYS) -> list
             for row in held if (row["filed"] or "") >= since]
     rows.sort(key=lambda r: (r["filed"], r["traded"] or "", r["symbol"]), reverse=True)
     return rows
+
+
+# ------------------------------------------------------- the night's row
+
+COPY = {
+    "header": "Trades in these stocks by members of the House of Representatives, "
+              "from the periodic transaction reports they file with the Clerk.",
+    "footer": "Members have up to 45 days to report a trade and some take longer, so "
+              "the filed date matters as much as the traded one. Amounts are the bands "
+              "the form offers, not figures. Senators are not covered: the Senate "
+              "publishes no file to read. Reports filed on paper are scanned images "
+              "and are not read. Not a signal.",
+}
+
+
+def record(conn, session: dt.date, got: dict) -> None:
+    """Tonight's row in the source report, from what refresh() returned."""
+    from publish import health                        # noqa: PLC0415 - avoids a cycle
+    if got.get("status") == "down":
+        detail = "The Clerk's index did not answer; no reports read tonight."
+    elif not got.get("asked"):
+        detail = (f"{got.get('listed', 0):,} House reports in the window, "
+                  f"all already read.")
+    else:
+        detail = (f"{got['asked']:,} new House reports asked for: {got['read']:,} "
+                  f"read ({got['transactions']:,} transactions), {got['no_text']:,} "
+                  f"scanned or missing, {got['failed']:,} did not answer; "
+                  f"{got['waiting']:,} still to read.")
+    health.record(conn, "congress", session, detail, status=got.get("status") or "ok")

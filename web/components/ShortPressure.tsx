@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ShortInterest, SqueezeFile, SqueezeRead } from "@/lib/types";
+import type { ShortInterest, ShortVolume, SqueezeFile, SqueezeRead } from "@/lib/types";
 import { shortDay } from "./CarriedOver";
 
 /**
@@ -47,13 +47,36 @@ export function ShortInterestLine({ held }: { held: ShortInterest }) {
 }
 
 /** The block on a stock's own page. Nothing when the desk did not look. */
-export function ShortInterestBlock({ held, squeeze }: {
+/** "Wednesday's" for a session in the last week, "the Nov 18 session's" for
+ *  an older one, "the last session's" when the day is not known. */
+function sessionWord(iso: string | null | undefined, asOf: string | null | undefined): string {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return "the last session\u2019s";
+  const when = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  // Against the edition's own date, not the reader's clock: the page is
+  // built once a night and has to read the same when it is opened.
+  const edition = asOf && /^\d{4}-\d{2}-\d{2}/.test(asOf)
+    ? new Date(`${asOf.slice(0, 10)}T12:00:00Z`).getTime() : null;
+  const age = edition === null ? Infinity : (edition - when.getTime()) / 86_400_000;
+  if (age >= 0 && age < 6.5) {
+    return `${when.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })}\u2019s`;
+  }
+  return `the ${shortDay(iso)} session\u2019s`;
+}
+
+export function ShortInterestBlock({ held, squeeze, volume, asOf }: {
   held: ShortInterest | null | undefined;
   squeeze: SqueezeRead | null | undefined;
+  /** FINRA's daily short volume, which the desk sends for the whole market.
+   *  The squeeze read carries the same two numbers for the few names it
+   *  ranks, so where both are here the squeeze's line is the one shown. */
+  volume?: ShortVolume | null;
+  /** The edition's session, to name the short-volume session by its weekday. */
+  asOf?: string | null;
 }) {
   const hasHeld = Boolean(held && held.shares);
   const hasVolume = Boolean(squeeze && squeeze.short_ratio != null);
-  if (!hasHeld && !hasVolume) return null;
+  const hasDaily = !hasVolume && Boolean(volume && volume.ratio != null);
+  if (!hasHeld && !hasVolume && !hasDaily) return null;
   const why = (squeeze?.why ?? []).filter(Boolean);
   return (
     <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
@@ -74,6 +97,17 @@ export function ShortInterestBlock({ held, squeeze }: {
             <> The desk&apos;s squeeze conditions: {squeeze.met} of 3 met
               {why.length > 0 ? ` (${why.join("; ")})` : ""}.</>
           )}
+        </p>
+      )}
+      {hasDaily && volume && (
+        <p className="footnote" style={{ margin: 0 }}>
+          <strong className="num">{share(volume.ratio)}</strong> of{" "}
+          {sessionWord(volume.d, asOf)} volume was marked short
+          {volume.ratio_20d != null && (
+            <>, against <span className="num">{share(volume.ratio_20d)}</span> over
+              the {volume.sessions != null && volume.sessions < 20
+                ? `${volume.sessions} sessions` : "twenty sessions"} before</>
+          )}.
         </p>
       )}
       <p className="caption dim" style={{ margin: 0 }}>
