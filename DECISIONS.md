@@ -546,3 +546,43 @@ beyond the free sample may be posted there.
   expectation. Revenue is Finnhub's alone. Without the key the run is as it
   was.
 - The key travels in a header, never in the address.
+
+## Ten things added after the cross-check (2026-11-26)
+
+- **Quotes have a working second source.** Yahoo, then Finnhub for the names
+  Yahoo does not answer for, then Cboe. Finnhub is a request a company at
+  the plan's sixty a minute, so it is a backstop for the names nearest their
+  pivot, not a replacement.
+- **The evening reporters run is its own scheduled task at 18:00 New York**,
+  the morning one at 09:20. One schedule cannot say both.
+- **A reaction settles.** The evening run says how the reactions already
+  posted held up over a full session: a before-the-bell report in that day's
+  session, an after-the-bell one in the next day's, close to close, beside
+  the quote first given and whether the priced move held. Yahoo's session
+  figure counts only when it is today's session, so a holiday waits.
+- **The Earnings page shows the day's reporters** from the note on the
+  `reporters` branch, through a route of its own, between nightly builds.
+  The rows it reads carry no screen membership. Which screen a name is on is
+  the paid half of the site and those rows are public.
+- **The week's sources go to the ops room after the Saturday wrap**: a line
+  a source, ok all week or which nights it was not and why. The nightly
+  keeps three weeks of statuses and publishes them in `meta.json`, so the
+  wrap still needs no database.
+- **S&P 500 membership** is the public constituents list at
+  github.com/datasets, fetched weekly. A convenience copy, not S&P's own
+  publication. Null until fetched once, and a list of the wrong size is not
+  believed.
+- **The desk's options read and short volume per name** arrive with its
+  schema 1.8, which was added to the desk for this. Kept for the site's own
+  names; dated; never shown as zero for a name the desk did not read. The
+  desk spells class shares without their dot, so those are absent.
+- **A first read from the press release, by a model**
+  (`data/press_release.py`, off without `ANTHROPIC_API_KEY`). The one part
+  of the site that is not arithmetic over filed numbers, and labelled so
+  wherever it appears. The release is treated as a stranger's document: the
+  model is told it is data, the answer is held to a schema, its sentences
+  are stripped of links and mentions, and revenue that disagrees with
+  Finnhub's is withheld. Eight a run, a paid request each.
+- **No Discord post can ping anybody** (`allowed_mentions` is empty on every
+  message), since some of what is posted is now read out of documents the
+  site did not write.
