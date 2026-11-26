@@ -13,11 +13,16 @@ How the two are joined, so nobody reads more into a row than is there:
 
   * Open interest is OCC's wherever OCC answered. A series OCC lists and
     Yahoo does not is kept, on any expiry Yahoo was asked about.
-  * An implied volatility outside 3% to 500%, or one drawn from a quote
-    wider than half its own mid, is a placeholder and not a reading. Such a
-    contract takes the nearest strike's on the same expiry: its own side
-    first, the other side when its side has none. Gamma is not sensitive
-    enough to a neighbouring strike's volatility for that to move a level.
+  * Yahoo gives every contract an implied volatility, and where there is
+    no quote it derives one from the last trade, however old. So a figure
+    is believed only where the contract has a two-sided quote no wider than
+    half its own mid, or traded on the chain's latest session, and only
+    between 3% and 500%. Market Desk found the same thing the same evening:
+    on thin names the unbelieved figures put skew at 160 points.
+  * A contract without a believed figure takes the nearest strike's on the
+    same expiry: its own side first, then the other side, then the nearest
+    expiry that has one. Gamma is not sensitive enough to a neighbouring
+    strike's volatility for that to move a level.
   * The per-expiry reading the High IV page ranks is built only from
     volatilities Yahoo actually quoted, never from borrowed ones.
   * If OCC did not answer, Yahoo's own open interest stands and the chain
@@ -78,6 +83,14 @@ def wide(bid: float, ask: float) -> bool:
     return bid > 0 and ask > 0 and (ask - bid) > max(0.25 * (bid + ask), 0.10)
 
 
+def believed(row: dict) -> bool:
+    """Whether Yahoo's implied volatility for this contract is a reading."""
+    bid, ask = row.get("bid", 0.0), row.get("ask", 0.0)
+    if not usable(row.get("iv")) or wide(bid, ask):
+        return False
+    return (bid > 0 and ask > 0) or bool(row.get("fresh"))
+
+
 def join(symbol: str, spot: float, quoted: list[dict],
          book: occ.Book | None) -> OptionChain | None:
     """The chain from Yahoo's rows and OCC's book. `book` None keeps Yahoo's
@@ -87,9 +100,7 @@ def join(symbol: str, spot: float, quoted: list[dict],
 
     # 1. Decide which volatilities are readings.
     for row in quoted:
-        row["own_iv"] = (row["iv"] if usable(row["iv"])
-                         and not wide(row.get("bid", 0.0), row.get("ask", 0.0))
-                         else 0.0)
+        row["own_iv"] = row["iv"] if believed(row) else 0.0
 
     # 2. The per-expiry reading, from quoted volatilities only.
     expiries: list[OptionExpiry] = []
@@ -119,9 +130,12 @@ def join(symbol: str, spot: float, quoted: list[dict],
 
     # 4. A contract without a reading borrows the nearest strike's.
     known: dict[tuple[dt.date, str], list[tuple[float, float]]] = {}
+    by_expiry: dict[dt.date, list[tuple[float, float]]] = {}
     for row in rows:
         if row["own_iv"] > 0:
             known.setdefault((row["expiry"], row["side"]), []).append(
+                (row["strike"], row["own_iv"]))
+            by_expiry.setdefault(row["expiry"], []).append(
                 (row["strike"], row["own_iv"]))
     contracts: list[OptionContract] = []
     for row in rows:
@@ -133,9 +147,13 @@ def join(symbol: str, spot: float, quoted: list[dict],
             other = "put" if row["side"] == "call" else "call"
             pool = known.get((row["expiry"], row["side"])) \
                 or known.get((row["expiry"], other))
+            if not pool and by_expiry:
+                nearest = min(by_expiry, key=lambda e: (
+                    abs((e - row["expiry"]).days), e))
+                pool = by_expiry[nearest]
             if not pool:
                 continue
-            iv = min(pool, key=lambda p: abs(p[0] - row["strike"]))[1]
+            iv = min(pool, key=lambda p: (abs(p[0] - row["strike"]), p[0]))[1]
         contracts.append(OptionContract(expiry=row["expiry"], side=row["side"],
                                         strike=row["strike"], open_interest=held,
                                         implied_volatility=iv))

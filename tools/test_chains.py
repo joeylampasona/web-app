@@ -143,6 +143,22 @@ check("every expiry asked about has its reading",
 check("the reading uses quoted volatilities only, never borrowed ones",
       round(joined.expiries[0].implied_volatility, 4), round((0.40 + 0.38 + 0.42 + 0.41) / 4, 4))
 
+stale = fresh() + [row(JAN, "call", 110, 1.60, bid=0.0, ask=0.0),
+                   dict(row(JAN, "put", 90, 0.55, bid=0.0, ask=0.0), fresh=True)]
+book_two = dict(book)
+book_two[(JAN, "call", 110.0)] = 40
+book_two[(JAN, "put", 90.0)] = 60
+book_two[(JUN, "call", 100.0)] = 1000
+later = chains.join("test", 100.0, stale + [row(JUN, "call", 100, 0.0, bid=0.0, ask=0.0)],
+                    book_two)
+held_later = {(c.expiry, c.side, c.strike): c.implied_volatility for c in later.rows}
+check("no quote and no trade today: the figure is from an old trade, not believed",
+      held_later[(JAN, "call", 110.0)], 0.36)
+check("no quote but it traded on the latest session: believed",
+      held_later[(JAN, "put", 90.0)], 0.55)
+check("an expiry with nothing believed takes the nearest expiry's",
+      held_later[(JUN, "call", 100.0)], 0.36)
+
 alone = chains.join("test", 100.0, fresh(), None)
 check("without OCC, Yahoo's own open interest stands and the chain says so",
       (alone.source, sum(c.open_interest for c in alone.rows)), ("yahoo", 40))

@@ -164,14 +164,33 @@ def _number(value) -> float:
     return 0.0 if number != number else number
 
 
+def _new_york_date(stamp) -> dt.date | None:
+    """The New York date of a moment Yahoo gave as seconds or as a timestamp."""
+    import zoneinfo                                # noqa: PLC0415
+    zone = zoneinfo.ZoneInfo("America/New_York")
+    try:
+        if hasattr(stamp, "to_pydatetime"):
+            moment = stamp.to_pydatetime()
+            if moment.tzinfo is None:
+                moment = moment.replace(tzinfo=dt.timezone.utc)
+            return moment.astimezone(zone).date()
+        seconds = float(stamp)
+        if seconds != seconds or seconds <= 0:
+            return None
+        return dt.datetime.fromtimestamp(seconds, zone).date()
+    except Exception:                              # noqa: BLE001 - NaT and friends
+        return None
+
+
 def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
                  at_least: int = 4, at_most: int = 30
                  ) -> tuple[float, list[dict]]:
     """Every contract Yahoo lists on the expiries inside the horizon.
 
     Returns the underlying's price and one plain row a contract: expiry,
-    side, strike, Yahoo's own open interest, its implied volatility, and the
-    bid and ask that volatility was drawn from. Nothing is filtered here.
+    side, strike, Yahoo's own open interest, its implied volatility, the bid
+    and ask, and `fresh`: whether the contract traded on the chain's latest
+    session. Nothing is filtered here.
     Which rows are readings is the caller's decision, and it cannot make it
     from rows already thrown away.
 
@@ -182,6 +201,7 @@ def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
         return 0.0, []
     rows: list[dict] = []
     spot = 0.0
+    session: dt.date | None = None
     try:
         ticker = yf.Ticker(yahoo_symbol(symbol))
         listed = list(_chain_request(lambda: ticker.options) or [])
@@ -205,6 +225,8 @@ def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
                 continue
             underlying = getattr(chain, "underlying", None) or {}
             spot = spot or _number(underlying.get("regularMarketPrice"))
+            if session is None and _number(underlying.get("regularMarketTime")) > 0:
+                session = _new_york_date(underlying.get("regularMarketTime"))
             for side, frame in (("call", chain.calls), ("put", chain.puts)):
                 if frame is None or frame.empty or "strike" not in frame:
                     continue
@@ -218,9 +240,16 @@ def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
                         "iv": _number(record.get("impliedVolatility")),
                         "bid": _number(record.get("bid")),
                         "ask": _number(record.get("ask")),
+                        "traded": _new_york_date(record.get("lastTradeDate")),
                     })
         if rows and spot <= 0:
             spot = _spot_price(ticker.fast_info)
+        # The latest session is the underlying's; failing that, the latest
+        # day any contract on the chain traded.
+        session = session or max((r["traded"] for r in rows if r["traded"]),
+                                 default=None)
+        for row in rows:
+            row["fresh"] = bool(session and row["traded"] == session)
     except _StoodDown:
         return 0.0, []
     except Exception as exc:                       # noqa: BLE001

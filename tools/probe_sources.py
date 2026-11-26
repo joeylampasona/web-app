@@ -679,8 +679,7 @@ def probe_chains() -> None:
         total["yahoo_ok"] += 1
         asked = {r["expiry"] for r in quoted}
         window = [r for r in quoted if r["expiry"] <= horizon and near(spot, r["strike"])]
-        iv_ok = [r for r in window if chains.usable(r["iv"])
-                 and not chains.wide(r["bid"], r["ask"])]
+        iv_ok = [r for r in window if chains.believed(r)]
         too_wide = [r for r in window if chains.wide(r["bid"], r["ask"])]
         unquoted = [r for r in window if r["bid"] <= 0 and r["ask"] <= 0]
         oi_yahoo = sum(r["oi"] for r in window)
@@ -726,7 +725,7 @@ def probe_chains() -> None:
     if total["contracts"]:
         share = 100.0 / total["contracts"]
         print(f"      Yahoo contracts in the window {total['contracts']:,}: a "
-              f"usable implied volatility on {total['iv_ok'] * share:.0f}%, a "
+              f"believed implied volatility on {total['iv_ok'] * share:.0f}%, a "
               f"quote too wide on {total['wide'] * share:.0f}%, no quote at all "
               f"on {total['unquoted'] * share:.0f}%.")
     print(f"      open interest in the window: Yahoo {total['oi_yahoo']:,}, "
