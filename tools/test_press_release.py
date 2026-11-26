@@ -71,6 +71,19 @@ check("an exhibit 99 with no number: the largest",
       pr.pick_exhibit([{"name": "ex99a.htm", "size": "10"}, {"name": "ex99b.htm", "size": "90"}]),
       "ex99b.htm")
 check("a filing with only its cover page has no release", pr.pick_exhibit(FILES[:1]), None)
+INDEX = """<table><tr><td scope="row">1</td><td scope="row">8-K</td>
+<td scope="row"><a href="/Archives/edgar/data/42/000126000007/bby-20261124.htm">bby-20261124.htm</a></td>
+<td scope="row">8-K</td><td scope="row">40000</td></tr>
+<tr><td scope="row">2</td><td scope="row">EX-99.2</td>
+<td scope="row"><a href="/Archives/edgar/data/42/000126000007/q3slides.htm">q3slides.htm</a></td>
+<td scope="row">EX-99.2</td><td scope="row">90000</td></tr>
+<tr><td scope="row">3</td><td scope="row">EX-99.1</td>
+<td scope="row"><a href="/Archives/edgar/data/42/000126000007/q3fy27newsrelease.htm">q3fy27newsrelease.htm</a></td>
+<td scope="row">EX-99.1</td><td scope="row">310000</td></tr></table>"""
+check("a release whose name gives nothing away, by the type on the filing's index",
+      (pr.pick_exhibit([{"name": "q3fy27newsrelease.htm", "size": "1"}]),
+       pr.pick_from_index(INDEX)), (None, "q3fy27newsrelease.htm"))
+check("an index with no exhibit 99 has no release", pr.pick_from_index("<html></html>"), None)
 
 
 class Reply:

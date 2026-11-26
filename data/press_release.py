@@ -157,6 +157,21 @@ def pick_exhibit(items: list[dict]) -> str | None:
     return max(named)[2] if named else None
 
 
+_INDEX_ROW = re.compile(
+    r'href="[^"]*/([^"/]+\.html?)"[^<]*</a>\s*</td>\s*<td[^>]*>\s*(EX-99[^<\s]*)',
+    re.IGNORECASE)
+
+
+def pick_from_index(page: str) -> str | None:
+    """The press release from a filing's index page, by the type SEC gives
+    each document: EX-99.1 when there is one, else the first EX-99."""
+    rows = _INDEX_ROW.findall(page or "")
+    if not rows:
+        return None
+    first = [name for name, kind in rows if kind.upper() in ("EX-99.1", "EX-99.01")]
+    return (first or [rows[0][0]])[0]
+
+
 def find(session: requests.Session, cik: str, day: dt.date, agent: str,
          base: str = "https://data.sec.gov") -> dict | None:
     """Where the release for a report on `day` is, or None when SEC has no
@@ -176,6 +191,13 @@ def find(session: requests.Session, cik: str, day: dt.date, agent: str,
     if reply.status_code != 200:
         return None
     name = pick_exhibit(((reply.json().get("directory") or {}).get("item")) or [])
+    if not name:
+        # The file's name gave nothing away. The filing's own index page says
+        # what each document is, whatever it is called.
+        page = session.get(f"{folder}/{filing['accession']}-index.htm",
+                           headers=headers, timeout=30)
+        time.sleep(0.12)
+        name = pick_from_index(page.text) if page.status_code == 200 else None
     if not name:
         return None
     return {"url": f"{folder}/{name}", "filed": filing["filed"],
@@ -212,6 +234,7 @@ def as_text(page: str) -> str:
     parser = _Text()
     parser.feed(page or "")
     text = "".join(parser.parts).replace("\xa0", " ")
+    text = re.sub("[\u200b\u200c\u200d\ufeff]", "", text)
     text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)
     text = re.sub(r"[ ]{2,}", " ", text)
     text = re.sub(r"\t[ \t]*", "\t", text)
