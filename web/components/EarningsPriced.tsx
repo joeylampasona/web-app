@@ -1,4 +1,5 @@
 import type { EarningsMoves, EarningsPriced as Priced, EarningsPricedLast } from "@/lib/types";
+import { ReadOn, shortDay } from "./CarriedOver";
 
 /**
  * What the options market expects from the next report, beside what the stock
@@ -39,10 +40,23 @@ export function EarningsPriced({ next, last, usual }: {
     <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
       {next && (
         <>
-          <p className="footnote" style={{ margin: 0 }}>
-            Options price a <strong>±{pct(next.implied_pct)}</strong> move for the{" "}
-            {day(next.report_date)} report{HOUR[next.hour] ? ` (${HOUR[next.hour]})` : ""}.
-          </p>
+          {next.stale ? (
+            // The figure is kept and dated. A move "priced" eight days before
+            // the report went out as tonight's the week the desk's chains
+            // went dark, and the tense here is what stops that.
+            <p className="footnote" style={{ margin: 0 }}>
+              <ReadOn day={next.d} />{" "}
+              Options priced a <strong>±{pct(next.implied_pct)}</strong> move for the{" "}
+              {day(next.report_date)} report{HOUR[next.hour] ? ` (${HOUR[next.hour]})` : ""}{" "}
+              when the chain was last read{shortDay(next.d) ? `, on ${shortDay(next.d)}` : ""}.
+              It has not been read since.
+            </p>
+          ) : (
+            <p className="footnote" style={{ margin: 0 }}>
+              Options price a <strong>±{pct(next.implied_pct)}</strong> move for the{" "}
+              {day(next.report_date)} report{HOUR[next.hour] ? ` (${HOUR[next.hour]})` : ""}.
+            </p>
+          )}
           {ratio != null && usual && (
             <p className="caption dim" style={{ margin: 0 }}>
               That is {ratio.toFixed(1)}× its usual {pct(usual.avg_abs_pct)} across{" "}
@@ -61,6 +75,9 @@ export function EarningsPriced({ next, last, usual }: {
             {signed(last.realised_pct)}
           </span>
           {last.inside == null ? "." : last.inside ? ", inside the priced move." : ", beyond it."}
+          {last.stale && (
+            <>{" "}<ReadOn day={last.d} about="that report" /></>
+          )}
         </p>
       )}
       <p className="caption dim" style={{ margin: 0 }}>

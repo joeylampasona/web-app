@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CatalystEvent, DataRelease, FomcMeeting } from "@/lib/types";
+import { CarriedOver, shortDay } from "./CarriedOver";
 import { TickerLink } from "./StockDrawer";
 
 /**
@@ -90,6 +91,10 @@ export function WeekAhead({ events, releases, fomc, pricedHeld }: {
   }
   const max = Math.max(...days.map((d) => d.reports.length), 1);
   const anyPriced = days.some((d) => d.reports.some((e) => e.priced_move_pct));
+  const staleNights = [...new Set(days.flatMap((d) => d.reports)
+    .filter((e) => e.priced_move_pct && e.priced_stale)
+    .map((e) => e.priced_read_on ?? ""))];
+  const staleNight = staleNights.length === 1 ? shortDay(staleNights[0]) : null;
 
   return (
     <div className="stack" style={{ gap: "var(--gap-md)" }}>
@@ -115,7 +120,12 @@ export function WeekAhead({ events, releases, fomc, pricedHeld }: {
                 <TickerLink key={e.ticker} symbol={e.ticker} className="weekbar-name">
                   <span className="mono" style={{ fontWeight: 600, fontSize: 13 }}>{e.ticker}</span>
                   {e.priced_move_pct ? (
-                    <span className="mono caption dim">±{e.priced_move_pct.toFixed(1)}%</span>
+                    <span className="mono caption dim"
+                          title={e.priced_stale
+                            ? `Priced when the chain was last read${shortDay(e.priced_read_on) ? `, ${shortDay(e.priced_read_on)}` : ""}`
+                            : undefined}>
+                      ±{e.priced_move_pct.toFixed(1)}%{e.priced_stale ? "†" : ""}
+                    </span>
                   ) : null}
                 </TickerLink>
               ))}
@@ -134,6 +144,10 @@ export function WeekAhead({ events, releases, fomc, pricedHeld }: {
             one <span className="num hl" style={{ fontWeight: 600 }}>{pricedHeld.inside_pct}%</span> of
             the time.</>
         )}{" "}
+        {staleNights.length > 0 && (
+          <><CarriedOver>{staleNight ? `Read ${staleNight}` : "Earlier reads"}</CarriedOver>{" "}
+            † priced from a chain last read {staleNight ? `on ${staleNight}` : "on an earlier night"}.{" "}</>
+        )}
         <Link href="/market/calendar" style={{ textDecoration: "underline" }}>Full calendar</Link>
         {" · "}
         <Link href="/market/earnings" style={{ textDecoration: "underline" }}>Earnings</Link>

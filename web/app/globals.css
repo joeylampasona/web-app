@@ -838,6 +838,7 @@ table.data thead th {
 .week-chip--screen { background: var(--brand); color: var(--on-brand); border-color: var(--brand); border-style: solid; }
 .week-chip-rs { font-size: 10px; opacity: 0.65; }
 .week-chip-move { font-size: 10px; font-weight: 600; }
+.week-chip-move--stale { font-weight: 400; opacity: 0.7; }
 .week-more { background: none; border: 0; padding: 4px 0; cursor: pointer; text-align: left;
              font-size: var(--size-caption); color: var(--text-secondary); text-decoration: underline; }
 @media (max-width: 900px) {

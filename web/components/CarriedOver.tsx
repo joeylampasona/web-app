@@ -32,6 +32,22 @@ export function shortDay(iso: string | null | undefined): string | null {
     .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+/**
+ * For a priced earnings move the desk read on an earlier night than it
+ * should have. The figure stays; this says which night it is from.
+ */
+export function ReadOn({ day, about = "this report" }: {
+  day: string | null | undefined; about?: string;
+}) {
+  const when = shortDay(day);
+  return (
+    <CarriedOver title={`The option chain was last read ${when ? `on ${when}` : "on an earlier night"}, `
+      + `well before ${about}. The figure is what was priced then, not tonight.`}>
+      {when ? `Read ${when}` : "Earlier read"}
+    </CarriedOver>
+  );
+}
+
 /** The sources that did less than a full night's work. Empty when the report
  *  is absent: no report is not the same as a bad one. */
 export function sourcesShort(meta: Meta | null | undefined): SourceReport[] {

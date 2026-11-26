@@ -4,7 +4,7 @@ import path from "node:path";
 import type {
   Edition, EditionIndex, LeadershipLayer,
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  BreadthBarcode, EarningsFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
+  BreadthBarcode, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 
@@ -337,6 +337,18 @@ export function getGammaBoard() {
     partial_rows?: number;
     copy: { header: string; subhead: string; footer: string };
   }>("market/gamma.json");
+}
+
+/** The Market Desk's dealer gamma for the index and the sector funds. Null
+ *  until the desk has sent one. */
+export function getDealerGamma() {
+  return read<DealerGammaFile>("market/dealer_gamma.json");
+}
+
+/** The names the Market Desk ranked for short pressure, with FINRA short
+ *  volume and short interest. Null on a night it ranked none. */
+export function getSqueeze() {
+  return read<SqueezeFile>("market/squeeze.json");
 }
 
 export function getFollowThrough() {

@@ -5,6 +5,7 @@ import { compactMoney, isRanked, price } from "@/lib/format";
 import { useQuote } from "@/lib/useQuotes";
 import type { StockFile } from "@/lib/types";
 import { QuadrantBadge, StageBadge } from "./Badges";
+import { ReadOn } from "./CarriedOver";
 import { LAYER_HELP, LayerChip } from "./Leadership";
 import { PriceChange } from "./PriceChange";
 import { RsRing } from "./RsRing";
@@ -212,8 +213,12 @@ export function StockPassport({ stock }: { stock: StockFile }) {
               </div>
               {report.priced_move_pct ? (
                 <div className="caption">
-                  options price <span className="num hl" style={{ fontWeight: 600 }}>
+                  {report.priced_stale ? "options priced" : "options price"}{" "}
+                  <span className={`num${report.priced_stale ? "" : " hl"}`} style={{ fontWeight: 600 }}>
                     ±{report.priced_move_pct.toFixed(1)}%</span>
+                  {report.priced_stale && (
+                    <>{" "}<ReadOn day={report.priced_read_on} /></>
+                  )}
                 </div>
               ) : null}
             </>

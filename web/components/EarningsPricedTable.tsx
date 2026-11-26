@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { EarningsFile, PricedRow } from "@/lib/types";
+import { CarriedOver, ReadOn, shortDay } from "./CarriedOver";
 
 /**
  * Priced against realised, from Market Desk's options read.
@@ -31,6 +32,25 @@ function Read({ row, rich }: { row: PricedRow; rich: number }) {
   return <span className="dim">fair</span>;
 }
 
+/** One line above the tables on a night some reads are older than they
+ *  should be. Which night, and how many, because the mark in the row is
+ *  small and a whole column of them reads as decoration. */
+function StaleNote({ rows, what }: { rows: PricedRow[]; what: string }) {
+  const stale = rows.filter((r) => r.stale);
+  if (stale.length === 0) return null;
+  const nights = [...new Set(stale.map((r) => r.d).filter(Boolean))].sort();
+  const when = nights.length === 1 ? shortDay(nights[0]) : null;
+  return (
+    <p className="footnote book-note" style={{ margin: 0 }}>
+      <CarriedOver>{when ? `Read ${when}` : "Earlier reads"}</CarriedOver>{" "}
+      {stale.length === rows.length ? `Every ${what} below was` : `${stale.length} of the ${rows.length} ${what}s below were`}{" "}
+      priced from a chain read {when ? `on ${when}` : "on an earlier night"}, the last
+      night the Market Desk read options before {stale.length === rows.length ? "these" : "those"} reports.
+      The figure is what was priced then.
+    </p>
+  );
+}
+
 export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFile["priced"]> }) {
   const t = priced.tally;
   return (
@@ -46,6 +66,8 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
           )}
         </div>
       ) : null}
+
+      <StaleNote rows={priced.upcoming} what="coming report" />
 
       {priced.upcoming.length > 0 ? (
         <div className="scroll-x scroll-tall card" style={{ padding: 0 }}>
@@ -67,8 +89,11 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
                     {day(row.report_date)} {row.hour && <span className="dim">{row.hour}</span>}
                   </td>
                   <td className="text dim">{day(row.expiry)}</td>
-                  <td className="num" style={{ fontWeight: 600 }}>
+                  <td className="num" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {row.implied_pct == null ? "—" : `±${row.implied_pct.toFixed(1)}%`}
+                    {row.stale && row.implied_pct != null && (
+                      <>{" "}<ReadOn day={row.d} /></>
+                    )}
                   </td>
                   <td className="num">{f1(row.hist_avg_pct)}</td>
                   <td className="num dim">{row.hist_n ?? 0}</td>
@@ -90,6 +115,9 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
           <summary className="footnote" style={{ cursor: "pointer" }}>
             Recently settled: {priced.settled.length} report{priced.settled.length === 1 ? "" : "s"}, priced against what happened
           </summary>
+          <div style={{ marginTop: "var(--gap-sm)" }}>
+            <StaleNote rows={priced.settled} what="settled report" />
+          </div>
           <div className="scroll-x scroll-tall card" style={{ padding: 0, marginTop: "var(--gap-sm)" }}>
             <table className="data">
               <thead>
@@ -106,7 +134,12 @@ export function EarningsPricedTable({ priced }: { priced: NonNullable<EarningsFi
                       <Link href={`/stocks/${row.ticker}`} className="mono" style={{ fontWeight: 600 }}>{row.ticker}</Link>
                     </td>
                     <td className="text">{day(row.report_date)}</td>
-                    <td className="num">{row.implied_pct == null ? "—" : `±${row.implied_pct.toFixed(1)}%`}</td>
+                    <td className="num" style={{ whiteSpace: "nowrap" }}>
+                      {row.implied_pct == null ? "—" : `±${row.implied_pct.toFixed(1)}%`}
+                      {row.stale && row.implied_pct != null && (
+                        <>{" "}<ReadOn day={row.d} about="the report" /></>
+                      )}
+                    </td>
                     <td className={`num ${row.realised_pct == null ? "" : row.realised_pct > 0 ? "gain" : row.realised_pct < 0 ? "loss" : ""}`}>
                       {row.realised_pct == null ? "—" : `${row.realised_pct > 0 ? "+" : ""}${row.realised_pct.toFixed(1)}%`}
                     </td>

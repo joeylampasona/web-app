@@ -62,6 +62,11 @@ export interface CatalystEvent {
   /** The move the options price into this report, % either way, when the
    *  Market Desk read the chain. */
   priced_move_pct?: number | null;
+  /** The night the desk read that chain, and whether that is older than it
+   *  should be for a report this close. A stale read keeps its figure and
+   *  says its date. */
+  priced_read_on?: string | null;
+  priced_stale?: boolean;
 }
 
 /** A scheduled economic data release. Not ticker-scoped and not a forecast —
@@ -421,6 +426,10 @@ export interface StockFile {
    *  read), and whether the last priced move held. */
   earnings_priced?: EarningsPriced | null;
   earnings_priced_last?: EarningsPricedLast | null;
+  /** FINRA short interest and the desk's squeeze read. Null means the desk
+   *  did not look at this name that night, not that nobody is short. */
+  short_interest?: ShortInterest | null;
+  squeeze?: SqueezeRead | null;
   /** How many of the Market Desk's tracked funds hold it. The fund list is
    *  behind the paywall when `holders_gated` is set. */
   holders?: HolderCounts | null;
@@ -661,11 +670,87 @@ export interface EarningsPriced {
   implied_pct: number;
   /** The night the chain was read. */
   d: string;
+  /** True when that night is more than a couple of sessions behind the
+   *  edition: the desk kept sending the last read it had. */
+  stale?: boolean;
 }
 
 export interface EarningsPricedLast {
   report_date: string; implied_pct: number; realised_pct: number | null;
   inside: boolean | null;
+  /** The night of the last read before the report, and whether it was taken
+   *  too long before the print to be called what the options priced. */
+  d?: string | null;
+  stale?: boolean;
+}
+
+/** FINRA's consolidated short interest for one name, as the Market Desk
+ *  carried it. Published twice a month, about nine business days after the
+ *  settlement date; `chg_pct` is against the settlement before. */
+export interface ShortInterest {
+  settlement: string | null;
+  shares: number | null;
+  chg_pct: number | null;
+  days_to_cover: number | null;
+}
+
+/** The desk's squeeze read for a name its brief ranked. `short_ratio` is
+ *  FINRA short volume over total for the latest session (0.58 is 58%).
+ *  The options fields are null when the name has no listed options. */
+export interface SqueezeRead {
+  spot: number | null;
+  net_gex: number | null;
+  call_oi: number | null; put_oi: number | null;
+  call_vol: number | null; put_vol: number | null;
+  call_wall: number | null; call_wall_pct: number | null;
+  iv30: number | null;
+  short_ratio: number | null; short_ratio_20d: number | null;
+  short_days: number | null;
+  /** How many of the desk's three conditions are met, and which, in words. */
+  met: number | null;
+  why: string[] | null;
+  watch: boolean | null;
+}
+
+export interface SqueezeRow extends SqueezeRead {
+  symbol: string;
+  name: string;
+  /** Whether this site has a page for the name. */
+  in_universe: boolean;
+  short_interest: ShortInterest | null;
+}
+
+export interface SqueezeFile {
+  as_of: string;
+  count: number;
+  rows: SqueezeRow[];
+  source: string;
+}
+
+/** Dealer gamma for one index or sector fund, in dollars per 1% move, on the
+ *  convention that dealers are long calls and short puts. */
+export interface DealerGammaRow {
+  symbol: string; label: string;
+  spot: number | null;
+  net: number | null; call: number | null; put: number | null;
+  /** The level where the signed total crosses zero, and its distance from
+   *  spot in per cent. Null when it does not cross inside the chain. */
+  flip: number | null; flip_pct: number | null;
+  call_wall: number | null; put_wall: number | null;
+  front_share: number | null;
+  n?: number | null;
+  regime: string | null;
+}
+
+export interface DealerGammaFile {
+  as_of: string;
+  /** The night the chains were read, and whether that is older than the
+   *  edition it is printed in. */
+  read_on: string | null;
+  stale: boolean;
+  index: DealerGammaRow[];
+  sectors: DealerGammaRow[];
+  source: string;
 }
 
 export interface HolderCounts {
@@ -745,6 +830,8 @@ export interface EarningsReadRow extends QuarterlyRead {
 
 export interface PricedRow {
   ticker: string; report_date: string; hour?: string | null; d?: string;
+  /** The read is older than it should be for this report. */
+  stale?: boolean;
   expiry?: string | null; implied_pct: number | null;
   hist_avg_pct?: number | null; hist_n?: number | null; ratio?: number | null;
   realised_pct?: number | null; inside?: boolean | null;
@@ -876,6 +963,8 @@ export interface MarketContextFile {
   regime: { label: string; score: number; as_of: string } | null;
   earnings_priced: { n: number; inside_pct?: number; mean_ratio?: number;
                      as_of?: string } | null;
+  /** Scheduled macro releases inside the next five sessions. Usually empty. */
+  events_crossing?: { date: string; name: string; label?: string | null }[];
   source: string;
 }
 

@@ -27,24 +27,50 @@ const REGIME_TONE: Record<string, string> = {
   stressed: "var(--loss)",
 };
 
+/** Scheduled macro releases inside the next five sessions, in one line.
+ *  Nothing when there are none, which is most nights. */
+function Crossing({ file }: { file: MarketContextFile }) {
+  const events = (file.events_crossing ?? []).filter((e) => e && e.date && (e.label || e.name));
+  if (events.length === 0) return null;
+  return (
+    <p className="caption dim" style={{ margin: 0 }}>
+      Inside the next five sessions:{" "}
+      {events.map((e, i) => (
+        <span key={`${e.date}-${e.name}`}>
+          {i > 0 && " · "}
+          <span style={{ color: "var(--text-primary)" }}>{e.label || e.name}</span> {day(e.date)}
+        </span>
+      ))}
+      . A scheduled release moves the whole tape and says nothing about one name.
+    </p>
+  );
+}
+
 export function MarketContext({ file, compact = false }: {
   file: MarketContextFile | null; compact?: boolean;
 }) {
-  if (!file || (!file.put_call && !file.regime)) return null;
+  if (!file) return null;
+  const crossing = (file.events_crossing ?? []).length > 0;
+  if (!file.put_call && !file.regime && !crossing) return null;
   const pc = file.put_call;
   const regime = file.regime;
 
   if (compact) {
     return (
-      <p className="caption dim" style={{ margin: 0 }}>
-        {pc && <>Put/call {ratio(pc.total)} (stocks {ratio(pc.equity)}), {day(pc.as_of)}</>}
-        {pc && regime && " · "}
-        {regime && (
-          <>Market Desk reads the regime as{" "}
-            <span style={{ color: REGIME_TONE[regime.label] }}>{regime.label}</span>
-          </>
+      <>
+        {(pc || regime) && (
+          <p className="caption dim" style={{ margin: 0 }}>
+            {pc && <>Put/call {ratio(pc.total)} (stocks {ratio(pc.equity)}), {day(pc.as_of)}</>}
+            {pc && regime && " · "}
+            {regime && (
+              <>Market Desk reads the regime as{" "}
+                <span style={{ color: REGIME_TONE[regime.label] }}>{regime.label}</span>
+              </>
+            )}
+          </p>
         )}
-      </p>
+        <Crossing file={file} />
+      </>
     );
   }
 
@@ -81,6 +107,7 @@ export function MarketContext({ file, compact = false }: {
           </div>
         )}
       </div>
+      <Crossing file={file} />
     </section>
   );
 }

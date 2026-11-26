@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useWatchlist } from "@/lib/useWatchlist";
+import { CarriedOver, shortDay } from "./CarriedOver";
 import { TickerLink } from "./StockDrawer";
 import type { CatalystEvent, DataRelease, FomcMeeting, FomcStatus } from "@/lib/types";
 
@@ -98,6 +99,10 @@ export function CalendarPanel({ file, releases, names }: {
   } | null;
   names?: CalendarNames;
 }) {
+  // Priced moves the desk read on an earlier night than it should have.
+  const staleReads = file.events.filter((e) => e.priced_stale && e.priced_move_pct != null);
+  const staleNights = [...new Set(staleReads.map((e) => e.priced_read_on).filter(Boolean))];
+  const staleNight = staleNights.length === 1 ? shortDay(staleNights[0]) : null;
   const [monday, setMonday] = useState(() => weekStart(file.as_of));
   const [kind, setKind] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
@@ -317,15 +322,20 @@ export function CalendarPanel({ file, releases, names }: {
                                   event.readthrough ? `reads through from ${event.readthrough.from}` : null,
                                   rating != null ? `RS ${rating}` : null,
                                   screens ? `on ${screens} screen${screens === 1 ? "" : "s"} tonight` : null,
-                                  event.priced_move_pct != null
-                                    ? `options price ±${event.priced_move_pct.toFixed(1)}%` : null,
+                                  event.priced_move_pct == null ? null
+                                    : event.priced_stale
+                                      ? `options priced ±${event.priced_move_pct.toFixed(1)}% when last read`
+                                        + (shortDay(event.priced_read_on) ? `, ${shortDay(event.priced_read_on)}` : "")
+                                      : `options price ±${event.priced_move_pct.toFixed(1)}%`,
                                 ].filter(Boolean).join(" · ")}
                               >
                                 {mine.has(event.ticker) && <span aria-label="on your watchlist">★ </span>}
                                 <span className="mono" style={{ fontWeight: 600 }}>{event.ticker}</span>
                                 {rating != null && <span className="num week-chip-rs">{rating}</span>}
                                 {event.priced_move_pct != null && (
-                                  <span className="num week-chip-move">±{event.priced_move_pct.toFixed(0)}%</span>
+                                  <span className={`num week-chip-move${event.priced_stale ? " week-chip-move--stale" : ""}`}>
+                                    ±{event.priced_move_pct.toFixed(0)}%{event.priced_stale ? "†" : ""}
+                                  </span>
                                 )}
                               </TickerLink>
                             );
@@ -358,6 +368,13 @@ export function CalendarPanel({ file, releases, names }: {
               <span className="mono" style={{ fontWeight: 600 }}>ABC</span></span> estimated date</span>
             <span>The small figure is the RS rating; names run strongest first, your watchlist ahead of them.</span>
           </div>
+          {staleReads.length > 0 && (
+            <p className="caption" style={{ margin: 0, color: "var(--text-secondary)" }}>
+              <CarriedOver>{staleNight ? `Read ${staleNight}` : "Earlier reads"}</CarriedOver>{" "}
+              † A priced move marked this way is from a chain last
+              read {staleNight ? `on ${staleNight}` : "on an earlier night"}, not from this edition.
+            </p>
+          )}
         </>
       )}
 
