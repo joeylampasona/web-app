@@ -88,6 +88,36 @@ check("a night without gamma keeps the last one, dated",
 check("a night without a squeeze read has none: it is about that night",
       more["squeeze"], {})
 
+# Desk schema 1.8: the options read and short volume, per name.
+conn.execute("INSERT INTO universe(symbol, as_of, price, passed) VALUES"
+             " ('ZS', '2026-11-27', 230.0, 1), ('NVDA', '2026-11-27', 149.0, 1)")
+newer = {**PAYLOAD, "schema_version": "1.8", "signals": [], "gamma": None,
+         "options_read": {"d": "2026-11-27", "by_ticker": {
+             "ZS": {"iv30": 61.6, "iv_rank": None, "exp_move_pct": 12.5},
+             "NOTOURS": {"iv30": 40.0}}},
+         "short_volume": {"d": "2026-11-25", "by_ticker": {
+             "NVDA": [0.381, 0.313, 21], "NOTOURS": [0.5, 0.5, 21]}}}
+marketdesk._fetch_file = lambda repo, token, path: (
+    newer if path.endswith("2026-11-27.json") else None)
+marketdesk.ingest(conn, dt.date(2026, 11, 27))
+more = marketdesk.extras(conn)
+check("the options read is kept for the site's own names only",
+      (more["options_read"]["d"], sorted(more["options_read"]["by_ticker"])),
+      ("2026-11-27", ["ZS"]))
+check("and so is the day's short volume",
+      more["short_volume"]["by_ticker"], {"NVDA": [0.381, 0.313, 21]})
+check("a fresh options read moves the date the desk's reads are judged by",
+      marketdesk.options_read_on(conn), "2026-11-27")
+for n in range(1, 7):
+    day = dt.date(2026, 11, 27) + dt.timedelta(days=n)
+    marketdesk._fetch_file = lambda repo, token, path, day=day: (
+        newer if path.endswith(f"{day}.json") else None)
+    marketdesk.ingest(conn, day)
+kept = [r[0] for r in conn.execute(
+    "SELECT as_of FROM desk_runs WHERE extras != 'null' ORDER BY as_of")]
+check("only the newest few runs keep a market's worth of short volume",
+      (len(kept), kept[0]), (marketdesk.EXTRAS_KEPT, "2026-11-29"))
+
 # A database from before the column existed still answers.
 bare = sqlite3.connect(":memory:")
 bare.row_factory = sqlite3.Row

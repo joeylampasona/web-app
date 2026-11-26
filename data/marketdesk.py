@@ -163,7 +163,7 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
     earn_iv = earn_iv if isinstance(earn_iv, dict) else None
     holders = payload.get("holders")
     holders = holders if isinstance(holders, dict) and holders.get("by_ticker") else None
-    more = _extras(payload, signals)
+    more = _extras(payload, signals, _universe(conn))
     conn.execute(
         "INSERT OR REPLACE INTO desk_runs"
         "(as_of, generated_at, schema_version, universe_size, stage_status,"
@@ -174,6 +174,11 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
          payload.get("universe_size"), json.dumps(stage_status), now,
          json.dumps(edge), json.dumps(positioning), json.dumps(context),
          json.dumps(earn_iv), json.dumps(holders), json.dumps(more)))
+    # The extras carry a market's worth of short volume. Only the newest few
+    # runs are ever read, so older copies are emptied as holders' are.
+    conn.execute(
+        "UPDATE desk_runs SET extras = 'null' WHERE as_of NOT IN"
+        " (SELECT as_of FROM desk_runs ORDER BY as_of DESC LIMIT ?)", (EXTRAS_KEPT,))
     if holders:
         # Half a megabyte a night, in a database the nightly caches whole.
         # Only the newest copy is ever read.
@@ -188,9 +193,41 @@ def ingest(conn: sqlite3.Connection, as_of: dt.date, notice=None) -> dict:
             "earnings": dates, "stage_status": stage_status}
 
 
-def _extras(payload: dict, signals: list) -> dict | None:
+#: How many runs keep their extras. extras() looks back this far for the
+#: last dealer gamma; nothing reads further.
+EXTRAS_KEPT = 5
+
+
+def _universe(conn: sqlite3.Connection) -> set[str] | None:
+    """The site's own names, to keep a whole-market block to what it can
+    show. None when they cannot be read, and then nothing is filtered."""
+    try:
+        from data import store                     # noqa: PLC0415
+        names = {str(s).upper() for s in store.universe_symbols(conn)}
+        return names or None
+    except Exception:                              # noqa: BLE001
+        return None
+
+
+def _by_ticker(block, universe: set[str] | None) -> dict | None:
+    """A desk block of the shape {d, by_ticker}, cut to the site's names.
+
+    The desk spells a ticker without the dot of a share class and the site
+    with it, so a class share (BRK.B) is absent from these blocks rather
+    than matched to the wrong line. Absent means not read, never zero.
+    """
+    if not (isinstance(block, dict) and isinstance(block.get("by_ticker"), dict)
+            and block.get("d")):
+        return None
+    rows = {str(k).upper(): v for k, v in block["by_ticker"].items()
+            if universe is None or str(k).upper() in universe}
+    return {"d": str(block["d"]), "by_ticker": rows} if rows else None
+
+
+def _extras(payload: dict, signals: list, universe: set[str] | None = None) -> dict | None:
     """The blocks that arrive in the file and had no column: dealer gamma,
-    the squeeze read, short interest per flagged name, macro releases."""
+    the squeeze read, short interest per flagged name, macro releases, and
+    from desk schema 1.8 the options read and short volume per name."""
     gamma = payload.get("gamma")
     gamma = gamma if isinstance(gamma, dict) and (
         gamma.get("index") or gamma.get("sectors")) else None
@@ -207,10 +244,13 @@ def _extras(payload: dict, signals: list) -> dict | None:
     crossing = payload.get("events_crossing")
     crossing = [e for e in crossing if isinstance(e, dict)] \
         if isinstance(crossing, list) else []
-    if not (gamma or squeeze or short or crossing):
+    options_read = _by_ticker(payload.get("options_read"), universe)
+    short_volume = _by_ticker(payload.get("short_volume"), universe)
+    if not (gamma or squeeze or short or crossing or options_read or short_volume):
         return None
     return {"gamma": gamma, "squeeze": squeeze, "short_interest": short,
-            "events_crossing": crossing}
+            "events_crossing": crossing, "options_read": options_read,
+            "short_volume": short_volume}
 
 
 def extras(conn: sqlite3.Connection) -> dict:
@@ -222,7 +262,7 @@ def extras(conn: sqlite3.Connection) -> dict:
     that has one, so a night the desk skipped it does not blank the panel.
     """
     empty = {"gamma": None, "squeeze": {}, "short_interest": {},
-             "events_crossing": []}
+             "events_crossing": [], "options_read": None, "short_volume": None}
     try:
         rows = conn.execute(
             "SELECT extras FROM desk_runs ORDER BY as_of DESC LIMIT 5").fetchall()
@@ -252,9 +292,12 @@ def options_read_on(conn: sqlite3.Connection) -> str | None:
     it sent was a week old. This is the date that says so.
     """
     dates: list[str] = []
-    gamma = extras(conn).get("gamma") or {}
+    more = extras(conn)
+    gamma = more.get("gamma") or {}
     if gamma.get("d"):
         dates.append(str(gamma["d"]))
+    if (more.get("options_read") or {}).get("d"):
+        dates.append(str(more["options_read"]["d"]))
     priced = earnings_iv(conn) or {}
     for row in (priced.get("upcoming") or []) + (priced.get("settled") or []):
         if row.get("d"):

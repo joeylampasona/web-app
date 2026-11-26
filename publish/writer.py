@@ -312,6 +312,22 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                          ((desk_extras or {}).get("squeeze") or {}).items()}
     short_by_symbol = {s.upper(): row for s, row in
                        ((desk_extras or {}).get("short_interest") or {}).items()}
+    # From desk schema 1.8: the options read and the day's short volume, per
+    # name, each with the night it is from. A name absent from either was
+    # not read; it is never shown as zero.
+    options_block = (desk_extras or {}).get("options_read") or {}
+    options_by_symbol = {
+        s.upper(): {**row, "d": options_block.get("d"),
+                    "stale": _read_is_stale(options_block.get("d"), as_of)}
+        for s, row in (options_block.get("by_ticker") or {}).items()
+        if isinstance(row, dict)}
+    volume_block = (desk_extras or {}).get("short_volume") or {}
+    short_volume_by_symbol = {}
+    for s, row in (volume_block.get("by_ticker") or {}).items():
+        if isinstance(row, (list, tuple)) and len(row) >= 3 and row[0] is not None:
+            short_volume_by_symbol[s.upper()] = {
+                "ratio": row[0], "ratio_20d": row[1], "sessions": row[2],
+                "d": volume_block.get("d")}
     if squeeze_by_symbol:
         squeeze_rows = [{"symbol": symbol,
                          "name": (market.refs[symbol].name
@@ -550,6 +566,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              sp500=(symbol in sp500_members
                                                     if sp500_members else None),
                                              short_interest=short_by_symbol.get(symbol),
+                                             options_read=options_by_symbol.get(symbol),
+                                             short_volume=short_volume_by_symbol.get(symbol),
                                              squeeze=squeeze_by_symbol.get(symbol),
                                              fundamentals=(fundamentals or {}).get(symbol),
                                              fundamentals_known=symbol in (fundamentals or {}),
@@ -1231,6 +1249,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    priced: tuple[dict | None, dict | None] = (None, None),
                    sp500: bool | None = None,
                    short_interest: dict | None = None,
+                   options_read: dict | None = None,
+                   short_volume: dict | None = None,
                    squeeze: dict | None = None,
                    fundamentals: dict | None = None,
                    fundamentals_known: bool = False,
@@ -1342,6 +1362,12 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # which says the desk did not look and not that nobody is short.
         "short_interest": short_interest,
         "squeeze": squeeze,
+        # The desk's options read for the name (IV30 and its rank, the move
+        # priced to the next monthly, put/call, walls) with the night it was
+        # read, and FINRA's short volume on the last session against its
+        # twenty-session mean. Null when the desk did not read the name.
+        "options_read": options_read,
+        "short_volume": short_volume,
         # How many of the desk's tracked funds hold it. Which funds is fetched
         # by subscribers.
         # Absent entirely until the desk has sent a holders table, so a page
