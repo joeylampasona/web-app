@@ -1009,17 +1009,34 @@ def probe_press(agent: str = "") -> None:
         print("\n   ANTHROPIC_API_KEY is not set here, so no release was sent to a "
               "model. The reads stay off until it is.")
         return
-    from publish import discord
-    for symbol in list(texts)[:2]:
+    # One line a release a model, so models can be laid side by side on the
+    # same documents: the figures, the seconds, and what the API charged.
+    models = [m.strip() for m in (os.environ.get("PROBE_PRESS_MODELS")
+                                  or press_release.model()).split(",") if m.strip()]
+    limit = int(os.environ.get("PROBE_PRESS_READS") or (2 if len(models) == 1 else 6))
+    spent = {m: 0.0 for m in models}
+    for symbol in list(texts)[:limit]:
         text, where = texts[symbol]
-        started = time.monotonic()
-        found = press_release.read(text, symbol, "")
-        print(f"\n   {symbol}: read in {time.monotonic() - started:.0f}s: "
-              f"{json.dumps(found)[:700] if found else 'nothing came back'}")
-        if found:
-            card = discord.release_embed(symbol, "", press_release.checked(found, None), where)
-            print(f"      card: {card['title']} | "
-                  + card["description"].replace(chr(10), " | "))
+        print(f"\n   {symbol}")
+        for using in models:
+            started = time.monotonic()
+            found = press_release.read(text, symbol, "", using=using)
+            took = time.monotonic() - started
+            if not found:
+                print(f"      {using:<18} nothing came back ({took:.0f}s)")
+                continue
+            dollars = press_release.cost(found.get("usage"), using)
+            spent[using] += dollars
+            print(f"      {using:<18} rev {found.get('revenue')} prior "
+                  f"{found.get('revenue_prior_year')} | gaap {found.get('eps_gaap')} / "
+                  f"{found.get('eps_gaap_prior_year')} | adj {found.get('eps_adjusted')} / "
+                  f"{found.get('eps_adjusted_prior_year')} | {found.get('guidance_direction')} "
+                  f"| {found.get('period_label')} | {took:.0f}s, "
+                  f"{found['usage']['input_tokens']:,} in + "
+                  f"{found['usage']['output_tokens']:,} out = ${dollars:.4f}")
+            print(f"         led with: {press_release.clean(found.get('led_with'))}")
+            print(f"         outlook: {press_release.clean(found.get('guidance_detail'), 200)}")
+    print("\n   spent: " + ", ".join(f"{m} ${v:.4f}" for m, v in spent.items()))
 
 
 def main() -> int:

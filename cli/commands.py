@@ -1591,6 +1591,7 @@ def _release_reads(args, out, day: dt.date, posted: list[str], pending: list[dic
     except (OSError, ValueError):
         pass
     read = found_none = 0
+    spent = 0.0
     for symbol in wanted:
         if read >= RELEASE_READS_A_RUN:
             break
@@ -1618,6 +1619,7 @@ def _release_reads(args, out, day: dt.date, posted: list[str], pending: list[dic
             continue
         if reported not in second:
             second[reported] = finnhub.calendar(reported)
+        spent += press_release.cost(found.get("usage"), press_release.model())
         found = press_release.checked(
             found, (second[reported].get(symbol) or {}).get("revenue"))
         card = discord.release_embed(symbol, names.get(symbol, ""), found, where)
@@ -1632,8 +1634,9 @@ def _release_reads(args, out, day: dt.date, posted: list[str], pending: list[dic
                 keep()
         except Exception as exc:                   # noqa: BLE001
             print(f"  press releases: Discord refused {symbol}: {type(exc).__name__}")
-    print(f"  press releases: {read} sent to the model, {found_none} with no "
-          f"8-K exhibit on file yet, {len(releases)} first reads on record.")
+    print(f"  press releases: {read} sent to {press_release.model()} for about "
+          f"${spent:.3f}, {found_none} with no 8-K exhibit on file yet, "
+          f"{len(releases)} first reads on record.")
 
 
 def _reads_file(path) -> dict[str, str]:

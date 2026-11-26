@@ -42,6 +42,26 @@ log = logging.getLogger(__name__)
 
 MODEL = "claude-opus-5-5"
 
+# Dollars per million tokens, input and output, for the models this has
+# been run on. Only for the run's own account of what it spent; a model not
+# listed is costed as the dearest.
+PRICES = {"claude-opus-5-5": (4.00, 20.00), "claude-sonnet-5-5": (2.00, 10.00),
+          "claude-haiku-5-5": (0.10, 0.50)}
+
+
+def model() -> str:
+    """Which model reads the releases: PRESS_RELEASE_MODEL, else the default."""
+    return (os.environ.get("PRESS_RELEASE_MODEL") or "").strip() or MODEL
+
+
+def cost(usage: dict | None, name: str) -> float:
+    """What one read cost, in dollars, from the tokens the API counted."""
+    if not usage:
+        return 0.0
+    into, out = PRICES.get(name, max(PRICES.values()))
+    return (usage.get("input_tokens", 0) * into
+            + usage.get("output_tokens", 0) * out) / 1_000_000
+
 #: Characters of release text beyond which it is not sent. A release is ten
 #: to sixty thousand; one this long is a whole annual report filed as an
 #: exhibit, and it is skipped, not trimmed.
@@ -251,7 +271,8 @@ def fetch(session: requests.Session, url: str, agent: str) -> str | None:
 
 # ------------------------------------------------------------ reading it
 
-def read(text: str, symbol: str, name: str, client=None) -> dict | None:
+def read(text: str, symbol: str, name: str, client=None, using: str | None = None
+         ) -> dict | None:
     """The model's read of one release, as the schema's dict. None when the
     release is too long to send whole, when the model declined or was cut
     off, or when the answer is not what was asked for. Raises nothing the
@@ -260,21 +281,28 @@ def read(text: str, symbol: str, name: str, client=None) -> dict | None:
         return None
     import anthropic                               # noqa: PLC0415 - optional
     client = client or anthropic.Anthropic()
+    using = using or model()
+    request = dict(
+        model=using,
+        max_tokens=4000,
+        output_config={"effort": "medium",
+                       "format": {"type": "json_schema", "schema": SCHEMA}},
+        system=SYSTEM,
+        messages=[{"role": "user", "content": (
+            f"The press release of {name or symbol} ({symbol}) follows, between "
+            f"the markers.\n\n<release>\n{text}\n</release>")}],
+    )
     try:
-        response = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=4000,
+        if using.startswith("claude-haiku"):
+            # The Haiku line has no server-side fallback: a release its safety
+            # checks decline simply gets no read.
+            response = client.messages.create(**request)
+        else:
             # If the model's safety checks decline a release, the API re-runs
             # the request on the model it names for that kind of decline.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={"effort": "medium",
-                           "format": {"type": "json_schema", "schema": SCHEMA}},
-            system=SYSTEM,
-            messages=[{"role": "user", "content": (
-                f"The press release of {name or symbol} ({symbol}) follows, between "
-                f"the markers.\n\n<release>\n{text}\n</release>")}],
-        )
+            response = client.beta.messages.create(
+                betas=["server-side-fallback-2026-07-01"], fallbacks="default",
+                **request)
     except anthropic.RateLimitError as exc:
         log.warning("press release %s: rate limited (%s)", symbol, exc.message)
         return None
@@ -294,7 +322,10 @@ def read(text: str, symbol: str, name: str, client=None) -> dict | None:
         return None
     if not isinstance(found, dict) or not found.get("is_quarterly_results"):
         return None
-    found["model"] = getattr(response, "model", MODEL)
+    found["model"] = getattr(response, "model", using)
+    usage = getattr(response, "usage", None)
+    found["usage"] = {"input_tokens": getattr(usage, "input_tokens", 0) or 0,
+                      "output_tokens": getattr(usage, "output_tokens", 0) or 0}
     return found
 
 

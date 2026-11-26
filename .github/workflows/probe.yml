@@ -16,6 +16,10 @@ on:
         description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress, press). Empty runs all."
         required: false
         default: ""
+      models:
+        description: "For the press section only: models to compare on the same releases, comma separated. Empty reads two releases with the model in use."
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -50,6 +54,8 @@ jobs:
           # For the press section: with it, two releases are sent to the
           # model, which is a paid request each. Never printed.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Models to lay side by side in the press section, comma separated.
+          PROBE_PRESS_MODELS: ${{ inputs.models }}
         run: python tools/probe_sources.py
 
 
