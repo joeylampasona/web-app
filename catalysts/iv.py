@@ -117,7 +117,8 @@ def _bracketing(chain: OptionChain, target: dt.date):
 def compute(calendar: Calendar, symbols, names: dict[str, str],
             adapter: DataAdapter | None = None,
             gamma_out: dict | None = None,
-            stats: dict | None = None) -> list[IVRow]:
+            stats: dict | None = None,
+            volume_out: dict | None = None) -> list[IVRow]:
     """Implied-volatility richness per name, and optionally gamma alongside it.
 
     `gamma_out`, when given, is filled with one GammaProfile per symbol whose
@@ -172,6 +173,11 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
             # different reading, and the night it changed nothing said so.
             origin = f"from_{getattr(chain, 'source', '') or 'unnamed'}"
             counts[origin] = counts.get(origin, 0) + 1
+        # The day's option volume, when the chain's source carried it. Taken
+        # off the chain already in hand, like gamma, so it costs no request.
+        if volume_out is not None and getattr(chain, "activity", None):
+            volume_out[symbol] = chain.activity
+            counts["volume_ok"] = counts.get("volume_ok", 0) + 1
         # Before the IV-specific tests below. A chain whose expiries do not
         # bracket the event still has open interest at strikes, and that is a
         # separate reading from whether the event is priced richly.

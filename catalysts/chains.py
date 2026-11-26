@@ -182,4 +182,10 @@ def build(symbol: str, as_of: dt.date | None = None) -> OptionChain | None:
         OUTCOMES["yahoo_had_none"] += 1
         return None
     OUTCOMES[chain.source] += 1
+    # The day's option volume rides on the same rows: no request is made for it.
+    try:
+        from catalysts import optvol               # noqa: PLC0415 - avoids a cycle
+        chain.activity = optvol.summary(symbol, spot, quoted, book)
+    except Exception as exc:                       # noqa: BLE001 - never cost the chain
+        log.debug("option volume for %s: %s", symbol, exc)
     return chain

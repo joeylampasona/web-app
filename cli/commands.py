@@ -344,6 +344,11 @@ def cmd_catalysts(args) -> int:
     from data import indexes as indexes_mod
     indexes_mod.refresh(conn, market.as_of, notice=lambda m: print(f"  → {m}", flush=True))
 
+    # The VIX against its three-month version, read once a night.
+    from catalysts import volatility as volatility_mod
+    volatility_mod.refresh(conn, market.as_of,
+                           notice=lambda m: print(f"  → {m}", flush=True))
+
     # Trades by members of the House, from the Clerk's own filings: the
     # newest reports not yet read, capped a night and by the clock.
     from data import congress as congress_mod
@@ -363,9 +368,12 @@ def cmd_catalysts(args) -> int:
 
     from catalysts import gamma as gammamod
     gamma_profiles: dict = {}
+    # The day's option volume per company, off the same chains: no request.
+    volume_profiles: dict = {}
     iv_stats: dict = {}
     rows = ivmod.compute(calendar, population, names, adapter,
-                         gamma_out=gamma_profiles, stats=iv_stats)
+                         gamma_out=gamma_profiles, stats=iv_stats,
+                         volume_out=volume_profiles)
     # Said every night, not only on a bad one. The night the full-book source
     # began refusing, the fallback answered, both sections filled, and the
     # only trace was a slower run.
@@ -432,6 +440,21 @@ def cmd_catalysts(args) -> int:
         # market with no rich options look identical from the outside.
         print("  → implied volatility: no name returned a usable chain. The "
               "High IV section will fall back to the last stored night.",
+              flush=True)
+    try:
+        from catalysts import optvol as optvolmod
+        if volume_profiles:
+            kept_volume = optvolmod.store(conn, volume_profiles, market.as_of)
+            busy = sum(1 for v in volume_profiles.values() if v.get("unusual"))
+            print(f"  → option volume: {kept_volume:,} names, "
+                  f"{sum(v.get('volume') or 0 for v in volume_profiles.values()):,} "
+                  f"contracts traded, {busy:,} names with an unusual contract.",
+                  flush=True)
+        else:
+            print("  → option volume: no chain carried the session's volume "
+                  "tonight; the page keeps the last days it has.", flush=True)
+    except Exception as exc:                      # noqa: BLE001 - never the nightly
+        print(f"  → option volume not kept: {type(exc).__name__}: {str(exc)[:160]}",
               flush=True)
     if gamma_profiles:
         kept = gammamod.store(conn, gamma_profiles)
@@ -956,6 +979,9 @@ def cmd_publish(args) -> int:
     desk_extras = desk_mod.extras(conn)
     from data import indexes as indexes_mod
     sp500_members, sp500_on = indexes_mod.sp500(conn)
+    from catalysts import optvol as optvol_mod, volatility as volatility_mod
+    options_volume = optvol_mod.load(conn, market.universe, market.as_of)
+    volatility = volatility_mod.latest(conn, market.as_of)
     from data import congress as congress_mod
     congress_trades = congress_mod.load(conn, market.universe, market.as_of)
 
@@ -1010,9 +1036,12 @@ def cmd_publish(args) -> int:
                              desk_extras=desk_extras,
                              sources_history=sources_history,
                              sp500=(sp500_members, sp500_on),
+                             options_volume=options_volume,
+                             volatility=volatility,
                              congress=congress_trades,
                              fundamentals=filed,
                              earnings_reads=earnings_reads,
+                             reported_dates=reported,
                              sources=sources)
 
     out = settings.out_dir()
@@ -1371,6 +1400,9 @@ def cmd_reporters(args) -> int:
     # Which companies have had a first read posted from their press release,
     # and the day: {symbol: "YYYY-MM-DD"}. Kept a fortnight.
     releases: dict[str, str] = {}
+    # The day the before-the-bell post last went out, so a second morning run
+    # does not repeat it.
+    noted: dict[str, str | None] = {"premarket": None}
     state_path = getattr(args, "state", None)
     if state_path:
         try:
@@ -1382,6 +1414,7 @@ def cmd_reporters(args) -> int:
             settled_kept = list(kept.get("settled") or [])
             releases = {k: v for k, v in (kept.get("releases") or {}).items()
                         if str(v) >= (day - dt.timedelta(days=14)).isoformat()}
+            noted["premarket"] = kept.get("premarket")
         except (OSError, ValueError):
             pass
 
@@ -1399,7 +1432,7 @@ def cmd_reporters(args) -> int:
             {"date": day.isoformat(), "posted": sorted(set(posted)), "reads": reads,
              "rows": rows_today, "pending": pending,
              "settled": settled_kept[:discord.SETTLED_KEPT],
-             "releases": releases}))
+             "releases": releases, "premarket": noted["premarket"]}))
 
     keep()
     if getattr(args, "reads", False):
@@ -1412,6 +1445,16 @@ def cmd_reporters(args) -> int:
         print(f"  {local.strftime('%-I:%M %p')} New York is outside both windows; "
               f"no reaction post.")
         return 0
+
+    # In the morning, before anything else: the names on a screen that are
+    # moving before the open. Once a day, and to Discord only.
+    if run == "pre" and noted["premarket"] != day.isoformat():
+        try:
+            if _premarket(args, out, day, local.strftime("%-I:%M %p")):
+                noted["premarket"] = day.isoformat()
+                keep()
+        except Exception as exc:                   # noqa: BLE001 - never cost the reaction
+            print(f"  before the bell: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
 
     # In the evening, before anything else: how the reactions already posted
     # held up over a full session. It needs nobody to be reporting today.
@@ -1537,6 +1580,39 @@ def cmd_reporters(args) -> int:
             _release_reads(args, out, day, posted, pending, releases, keep)
         except Exception as exc:                   # noqa: BLE001 - never cost the run
             print(f"  press releases: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
+
+
+def _premarket(args, out, day: dt.date, read_at: str) -> bool:
+    """Post the names on a screen moving before the open. True once it has
+    gone out, which is what stops a second morning run repeating it.
+
+    Discord only. Which screen a name is on is the paid half of the site and
+    the Discord is private; nothing here is written to the published tree.
+    """
+    from catalysts import yf as yfmod
+    from publish import discord
+
+    on_screen = _names_on_screens(out)
+    if not on_screen:
+        print("  before the bell: no screen lists to read.")
+        return False
+    quotes = yfmod.report_day_quotes(sorted(on_screen))
+    up, down = discord.premarket_movers(quotes, on_screen)
+    open_now = sum(1 for q in quotes.values() if q.get("state") == "PRE")
+    print(f"  before the bell: quotes for {len(quotes):,} of {len(on_screen):,} names "
+          f"on a screen, {open_now:,} marked pre-market; {len(up)} up and "
+          f"{len(down)} down by {discord.PREMARKET_FLOOR:g}% or more")
+    message = discord.premarket_message(up, down, day, read_at)
+    if not message:
+        return False
+    print(message)
+    if not getattr(args, "send", False):
+        return False
+    if discord.post("edition", message, username="The Tape · before the bell"):
+        print("  before the bell: sent to Discord.")
+        return True
+    print("  before the bell: no Discord webhook is set; nothing was sent.")
+    return False
 
 
 #: How many press releases one run sends to the model. Each is a request

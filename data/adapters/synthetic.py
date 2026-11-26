@@ -226,7 +226,22 @@ class SyntheticAdapter(DataAdapter):
                         open_interest=oi,
                         implied_volatility=round(row.implied_volatility
                                                  * rng.uniform(0.94, 1.09), 4)))
-        return OptionChain(symbol=symbol, spot=spot, expiries=expiries, rows=rows)
+        # The day's volume for the same contracts, so the fixture exercises the
+        # options-volume page too: most contracts trade a fraction of their
+        # open interest, and now and then one trades several times it.
+        from catalysts import optvol               # noqa: PLC0415 - avoids a cycle
+        traded = random.Random(_seed_for(symbol, self.seed + 29))
+        quoted = []
+        for contract in rows:
+            share = traded.uniform(0.0, 0.5)
+            if traded.random() < 0.004:
+                share = traded.uniform(2.0, 6.0)
+            quoted.append({"expiry": contract.expiry, "side": contract.side,
+                           "strike": contract.strike, "oi": contract.open_interest,
+                           "volume": int(contract.open_interest * share),
+                           "fresh": traded.random() < 0.85, "traded": self.end})
+        return OptionChain(symbol=symbol, spot=spot, expiries=expiries, rows=rows,
+                           activity=optvol.summary(symbol, spot, quoted, None))
 
     # ------------------------------------------------------------ generation
 

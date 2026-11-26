@@ -338,6 +338,62 @@ POST_WINDOW = (dt.time(17, 30), dt.time(20, 30))
 REPORTERS_NAMED = 30
 
 
+# ------------------------------------------------- before the bell
+#
+# Names on a screen that are moving before the open. For the private Discord
+# only: which screen a name is on is the paid half of the site, so this is
+# never written to the public tree or to anything a public page reads.
+
+#: A pre-market move smaller than this, either way, is not worth a line.
+PREMARKET_FLOOR = 3.0
+#: How many names are listed each way.
+PREMARKET_EACH_WAY = 8
+
+
+def premarket_movers(quotes: dict[str, dict], on_screen: dict[str, str],
+                     floor: float = PREMARKET_FLOOR,
+                     each: int = PREMARKET_EACH_WAY) -> tuple[list[dict], list[dict]]:
+    """(up, down): the largest pre-market moves among names on a screen.
+
+    Only a quote Yahoo marks as pre-market counts. Outside those hours the
+    field can hold an earlier morning's figure, and on a holiday there is no
+    pre-market at all.
+    """
+    rows = []
+    for symbol, screen in on_screen.items():
+        quote = quotes.get(symbol) or {}
+        move = quote.get("pre_pct")
+        if quote.get("state") != "PRE" or move is None or abs(move) < floor:
+            continue
+        rows.append({"symbol": symbol, "screen": screen, "move": move,
+                     "name": company_name(quote.get("name") or "")})
+    up = sorted((r for r in rows if r["move"] > 0), key=lambda r: (-r["move"], r["symbol"]))
+    down = sorted((r for r in rows if r["move"] < 0), key=lambda r: (r["move"], r["symbol"]))
+    return up[:each], down[:each]
+
+
+def premarket_message(up: list[dict], down: list[dict], day: dt.date,
+                      read_at: str) -> str | None:
+    """One post for the morning. None when nothing on a screen has moved
+    enough: a line that says nothing every morning gets muted."""
+    if not up and not down:
+        return None
+    lines = [f"**Before the bell**: {day.strftime('%A')} {day.month}/{day.day}, "
+             f"names on a screen, quotes read {read_at} ET"]
+
+    def listed(rows: list[dict]) -> str:
+        return " · ".join(f"`{r['symbol']}` {r['move']:+.1f}% ({r['screen']})"
+                          for r in rows)
+    if up:
+        lines.append(f"Up: {listed(up)}")
+    if down:
+        lines.append(f"Down: {listed(down)}")
+    lines.append(f"_Quotes in thin trading before the open, delayed, moves of "
+                 f"{PREMARKET_FLOOR:g}% or more. A gap can close in the first "
+                 f"minutes; the session decides._")
+    return "\n".join(lines)
+
+
 def which_run(now: dt.datetime) -> str | None:
     """"pre", "post" or None, from the New York clock on a weekday."""
     local = now.astimezone(NEW_YORK)

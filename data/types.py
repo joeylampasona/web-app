@@ -69,3 +69,6 @@ class OptionChain:
     # fraction of it. Gamma is a statement about the whole book, so a reading
     # built from the thinner one has to be able to say so.
     source: str = ""
+    # The session's option trading for the company (catalysts/optvol.summary),
+    # from the same rows. None from a source that does not carry volume.
+    activity: dict | None = None

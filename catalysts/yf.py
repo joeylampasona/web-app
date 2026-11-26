@@ -240,6 +240,9 @@ def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
                         "iv": _number(record.get("impliedVolatility")),
                         "bid": _number(record.get("bid")),
                         "ask": _number(record.get("ask")),
+                        # Contracts traded on the last day this one traded,
+                        # which is today's only when `fresh` says so.
+                        "volume": int(_number(record.get("volume"))),
                         "traded": _new_york_date(record.get("lastTradeDate")),
                     })
         if rows and spot <= 0:

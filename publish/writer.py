@@ -13,6 +13,7 @@ from catalysts import news as newsmod
 from data import classify, earnings_read, settings
 from data.market import Market
 from patterns import detectors, flags as flagsmod, params as param_module
+from patterns import avwap as avwap_mod
 from patterns import levels as levels_mod, scan, stages
 from publish import gated as gatedmod
 from publish import schema
@@ -181,6 +182,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             congress: dict | None = None,
             fundamentals: dict[str, dict] | None = None,
             earnings_reads: list[dict] | None = None,
+            reported_dates: dict[str, list] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
     out = out or settings.out_dir()
     written: list[pathlib.Path] = []
@@ -441,9 +443,15 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             # screen. It replays history through the base engine, which cannot
             # reconstruct a fitted trendline, so the shape screens are absent
             # from it and must not link to it.
-            "has_followthrough": key in param_module.BASE_SCREEN_KEYS,
-            "stage_labels": stages.labels_for(detectors.direction_of(key)),
-            "stage_help": stages.help_for(detectors.direction_of(key), as_of.year),
+            "has_followthrough": key in param_module.FOLLOWTHROUGH_KEYS,
+            # A screen may name the four stages in its own words: the reclaim's
+            # first bucket is names under a level, not bases forming.
+            "stage_labels": (spec.stage_labels
+                             or stages.labels_for(detectors.direction_of(key))),
+            "stage_help": ({stage: text.replace("{year}", str(as_of.year))
+                            for stage, text in spec.stage_help.items()}
+                           if spec.stage_help
+                           else stages.help_for(detectors.direction_of(key), as_of.year)),
             "setups": grouped,
         }
 
@@ -545,6 +553,9 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "benchmark": market.benchmark,
         "regime": index_rows.regime(market),
         "rows": index_rows.rows(market),
+        # What the indexes disagree about at a 20-session extreme, as one
+        # sentence, or null when they agree. Says who disagrees, not who is right.
+        "divergence": index_rows.divergence_for(market),
     }))
 
     setups_by_symbol: dict[str, list] = {}
@@ -598,7 +609,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              fundamentals=(fundamentals or {}).get(symbol),
                                              fundamentals_known=symbol in (fundamentals or {}),
                                              leadership=layer_of.get(symbol),
-                                             earnings_read=reads_by_symbol.get(symbol))))
+                                             earnings_read=reads_by_symbol.get(symbol),
+                                             reported=(reported_dates or {}).get(symbol))))
 
     # One search index, so the web layer never opens two thousand files to
     # answer a keystroke.
@@ -1329,6 +1341,24 @@ def _fundamentals_view(payload: dict | None, cap: float | None,
     return view
 
 
+def _avwap_rows(market: Market, symbol: str, primary, reported: list | None,
+                bar_limit: int) -> list[dict]:
+    """The anchors this stock has, in the order the page lists them."""
+    bars = market.series.get(symbol) or []
+    if len(bars) < 2:
+        return []
+    report = next((day for day in (reported or []) if day <= bars[-1].date), None)
+    cleared = None
+    if primary is not None and primary.breakout_date:
+        cleared = avwap_mod.index_on_or_after(
+            bars, dt.date.fromisoformat(primary.breakout_date))
+    return avwap_mod.summary(bars, [
+        ("earnings", avwap_mod.earnings_session(bars, report) if report else None),
+        ("breakout", cleared),
+        ("year", avwap_mod.year_session(bars)),
+    ], bar_limit)
+
+
 def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    setups_by_symbol: dict, calendar: ev.Calendar, bar_limit: int,
                    insiders: dict[str, dict] | None = None,
@@ -1354,7 +1384,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    fundamentals: dict | None = None,
                    fundamentals_known: bool = False,
                    leadership: dict | None = None,
-                   earnings_read: dict | None = None) -> dict:
+                   earnings_read: dict | None = None,
+                   reported: list | None = None) -> dict:
     ref = market.refs.get(symbol)
     setups = setups_by_symbol.get(symbol, [])
     primary = setups[0] if setups else None
@@ -1411,6 +1442,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         # Prices tested three or more times in the last 120 sessions, and the
         # nearest either side of the close. Where they sit, not a forecast.
         "levels": levels_mod.summary(market.series.get(symbol) or []),
+        # The average price paid since the last report, since the breakout
+        # and since the year began, from daily bars. One row an anchor the
+        # stock has; the browser draws the line from the bars above.
+        "avwap": _avwap_rows(market, symbol, primary, reported, bar_limit),
         # Only the 200. The 9, 21 and 50 need at most fifty prior bars, and the
         # hundred and eighty we ship contain them, so the browser derives those
         # three itself. Publishing all four would add about 11MB to every

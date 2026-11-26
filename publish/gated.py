@@ -192,6 +192,35 @@ def gamma_documents(board_rows: list[dict], gamma: dict[str, dict] | None,
     return documents
 
 
+#: How many rows of the option-volume board stay public, in full.
+FREE_VOLUME_ROWS = 5
+
+
+def free_volume_symbols(board_rows: list[dict]) -> set[str]:
+    """The names whose option volume stays public: the top of the ranking.
+    The board arrives ranked with ties already broken on the symbol."""
+    return {row["symbol"] for row in (board_rows or [])[:FREE_VOLUME_ROWS]}
+
+
+def options_volume_documents(board_rows: list[dict], found: dict[str, dict] | None,
+                             free: set[str], as_of: dt.date,
+                             total: int | None = None) -> list[Document]:
+    """Everything about the day's option volume a non-subscriber does not get:
+    the whole board, free rows included, and each company's own summary."""
+    documents = [Document("market/options_volume.json",
+                          {"as_of": as_of.isoformat(),
+                           "count": len(board_rows) if total is None else total,
+                           "board_rows": len(board_rows),
+                           "rows": board_rows},
+                          as_of)]
+    for symbol, payload in sorted((found or {}).items()):
+        if symbol in free or not payload:
+            continue
+        documents.append(Document(f"stocks/options_volume/{symbol.lower()}.json",
+                                  payload, as_of))
+    return documents
+
+
 def seasonal_documents(symbols: list[dict], as_of: dt.date) -> list[Document]:
     """The whole grid, benchmark included, as one document."""
     if not symbols:
