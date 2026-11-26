@@ -479,13 +479,15 @@ beyond the free sample may be posted there.
   options, in about half a second each, and says "No data exists" for one
   that has none. At that hour Yahoo's own open interest was nearly as full
   as OCC's, 16.5 million contracts against 17.6 million, so it is the hour
-  that starves Yahoo's figure and not Yahoo. 85% of Yahoo's contracts
-  carried a usable implied volatility, 14% a quote too wide to be one.
+  that starves Yahoo's figure and not Yahoo. 76% of Yahoo's contracts
+  carried an implied volatility worth believing, 14% a quote too wide to be
+  one, and most of the rest a figure drawn from an old trade.
 - **The chain is joined** (`catalysts/chains.py`). Open interest is OCC's,
   the cleared figure, for every series on the expiries asked about. Implied
-  volatility is Yahoo's, for expiries inside 95 days. A contract with no
-  usable volatility, or one drawn from a quote wider than half its mid,
-  takes the nearest strike's on the same expiry. The High IV reading is
+  volatility is Yahoo's, for expiries inside 95 days, believed only where
+  the contract has a two-sided quote no wider than half its mid or traded
+  on the latest session. Any other contract takes the nearest strike's on
+  the same expiry. The High IV reading is
   built only from volatilities Yahoo quoted. Market Desk made the same join
   the same evening (`scanners/chains.py` there); the two were written
   separately and should be kept telling the same story.
