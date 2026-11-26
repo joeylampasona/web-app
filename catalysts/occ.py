@@ -39,6 +39,9 @@ PAUSE = 0.15
 # be talked round by asking four hundred more times.
 FAILURES_BEFORE_STANDING_DOWN = 8
 
+# What the body says, lower-cased, when OCC lists nothing for the symbol.
+NOTHING_LISTED = "no data exists"
+
 #: What happened to every request made in this process.
 OUTCOMES: "collections.Counter[str]" = collections.Counter()
 
@@ -126,12 +129,12 @@ def open_interest(symbol: str) -> Book | None:
             if code == 200:
                 book = parse(response.text)
                 if book is None:
-                    # Answered, with something that is not the file. OCC says
-                    # "no results" this way for a symbol it does not know, and
-                    # a block page would look the same from here, so it is
-                    # read by what it says.
-                    if "no record" in response.text.lower() or \
-                            "not found" in response.text.lower():
+                    # Answered, with something that is not the file. For a
+                    # company with no listed options, and for a symbol it has
+                    # never heard of, OCC answers 200 with one line: "No data
+                    # exists for WINA symbol". A block page would also be a
+                    # 200 that is not the file, so it is read by what it says.
+                    if NOTHING_LISTED in response.text.lower():
                         OUTCOMES["unknown_symbol"] += 1
                         _failed_in_a_row = 0
                         return {}

@@ -467,3 +467,34 @@ beyond the free sample may be posted there.
   the week to come, the names on a screen that report, with the priced move
   where known, and how many others in the universe report that day. One
   scheduled time so it posts once. It does not know market holidays.
+
+## Option chains come from the clearing house and Yahoo (2026-11-25)
+
+- **What broke.** Cboe has refused the nightly since 19 November. The
+  fallback was Yahoo alone, read at two in the morning, and the first night
+  on it gamma covered 225 companies holding 163,000 contracts, against 461
+  and 13.7 million three nights earlier.
+- **What was measured** (`probe.yml`, `only: chains`, 22:39 New York, sixty
+  names). OCC's public series file answered for every company that has
+  options, in about half a second each, and says "No data exists" for one
+  that has none. At that hour Yahoo's own open interest was nearly as full
+  as OCC's, 16.5 million contracts against 17.6 million, so it is the hour
+  that starves Yahoo's figure and not Yahoo. 85% of Yahoo's contracts
+  carried a usable implied volatility, 14% a quote too wide to be one.
+- **The chain is joined** (`catalysts/chains.py`). Open interest is OCC's,
+  the cleared figure, for every series on the expiries asked about. Implied
+  volatility is Yahoo's, for expiries inside 95 days. A contract with no
+  usable volatility, or one drawn from a quote wider than half its mid,
+  takes the nearest strike's on the same expiry. The High IV reading is
+  built only from volatilities Yahoo quoted. Market Desk made the same join
+  the same evening (`scanners/chains.py` there); the two were written
+  separately and should be kept telling the same story.
+- **Order of asking**: Cboe, which stands down after twelve refusals and
+  would be the full book again if it reopened; then the join; and Yahoo's
+  own open interest only when OCC does not answer, which is the one case a
+  gamma row is still marked partial. A company OCC holds nothing for is not
+  put to Yahoo at all.
+- **Cboe's block is not worked around.** A browser's headers get past it.
+  It was put up on purpose, in front of something Cboe sells.
+- **Still open**: whether OCC's file is as full at two in the morning as at
+  eleven at night. If it is not, the chains move to an evening run.

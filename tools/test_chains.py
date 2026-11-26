@@ -80,6 +80,8 @@ check("asked under a plain name, not the SEC contact", asked[-1]["agent"], "tape
 check("by underlying", asked[-1]["params"], {"symbolType": "U", "symbol": "TEST"})
 answers[:] = [Reply(404)]
 check("a symbol it does not know: nothing listed", occ.open_interest("NOPE"), {})
+answers[:] = [Reply(200, "No data exists for WINA symbol")]
+check("a company with no listed options, in OCC's own words", occ.open_interest("WINA"), {})
 answers[:] = [Reply(403), Reply(503)]
 check("refused or down: no answer, which is different", occ.open_interest("TEST"), None)
 answers[:] = [Reply(200, "<html>Attention Required</html>")]
@@ -181,11 +183,16 @@ before = len(yahoo_asked)
 check("OCC holds nothing for the company: no chain", chains.build("TEST", TODAY), None)
 check("and Yahoo is not asked", len(yahoo_asked) - before, 0)
 
+answers[:] = [Reply(200, "No data exists for TEST symbol")]
+before = len(yahoo_asked)
+check("OCC has never heard of it: no chain, Yahoo not asked",
+      (chains.build("TEST", TODAY), len(yahoo_asked) - before), (None, 0))
+
 answers[:] = [Reply(403), Reply(403)]
 check("OCC silent: Yahoo's own open interest, marked", chains.build("TEST", TODAY).source,
       "yahoo")
 check("each outcome is counted", dict(chains.OUTCOMES),
-      {"occ+yahoo": 1, "no_listed_options": 1, "yahoo": 1})
+      {"occ+yahoo": 1, "no_listed_options": 2, "yahoo": 1})
 
 # ------------------------------------------------- Yahoo saying slow down
 print("\nYahoo's rate limit:")
