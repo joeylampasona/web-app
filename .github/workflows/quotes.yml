@@ -91,6 +91,9 @@ jobs:
           # once a day to its own room on Discord, or to the one original
           # webhook until that room exists. The server is private.
           DISCORD_WEBHOOK_STOP_PRESS: ${{ secrets.DISCORD_WEBHOOK_STOP_PRESS || secrets.DISCORD_WEBHOOK_URL }}
+          # Optional. The second source for prices, behind Yahoo: asked only
+          # about the names Yahoo did not answer for.
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: >-
           python -m cli quotes --alerts --send-alerts
           --stop-press --send-stop-press --stop-press-state last/stop_press.json

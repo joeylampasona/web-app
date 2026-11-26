@@ -12,16 +12,18 @@ a screen, written to its own file. Nothing here feeds the detectors, and the
 figures it writes are never mixed into the nightly tree — a delayed quote and
 a settled close are different things and the page says which it is showing.
 
-Two sources, asked in order. On 2026-11-19 the only one there was began
+Three sources, asked in order. On 2026-11-19 the only one there was began
 refusing every request, 221 of 221 a run, and the site went a whole session
-without an intraday price because nothing stood behind it.
+without an intraday price because nothing stood behind it. Yahoo was put in
+front of it, which left the refusing source as the only thing behind Yahoo:
+a fallback in name. Finnhub now stands between them when there is a key.
 """
 from __future__ import annotations
 
 import datetime as dt
 import time
 
-from catalysts import cboe, yf
+from catalysts import cboe, finnhub, yf
 
 #: How many names a batched source is asked about. It answers two hundred a
 #: request, so the cap is there to bound the file, not the clock.
@@ -111,11 +113,26 @@ def collect(symbols, notice=None) -> dict:
         notice(f"quotes: yahoo answered {len(found):,} of {len(wanted):,} "
                f"({_tally(yf.QUOTE_OUTCOMES)})")
 
-    # Then Cboe for whatever is left, nearest its pivot first. With Yahoo
+    # Then Finnhub for whatever is left, nearest its pivot first. With Yahoo
     # answering that is a few names it does not carry; with Yahoo down it is
-    # the whole list, cut to what one request a name can cover.
+    # the whole list, cut to what one request a name can cover inside the
+    # plan's sixty a minute.
     left = [s for s in wanted if s not in rows][:MAX_ONE_BY_ONE]
     ran_out = False
+    if left and finnhub.enabled():
+        more = finnhub.quotes(left, budget_seconds=TIME_BUDGET_SECONDS - 60,
+                              notice=notice)
+        if more:
+            rows.update(more)
+            by_source["finnhub"] = len(more)
+        if notice:
+            notice(f"quotes: finnhub answered {len(more):,} of {len(left):,} "
+                   f"({_tally(finnhub.OUTCOMES)})")
+        left = [s for s in left if s not in rows]
+
+    # And Cboe last. It has refused everything since 2026-11-19 and stands
+    # down after a dozen names, so this costs seconds; it is kept because the
+    # day it answers again is a day nothing has to be changed.
     if left:
         more, asked, ran_out = _one_by_one(left, notice)
         if more:

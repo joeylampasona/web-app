@@ -170,6 +170,80 @@ payload = quotes.collect(wanted, notice=notes.append)
 check("with Yahoo down Cboe covers the nearest four hundred",
       (payload["count"], cboe_asked[0], cboe_asked[-1]), (400, "S0", "S399"))
 
+# ------------------------------------------------ Finnhub in between
+import os  # noqa: E402
+
+from catalysts import finnhub  # noqa: E402
+
+
+class FinnhubReply:
+    def __init__(self, code, body):
+        self.status_code, self._body = code, body
+
+    def json(self):
+        return self._body
+
+
+finnhub_asked: list[str] = []
+finnhub_keys: list[str] = []
+
+
+def finnhub_get(url, params=None, headers=None, timeout=None):
+    finnhub_asked.append(params["symbol"])
+    finnhub_keys.append(headers["X-Finnhub-Token"])
+    if params["symbol"] == "S7":
+        return FinnhubReply(200, {"c": 0, "pc": 0, "t": 0})       # unknown to it
+    return FinnhubReply(200, {"c": 12.5, "pc": 12.0, "t": 1795640400})
+
+
+finnhub.requests.get = finnhub_get
+clock = {"now": 0.0}
+slept: list[float] = []
+real_quotes = finnhub.quotes
+
+
+def paced(symbols, **kw):
+    def sleep(seconds):
+        slept.append(seconds)
+        clock["now"] += seconds
+    return real_quotes(symbols, sleep=sleep, clock=lambda: clock["now"], **kw)
+
+
+quotes.finnhub.quotes = paced
+os.environ.pop("FINNHUB_API_KEY", None)
+cboe_asked.clear()
+quotes.yf.quotes = yahoo_returns(lambda s: s not in ("S3", "S7"))
+quotes.cboe.quote = cboe_answers
+quotes.collect(wanted, notice=notes.append)
+check("without a key Finnhub is not asked and Cboe is, as before",
+      (finnhub_asked, cboe_asked), ([], ["S3", "S7"]))
+
+os.environ["FINNHUB_API_KEY"] = "test-key"
+cboe_asked.clear()
+payload = quotes.collect(wanted, notice=notes.append)
+check("with one, Finnhub is asked about what Yahoo left", finnhub_asked, ["S3", "S7"])
+check("and Cboe only about what Finnhub did not know", cboe_asked, ["S7"])
+check("all three are named", payload["sources"],
+      {"yahoo-delayed": 598, "finnhub": 1, "cboe-delayed": 1})
+check("a Finnhub row is the same shape as any other",
+      payload["quotes"]["S3"], {"last": 12.5, "prev_close": 12.0, "change_pct": 4.17,
+                                "at": payload["quotes"]["S3"]["at"]})
+check("the key went in a header", set(finnhub_keys), {"test-key"})
+
+finnhub_asked.clear()
+cboe_asked.clear()
+slept.clear()
+clock["now"] = 0.0
+quotes.yf.quotes = yahoo_returns(lambda s: False)
+quotes.cboe.quote = cboe_refuses
+cboe.reset()
+payload = quotes.collect(wanted, notice=notes.append)
+check("Yahoo down: Finnhub covers the nearest names until its clock runs out",
+      (finnhub_asked[0], 300 < len(finnhub_asked) <= 400, payload["count"] > 300),
+      ("S0", True, True))
+check("paced under the plan's sixty a minute", max(slept) <= 60 / 50 and min(slept) > 1.0, True)
+os.environ.pop("FINNHUB_API_KEY", None)
+
 if real_data is not None:
     sys.modules["yfinance.data"] = real_data
 

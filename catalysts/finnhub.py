@@ -25,6 +25,18 @@ import requests
 log = logging.getLogger(__name__)
 
 URL = "https://finnhub.io/api/v1/calendar/earnings"
+QUOTE_URL = "https://finnhub.io/api/v1/quote"
+
+# The free plan allows sixty requests a minute. A quote is a request a
+# company, so this is what paces the sweep, with room left for the calendar.
+QUOTES_A_MINUTE = 55
+
+# Beyond this share of the estimate, a revenue "surprise" is a mismatch of
+# definitions and is not reported as one.
+REVENUE_MISMATCH = 0.40
+
+# How many refusals in a row before the rest of a sweep is not asked.
+REFUSALS_BEFORE_STANDING_DOWN = 4
 TIMEOUT = 30
 AGENT = "tape-research"
 
@@ -75,6 +87,13 @@ def parse(payload: dict, day: dt.date) -> dict[str, dict]:
         # no sales.
         revenue = revenue if revenue else None
         revenue_estimate = revenue_estimate if revenue_estimate else None
+        # A revenue that lands this far from its estimate is two different
+        # definitions of revenue, not a surprise: Jacobs "beat" by 81% on the
+        # first day this was read, gross against net. The figure is kept and
+        # the comparison is dropped.
+        if (revenue and revenue_estimate and
+                abs(revenue - revenue_estimate) / revenue_estimate > REVENUE_MISMATCH):
+            revenue_estimate = None
         out[symbol] = {
             "hour": HOURS.get(str(row.get("hour") or "").lower()),
             "eps": eps, "estimate": estimate,
@@ -107,6 +126,64 @@ def calendar(day: dt.date) -> dict[str, dict]:
         OUTCOMES["error"] += 1
         log.debug("finnhub calendar %s: %s", day, type(exc).__name__)
         return {}
+
+
+def quotes(symbols, *, budget_seconds: float = 420.0, notice=None,
+           sleep=None, clock=None) -> dict[str, dict]:
+    """A price for each symbol, one request a company, paced to the plan.
+
+    The second source behind Yahoo for the intraday file. It is far slower
+    than Yahoo's two hundred a request, so it is meant for the handful Yahoo
+    missed, or, on a day Yahoo is down, for the names nearest their pivot:
+    the caller passes them in the order that matters and this stops when the
+    clock runs out. {} without a key.
+    """
+    import time                                    # noqa: PLC0415
+    from catalysts import yf                       # noqa: PLC0415 - row shape
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
+    token = key()
+    if not token:
+        return {}
+    headers = {"X-Finnhub-Token": token, "User-Agent": AGENT}
+    gap = 60.0 / QUOTES_A_MINUTE
+    started = clock()
+    refused = 0
+    out: dict[str, dict] = {}
+    for asked, symbol in enumerate(symbols):
+        if clock() - started > budget_seconds:
+            if notice:
+                notice(f"quotes: finnhub stopped at {asked:,} of {len(symbols):,} "
+                       f"after {budget_seconds:.0f}s and kept what it had.")
+            break
+        if refused >= REFUSALS_BEFORE_STANDING_DOWN:
+            if notice:
+                notice(f"quotes: finnhub refused {refused} in a row and was not "
+                       f"asked about the rest.")
+            break
+        try:
+            response = requests.get(QUOTE_URL, params={"symbol": symbol.upper()},
+                                    headers=headers, timeout=TIMEOUT)
+            if response.status_code != 200:
+                OUTCOMES[f"quote_http_{response.status_code}"] += 1
+                refused += 1
+                sleep(gap)
+                continue
+            refused = 0
+            body = response.json() or {}
+            # c is the latest price, pc the previous close, t the second it
+            # traded. An unknown symbol answers 200 with every figure zero.
+            row = yf.quote_row(body.get("c"), body.get("pc"), body.get("t"))
+            if row:
+                out[symbol] = row
+                OUTCOMES["quote_ok"] += 1
+            else:
+                OUTCOMES["quote_empty"] += 1
+        except (requests.RequestException, ValueError):
+            OUTCOMES["quote_error"] += 1
+            refused += 1
+        sleep(gap)
+    return out
 
 
 def complete(row: dict | None) -> bool:

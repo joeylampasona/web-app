@@ -146,9 +146,15 @@ CALENDAR = {"earningsCalendar": [
     {"date": "2026-11-25", "symbol": "NOHR", "hour": "", "epsActual": 0.1,
      "epsEstimate": 0.0},
     {"date": "2026-11-26", "symbol": "LATER", "hour": "bmo"},
+    {"date": "2026-11-25", "symbol": "J", "hour": "bmo", "epsActual": 2.2,
+     "epsEstimate": 2.1671, "revenueActual": 4_712_280_000,
+     "revenueEstimate": 2_606_261_955},
 ]}
 found = finnhub.parse(CALENDAR, DAY)
-check("only the day asked about", sorted(found), ["DE", "NOHR", "ZS"])
+check("only the day asked about", sorted(found), ["DE", "J", "NOHR", "ZS"])
+check("a revenue 81% over its estimate is two definitions, not a beat",
+      (found["J"]["revenue"], found["J"]["revenue_estimate"],
+       found["J"]["revenue_surprise_pct"]), (4_712_280_000, None, None))
 check("before the open, as a time the run can sort by", found["DE"]["hour"], dt.time(7, 0))
 check("the surprise, earnings and revenue",
       (found["DE"]["surprise_pct"], found["DE"]["revenue_surprise_pct"]), (5.6, 2.7))
@@ -192,7 +198,7 @@ def fake_get(url, params=None, headers=None, timeout=None):
 
 finnhub.requests.get = fake_get
 os.environ["FINNHUB_API_KEY"] = "test-key"
-check("with one, the whole day in one request", len(finnhub.calendar(DAY)), 3)
+check("with one, the whole day in one request", len(finnhub.calendar(DAY)), 4)
 check("the key goes in a header, never in the address",
       ("test-key" in json.dumps(seen["params"]) or "test-key" in seen["url"],
        seen["headers"]["X-Finnhub-Token"]), (False, "test-key"))
