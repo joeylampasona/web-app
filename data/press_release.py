@@ -40,7 +40,12 @@ import requests
 
 log = logging.getLogger(__name__)
 
-MODEL = "claude-opus-5-5"
+# Haiku, on evidence. Six real releases were read side by side by this model
+# and the next one up (probe.yml, press, 2026-11-26): every figure was the
+# same from both, the revenues matched the second source's, and a read cost
+# a fifth of a cent against three cents. The first two had also been read by
+# the largest model, with the same figures, at about six cents each.
+MODEL = "claude-haiku-5-5"
 
 # Dollars per million tokens, input and output, for the models this has
 # been run on. Only for the run's own account of what it spent; a model not

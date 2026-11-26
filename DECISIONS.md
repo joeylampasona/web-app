@@ -582,7 +582,13 @@ beyond the free sample may be posted there.
   wherever it appears. The release is treated as a stranger's document: the
   model is told it is data, the answer is held to a schema, its sentences
   are stripped of links and mentions, and revenue that disagrees with
-  Finnhub's is withheld. Eight a run, a paid request each.
+  Finnhub's by more than half or double is withheld; one that differs by
+  less is shown beside Finnhub's, since that is two counts of revenue and
+  not a misreading. Eight a run. Read by the small model: on six real
+  releases it and the next one up gave the same figures throughout, at a
+  fifth of a cent a read against three cents. The run's last line says what
+  it spent, and `PRESS_RELEASE_MODEL` changes the model without a change
+  of code.
 - **No Discord post can ping anybody** (`allowed_mentions` is empty on every
   message), since some of what is posted is now read out of documents the
   site did not write.
