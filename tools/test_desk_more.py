@@ -219,6 +219,86 @@ rows = discord.reporter_rows("pre", ["DE"], quotes, {"DE": {**yahoo, "hour": dt.
 check("a line built from Yahoo alone says nothing about revenue",
       "revenue" in discord.reporters_message("pre", rows, DAY, "9:21 AM"), False)
 
+# ------------------------------------------------- reactions settling
+print("\nReactions, settled:")
+MON, TUE, WED = dt.date(2026, 11, 23), dt.date(2026, 11, 24), dt.date(2026, 11, 25)
+waiting = [
+    {"symbol": "PRE", "name": "Early Co", "day": TUE.isoformat(),
+     "when": "before the bell", "move": 3.1, "implied": 7.0},
+    {"symbol": "AFT", "name": "Late Co", "day": TUE.isoformat(),
+     "when": "after the bell", "move": -8.0, "implied": 5.0},
+    {"symbol": "OLD", "name": "Stale Co", "day": "2026-11-10",
+     "when": "after the bell", "move": 1.0, "implied": None},
+]
+closes = {"PRE": {"session_pct": 5.2, "session_on": TUE.isoformat()},
+          "AFT": {"session_pct": 0.4, "session_on": TUE.isoformat()}}
+done, still = discord.settle(waiting, closes, TUE)
+check("a before-the-bell report settles in that day's session",
+      [(r["symbol"], r["session_move"], r["inside"]) for r in done], [("PRE", 5.2, True)])
+check("an after-the-bell one waits for the next day's; an old one is dropped",
+      [r["symbol"] for r in still], ["AFT"])
+closes["AFT"] = {"session_pct": -9.4, "session_on": TUE.isoformat()}
+check("a holiday: Yahoo still shows the last session traded, so it keeps waiting",
+      discord.settle(still, closes, WED)[0], [])
+closes["AFT"]["session_on"] = WED.isoformat()
+done2, still2 = discord.settle(still, closes, WED)
+check("the next session's close, and whether the priced move held",
+      [(r["symbol"], r["session_move"], r["inside"]) for r in done2], [("AFT", -9.4, False)])
+text = discord.reactions_settled_message(done + done2, WED).splitlines()
+check("the biggest move first, with the quote the reaction line gave",
+      text[1], "`AFT` Late Co: closed -9.4% · was -8.0% after the bell · "
+               "options priced ±5.0%, outside")
+check("nobody settled, nothing said", discord.reactions_settled_message([], WED), None)
+check("a post that did not go out puts them back as they were",
+      discord.unsettled(done)[0], waiting[0])
+row = {"symbol": "DE", "name": "Deere", "move": 3.4, "when": "before the bell",
+       "screen": "VCP", "implied": 7.6, "eps": 4.12, "estimate": 3.9,
+       "surprise_pct": 5.6}
+public = discord.public_row(row, WED, "pre", "2026-11-25T09:21")
+check("the row a public page reads says nothing of which screen a name is on",
+      ("screen" in public, public["eps"], public["day"]), (False, 4.12, "2026-11-25"))
+check("a move read on the day is already its session's",
+      (discord.awaits_session(row), discord.awaits_session({"when": "on the day"})),
+      (True, False))
+
+# ------------------------------------------------------ the S&P 500
+print("\nThe S&P 500 list:")
+from data import indexes                          # noqa: E402
+
+LIST = "Symbol,Security,GICS Sector\n" + "".join(
+    f"S{i},Company {i},Industrials\n" for i in range(500)) + "BRK.B,Berkshire,Financials\n" \
+    "BF-B,Brown-Forman,Staples\n"
+check("a share class is spelled with a dot, as the price feed spells it",
+      [s for s in indexes.parse(LIST) if "." in s], ["BF.B", "BRK.B"])
+book = sqlite3.connect(":memory:")
+book.row_factory = sqlite3.Row
+store.migrate(book)
+check("before the first fetch nobody is tagged, and that is not 'not a member'",
+      indexes.sp500(book), (set(), None))
+
+
+class Page:
+    def __init__(self, code, text):
+        self.status_code, self.text = code, text
+
+
+pages: list = []
+indexes.requests.get = lambda url, timeout=None, headers=None: pages.pop(0)
+pages[:] = [Page(200, LIST)]
+said: list[str] = []
+check("fetched and kept", indexes.refresh(book, dt.date(2026, 11, 25), said.append)["count"], 502)
+check("not asked again within the week",
+      (indexes.refresh(book, dt.date(2026, 11, 27), said.append)["status"], len(pages)),
+      ("fresh", 0))
+pages[:] = [Page(200, "Symbol,Security\nAAA,One\nBBB,Two\n")]
+check("a list of the wrong size is not believed; the kept one stands",
+      (indexes.refresh(book, dt.date(2026, 12, 3), said.append)["status"],
+       len(indexes.sp500(book)[0])), ("kept", 502))
+pages[:] = [Page(200, LIST.replace("S499,Company 499,Industrials\n", "NEW,Newcomer,Tech\n"))]
+indexes.refresh(book, dt.date(2026, 12, 3), said.append)
+check("a change in membership is said in the log",
+      said[-1], "S&P 500 list refreshed: 502 lines. Joined: NEW. Left: S499.")
+
 print()
 if FAILED:
     print(f"{len(FAILED)} CHECK(S) FAILED: {FAILED}")

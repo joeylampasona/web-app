@@ -414,6 +414,98 @@ def reporter_rows(run: str, named: list[str], quotes: dict[str, dict],
     return rows
 
 
+#: The fields of a reaction line that are public facts about a public
+#: company: what was reported and how the price took it. Which screen a name
+#: is on is not among them. That is the paid half of the site, and these
+#: rows are read by a public page.
+PUBLIC_ROW = ("symbol", "name", "move", "when", "implied", "eps", "estimate",
+              "surprise_pct", "revenue", "revenue_estimate", "revenue_surprise_pct")
+
+#: How many days a reaction waits for its session before it is given up on,
+#: and how many settled ones the note keeps for the page.
+SETTLE_WITHIN_DAYS = 6
+SETTLED_KEPT = 40
+
+
+def public_row(row: dict, day: dt.date, run: str, read_at: str) -> dict:
+    """A reaction line as the site may show it: no screen membership."""
+    return {**{key: row.get(key) for key in PUBLIC_ROW},
+            "day": day.isoformat(), "run": run, "read_at": read_at}
+
+
+def awaits_session(row: dict) -> bool:
+    """Whether a reaction was read outside the session it is a reaction in.
+    Before the bell and after it, the price is a quote in thin trading; the
+    session that follows is where it settles. A move read "on the day" is
+    already that session's."""
+    return row.get("when") in ("before the bell", "after the bell")
+
+
+def settle(pending: list[dict], quotes: dict[str, dict], today: dt.date
+           ) -> tuple[list[dict], list[dict]]:
+    """Which waiting reactions have had their session, and what it did.
+
+    A company that reported before the bell settles in that day's session;
+    one that reported after it, in the next day's. Yahoo's session figure is
+    used only when it is today's session: on a holiday it still shows the
+    last one traded, which for an after-the-bell report is the day before
+    the reaction. Returns (settled, still waiting); a row older than
+    SETTLE_WITHIN_DAYS is dropped from both.
+    """
+    settled, waiting = [], []
+    for row in pending:
+        try:
+            reported = dt.date.fromisoformat(str(row.get("day")))
+        except ValueError:
+            continue
+        if (today - reported).days > SETTLE_WITHIN_DAYS:
+            continue
+        due = reported if row.get("when") == "before the bell" \
+            else reported + dt.timedelta(days=1)
+        quote = quotes.get(row.get("symbol")) or {}
+        if (today < due or quote.get("session_on") != today.isoformat()
+                or quote.get("session_pct") is None):
+            waiting.append(row)
+            continue
+        closed = quote["session_pct"]
+        implied = row.get("implied")
+        settled.append({
+            "symbol": row.get("symbol"), "name": row.get("name"),
+            "reported": reported.isoformat(), "when": row.get("when"),
+            "first_move": row.get("move"), "session_move": closed,
+            "settled_on": today.isoformat(), "implied": implied,
+            "inside": (abs(closed) <= implied) if implied else None,
+        })
+    return settled, waiting
+
+
+def unsettled(done: list[dict]) -> list[dict]:
+    """Settled rows put back as waiting ones, for a post that did not go out."""
+    return [{"symbol": r["symbol"], "name": r["name"], "day": r["reported"],
+             "when": r["when"], "move": r["first_move"], "implied": r["implied"]}
+            for r in done]
+
+
+def reactions_settled_message(rows: list[dict], today: dt.date) -> str | None:
+    """How the reactions already posted held up over a full session."""
+    if not rows:
+        return None
+    lines = [f"**How they settled**: the session of {today.strftime('%A')} "
+             f"{today.month}/{today.day}"]
+    for row in sorted(rows, key=lambda r: -abs(r["session_move"])):
+        name = f" {row['name']}" if row.get("name") else ""
+        parts = [f"closed {row['session_move']:+.1f}%"]
+        if row.get("first_move") is not None:
+            parts.append(f"was {row['first_move']:+.1f}% {row['when']}")
+        if row.get("implied"):
+            verdict = "inside" if row["inside"] else "outside"
+            parts.append(f"options priced ±{row['implied']:.1f}%, {verdict}")
+        lines.append(f"`{row['symbol']}`{name}: " + " · ".join(parts))
+    lines.append("_The first figure is the regular session, close to close. "
+                 "The second is the quote the reaction line gave._")
+    return "\n".join(lines)
+
+
 def money(amount: float) -> str:
     """Revenue the way a headline writes it: $4.21bn, $812m."""
     if abs(amount) >= 1e9:

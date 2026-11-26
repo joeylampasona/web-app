@@ -174,6 +174,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             earnings_iv: dict | None = None,
             holders: dict | None = None,
             desk_extras: dict | None = None,
+            sources_history: list | None = None,
+            sp500: tuple[set, str | None] | None = None,
             fundamentals: dict[str, dict] | None = None,
             earnings_reads: list[dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
@@ -181,6 +183,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
     written: list[pathlib.Path] = []
     gated_documents: list[gatedmod.Document] = []
     as_of = market.as_of
+    sp500_members, sp500_on = sp500 if sp500 else (set(), None)
     breakout_symbols = result.fresh_breakout_symbols()
     theme_names = classify.theme_names()
 
@@ -376,6 +379,10 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # been on this screen.
         on_screen = result.nights.get(key, {})
         grouped = {stage: [{**s.to_json(), "market_cap": market.caps.get(s.symbol),
+                            # Present only once the list is on file, so a
+                            # filter cannot empty a screen on a night it is not.
+                            **({"sp500": s.symbol in sp500_members}
+                               if sp500_members else {}),
                             "layer": (layer_of.get(s.symbol) or {}).get("layer"),
                             "nights": on_screen.get(s.symbol)}
                            for s in setups if s.stage == stage]
@@ -540,6 +547,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              holders_locked=set(holder_rows),
                                              priced=(priced_next.get(symbol),
                                                      priced_last.get(symbol)),
+                                             sp500=(symbol in sp500_members
+                                                    if sp500_members else None),
                                              short_interest=short_by_symbol.get(symbol),
                                              squeeze=squeeze_by_symbol.get(symbol),
                                              fundamentals=(fundamentals or {}).get(symbol),
@@ -858,6 +867,16 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         # sentence. The colophon page, the log and the nightly's own message
         # all read this list, so a source that fails says so in three places.
         "sources": list(sources or []),
+        # The same report for the last three weeks of sessions, statuses and
+        # sentences only, so the week's wrap can say how each source did
+        # without the database.
+        "sources_history": list(sources_history or []),
+        # How many of the universe are S&P 500 members and the day the list
+        # was fetched; null before the first fetch.
+        "sp500": ({"members_in_universe": sum(1 for s in market.universe
+                                              if s in sp500_members),
+                   "listed": len(sp500_members), "fetched_on": sp500_on}
+                  if sp500_members else None),
         # The one hand-kept list on the site, and how much runway it has left.
         # Carried in meta so the nightly's own summary can shout about it: a
         # list that runs out quietly is indistinguishable from a quiet calendar.
@@ -1210,6 +1229,7 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    holders: dict[str, dict] | None = None,
                    holders_locked: set[str] | None = None,
                    priced: tuple[dict | None, dict | None] = (None, None),
+                   sp500: bool | None = None,
                    short_interest: dict | None = None,
                    squeeze: dict | None = None,
                    fundamentals: dict | None = None,
@@ -1250,6 +1270,9 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
         "rs_rating": bundle.now.get(symbol),
         "rs_change_m1": bundle.change(symbol, "m1"),
         "market_cap": market.caps.get(symbol),
+        # Whether it is in the S&P 500. Null until the list has been
+        # fetched once, which is not the same as false.
+        "sp500": sp500,
         # "share_class" when the cap is one class's count times its price: a
         # floor for a multi-class company, labelled on the page.
         "market_cap_basis": ("share_class" if symbol in market.class_caps

@@ -617,6 +617,10 @@ def report_day_quotes(symbols: Sequence[str]) -> dict[str, dict]:
                     "due_on": due_on,
                     "market_cap": _positive(row.get("marketCap")) or None,
                     "session_pct": pct("regularMarketChangePercent"),
+                    # The New York day that session was. On a holiday or a
+                    # weekend it is the last one traded, not today.
+                    "session_on": (_new_york_date(row.get("regularMarketTime")).isoformat()
+                                   if _new_york_date(row.get("regularMarketTime")) else None),
                     "pre_pct": pct("preMarketChangePercent"),
                     "post_pct": pct("postMarketChangePercent"),
                     "state": row.get("marketState") or "",

@@ -40,6 +40,8 @@ jobs:
       - name: Write the wrap
         env:
           DISCORD_WEBHOOK_EDITION: ${{ secrets.DISCORD_WEBHOOK_EDITION || secrets.DISCORD_WEBHOOK_URL }}
+          # The week's source report follows the wrap, to the ops room.
+          DISCORD_WEBHOOK_OPS: ${{ secrets.DISCORD_WEBHOOK_OPS || secrets.DISCORD_WEBHOOK_URL }}
           SITE_URL: https://thetape.cc
           SEND: ${{ github.event_name == 'schedule' || inputs.send == 'true' }}
         run: |

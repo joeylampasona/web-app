@@ -214,6 +214,61 @@ def report(conn, session: dt.date, desk_run: dict | None = None,
     return out
 
 
+HISTORY_KEY = PREFIX + "history"
+#: How many sessions of statuses are kept. Three weeks: enough for a weekly
+#: report to look back over a week with a holiday in it.
+HISTORY_KEPT = 15
+
+
+def remember(conn, session: dt.date, rows: list[dict]) -> list[dict]:
+    """Add tonight's statuses to the running record and return it, oldest
+    first: [{"session", "sources": {key: {"status", "detail"}}}]. A session
+    published twice keeps its last report."""
+    try:
+        history = json.loads(store.get_kv(conn, HISTORY_KEY, "") or "[]")
+    except ValueError:
+        history = []
+    stamp = session.isoformat()
+    history = [h for h in history if isinstance(h, dict) and h.get("session") != stamp]
+    history.append({"session": stamp, "sources": {
+        row["key"]: {"status": row.get("status") or "ok",
+                     "detail": row.get("detail") or ""} for row in rows}})
+    history = sorted(history, key=lambda h: h["session"])[-HISTORY_KEPT:]
+    store.set_kv(conn, HISTORY_KEY, json.dumps(history, separators=(",", ":")))
+    return history
+
+
+def week_report(history: list[dict], labels: dict[str, str],
+                monday: dt.date, friday: dt.date) -> list[str]:
+    """One line a source for the week: how many nights it was ok, and for
+    the nights it was not, which and why. Empty when no night is on record."""
+    nights = [h for h in history
+              if monday.isoformat() <= str(h.get("session")) <= friday.isoformat()]
+    if not nights:
+        return []
+    lines = []
+    keys = [key for key, _, _ in SOURCES
+            if any(key in (n.get("sources") or {}) for n in nights)]
+    for key in keys:
+        seen = [(n["session"], n["sources"][key]) for n in nights
+                if key in (n.get("sources") or {})]
+        bad = [(day, row) for day, row in seen if row.get("status") != "ok"]
+        label = labels.get(key, key)
+        if not bad:
+            lines.append(f"{label}: ok all {_count(len(seen))} "
+                         f"night{'s' if len(seen) != 1 else ''}.")
+            continue
+        days = ", ".join(f"{dt.date.fromisoformat(day):%a} {row['status']}"
+                         for day, row in bad)
+        lines.append(f"{label}: ok {len(seen) - len(bad)} of {len(seen)} ({days}). "
+                     f"Last: {bad[-1][1].get('detail', '')}".strip())
+    return lines
+
+
+def labels() -> dict[str, str]:
+    return {key: label for key, label, _ in SOURCES}
+
+
 def summary(rows: list[dict]) -> list[str]:
     """One line per source that is not ok, for a log or a message."""
     return [f"{row['label']} ({row['status']}): {row['detail']}"

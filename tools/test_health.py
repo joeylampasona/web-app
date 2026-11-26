@@ -96,6 +96,30 @@ check("a session with no bars is prices down",
       {r["key"]: r for r in health.report(conn, dt.date(2026, 11, 23))}["prices"]["status"],
       "down")
 
+# ------------------------------------------------- the week's record
+mon, fri = dt.date(2026, 11, 16), dt.date(2026, 11, 20)
+hist: list = []
+for day, status in (("2026-11-13", "ok"), ("2026-11-17", "ok"), ("2026-11-18", "ok"),
+                    ("2026-11-19", "partial"), ("2026-11-20", "down")):
+    hist = health.remember(conn, dt.date.fromisoformat(day), [
+        {"key": "options", "status": status, "detail": f"detail for {day}"},
+        {"key": "prices", "status": "ok", "detail": "bars"}])
+check("each night's statuses are kept, oldest first",
+      [h["session"] for h in hist][0::4], ["2026-11-13", "2026-11-20"])
+hist = health.remember(conn, dt.date(2026, 11, 20), [
+    {"key": "options", "status": "partial", "detail": "the second publish"},
+    {"key": "prices", "status": "ok", "detail": "bars"}])
+check("a session published twice keeps its last report",
+      (len(hist), hist[-1]["sources"]["options"]["detail"]), (5, "the second publish"))
+week = health.week_report(hist, health.labels(), mon, fri)
+check("a source ok every night of the week says so in a line",
+      week[0], "Prices: ok all four nights.")
+check("one that was not says which nights and the last reason",
+      week[1], "Option chains: ok 2 of 4 (Thu partial, Fri partial). Last: the second publish")
+check("the Friday before is not this week's", "Nov 13" in " ".join(week), False)
+check("no nights on record, nothing to report",
+      health.week_report(hist, health.labels(), dt.date(2026, 12, 7), dt.date(2026, 12, 11)), [])
+
 # ------------------------------------------- which book gamma came from
 def chain(source: str) -> OptionChain:
     expiry = session + dt.timedelta(days=28)

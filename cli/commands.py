@@ -339,6 +339,11 @@ def cmd_catalysts(args) -> int:
     # window is the steady rate, but a cold cache would otherwise try every
     # name at once, which is exactly how the earnings scrape got itself
     # throttled before it was given one.
+    # Which companies are in the S&P 500: fetched weekly, here because this
+    # is the stage that reaches the network.
+    from data import indexes as indexes_mod
+    indexes_mod.refresh(conn, market.as_of, notice=lambda m: print(f"  → {m}", flush=True))
+
     from catalysts import forecast as forecastmod
     asked_forecasts, kept_forecasts = forecastmod.fetch(
         conn, market.universe, limit=400,
@@ -943,6 +948,8 @@ def cmd_publish(args) -> int:
     earnings_iv = desk_mod.earnings_iv(conn)
     holders = desk_mod.holders(conn)
     desk_extras = desk_mod.extras(conn)
+    from data import indexes as indexes_mod
+    sp500_members, sp500_on = indexes_mod.sp500(conn)
 
     # Filed figures, from the fundamentals step's cache. Never fetched here.
     from data import fundamentals as fundamentals_mod
@@ -973,6 +980,7 @@ def cmd_publish(args) -> int:
     from publish import health
     sources = health.report(conn, market.as_of, desk_run,
                             provider=str(settings.get("data.provider", "") or ""))
+    sources_history = health.remember(conn, market.as_of, sources)
     for line in health.summary(sources):
         print(f"  → source report: {line}", flush=True)
     if sources and not health.summary(sources):
@@ -992,6 +1000,8 @@ def cmd_publish(args) -> int:
                              earnings_iv=earnings_iv,
                              holders=holders,
                              desk_extras=desk_extras,
+                             sources_history=sources_history,
+                             sp500=(sp500_members, sp500_on),
                              fundamentals=filed,
                              earnings_reads=earnings_reads,
                              sources=sources)
@@ -1343,12 +1353,21 @@ def cmd_reporters(args) -> int:
     run = wanted if wanted in ("pre", "post") else discord.which_run(now)
 
     posted: list[str] = []
+    # Today's lines as a public page may show them, the reactions still
+    # waiting on their session, and the ones that have had it. The last two
+    # outlive the day; the first two lists do not.
+    rows_today: list[dict] = []
+    pending: list[dict] = []
+    settled_kept: list[dict] = []
     state_path = getattr(args, "state", None)
     if state_path:
         try:
             kept = json.loads(pathlib.Path(state_path).read_text())
             if kept.get("date") == day.isoformat():
                 posted = list(kept.get("posted") or [])
+                rows_today = list(kept.get("rows") or [])
+            pending = list(kept.get("pending") or [])
+            settled_kept = list(kept.get("settled") or [])
         except (OSError, ValueError):
             pass
 
@@ -1363,7 +1382,9 @@ def cmd_reporters(args) -> int:
             except (OSError, ValueError):
                 continue
         (out / "reporters.json").write_text(json.dumps(
-            {"date": day.isoformat(), "posted": sorted(set(posted)), "reads": reads}))
+            {"date": day.isoformat(), "posted": sorted(set(posted)), "reads": reads,
+             "rows": rows_today, "pending": pending,
+             "settled": settled_kept[:discord.SETTLED_KEPT]}))
 
     keep()
     if getattr(args, "reads", False):
@@ -1376,6 +1397,28 @@ def cmd_reporters(args) -> int:
         print(f"  {local.strftime('%-I:%M %p')} New York is outside both windows; "
               f"no reaction post.")
         return 0
+
+    # In the evening, before anything else: how the reactions already posted
+    # held up over a full session. It needs nobody to be reporting today.
+    if run == "post" and pending:
+        try:
+            closes = yfmod.report_day_quotes([row["symbol"] for row in pending])
+            done, pending[:] = discord.settle(pending, closes, day)
+            print(f"  settled {len(done)} of the reactions waiting on a session; "
+                  f"{len(pending)} still waiting")
+            text = discord.reactions_settled_message(done, day)
+            if text:
+                print(text)
+                if not getattr(args, "send", False):
+                    # A dry run settles nothing: the note is not its to change.
+                    pending.extend(discord.unsettled(done))
+                elif discord.post("earnings", text, username="The Tape · earnings"):
+                    settled_kept[:0] = done
+                else:
+                    pending.extend(discord.unsettled(done))
+            keep()
+        except Exception as exc:                   # noqa: BLE001 - never cost the reaction
+            print(f"  settling: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
 
     try:
         upcoming = json.loads((out / "catalysts" / "upcoming.json").read_text())
@@ -1455,6 +1498,12 @@ def cmd_reporters(args) -> int:
     try:
         if discord.post("earnings", message, username="The Tape · earnings"):
             posted += [row["symbol"] for row in rows]
+            read_at = local.strftime("%Y-%m-%dT%H:%M")
+            rows_today += [discord.public_row(row, day, run, read_at) for row in rows]
+            pending += [{"symbol": row["symbol"], "name": row["name"],
+                         "day": day.isoformat(), "when": row["when"],
+                         "move": row["move"], "implied": row.get("implied")}
+                        for row in rows if discord.awaits_session(row)]
             keep()
             print("\nSent to Discord.")
         else:
@@ -1622,6 +1671,7 @@ def cmd_wrap(args) -> int:
     _banner(f"The week's wrap — week of {meta['as_of']}")
     print(message)
     if not getattr(args, "send", False):
+        _sources_week(meta, send=False)
         return 0
     try:
         if not discord.post("edition", message, username="The Tape · the week"):
@@ -1631,7 +1681,29 @@ def cmd_wrap(args) -> int:
         print(f"\nDiscord refused the wrap: {exc}")
         return 1
     print("\nSent to Discord.")
+    _sources_week(meta, send=True)
     return 0
+
+
+def _sources_week(meta: dict, send: bool) -> None:
+    """How each source did this week, to the ops room. Its own post, and
+    never a reason for the wrap to fail."""
+    from publish import discord, health
+    try:
+        as_of = dt.date.fromisoformat(meta["as_of"])
+        monday, friday = discord.week_of(as_of)
+        lines = health.week_report(meta.get("sources_history") or [], health.labels(),
+                                   monday, friday)
+        if not lines:
+            print("\nNo source reports on record for this week.")
+            return
+        text = (f"**Sources, week of {monday.month}/{monday.day}**\n"
+                + "\n".join(f"• {line}" for line in lines))
+        print("\n" + text)
+        if send and discord.post("ops", text[:1900], username="The Tape · sources"):
+            print("Sent to the ops room.")
+    except Exception as exc:                       # noqa: BLE001
+        print(f"\nThe week's source report failed: {type(exc).__name__}: {exc}")
 
 
 def cmd_gated(args) -> int:
