@@ -77,6 +77,7 @@ export function MarketContext({ file, compact = false }: {
   return (
     <section className="stack" style={{ gap: "var(--gap-sm)", marginTop: "var(--gap-xl)" }}>
       <div className="eyebrow">Options and regime</div>
+      {(pc || regime) && (
       <div className="grid-auto">
         {pc && (
           <div className="card stack" style={{ gap: "var(--gap-xs)" }}>
@@ -107,6 +108,7 @@ export function MarketContext({ file, compact = false }: {
           </div>
         )}
       </div>
+      )}
       <Crossing file={file} />
     </section>
   );

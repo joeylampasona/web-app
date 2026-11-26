@@ -125,11 +125,12 @@ export function ShortPressure({ file }: { file: SqueezeFile | null }) {
                 <tr key={row.symbol}>
                   <td className="text">
                     {row.in_universe ? (
-                      <Link href={`/stocks/${row.symbol}`} className="mono" style={{ fontWeight: 600 }}>
+                      <Link href={`/stocks/${row.symbol}`} className="mono"
+                            style={{ fontWeight: 600, textDecoration: "underline" }}>
                         {row.symbol}
                       </Link>
                     ) : (
-                      <span className="mono" style={{ fontWeight: 600 }}
+                      <span className="mono" style={{ color: "var(--text-secondary)" }}
                             title="Outside the names this site follows">{row.symbol}</span>
                     )}
                     {row.name && row.name !== row.symbol && (
@@ -168,7 +169,8 @@ export function ShortPressure({ file }: { file: SqueezeFile | null }) {
             publishes it twice a month, and the change is against the settlement
             before.</>
         )}
-        {" "}Names in plain type are outside the universe this site follows.
+        {" "}An underlined ticker opens its page here; the others are outside
+        the universe this site follows.
         Source: FINRA, via the Market Desk.
       </p>
     </section>
