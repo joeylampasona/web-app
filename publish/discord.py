@@ -531,6 +531,9 @@ def release_embed(symbol: str, name: str, found: dict, where: dict) -> dict:
             line += f", {change:+.1f}% on the year"
         if found.get("revenue_checked") == "agrees":
             line += " (agrees with Finnhub)"
+        elif found.get("revenue_checked") == "differs" and found.get("revenue_second"):
+            line += (f" (Finnhub counts {money(found['revenue_second'])}, "
+                     f"likely a narrower measure)")
         lines.append(line + ".")
     elif found.get("revenue_checked") == "disagrees":
         lines.append("Revenue withheld: the figure read from the release and "
@@ -558,7 +561,7 @@ def release_embed(symbol: str, name: str, found: dict, where: dict) -> dict:
         filed = dt.date.fromisoformat(where["filed"])
         foot += f", filed {filed.month}/{filed.day}"
     foot += ". Unaudited. The read of the filed quarter follows."
-    title = f"{symbol} {company_name(name or '')}: first read"
+    title = f"{symbol} {company_name(name or '')}".strip() + ": first read"
     if period:
         title += f", {period}"
     return {

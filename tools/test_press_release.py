@@ -198,6 +198,17 @@ thousand = pr.checked({**got, "revenue": 812_400}, 812_000_000)
 check("'in millions' read as dollars disagrees, and the figure is withheld",
       (thousand["revenue_checked"], thousand["revenue"], thousand["revenue_prior_year"]),
       ("disagrees", None, None))
+deere = pr.checked({**got, "revenue": 12_115_000_000, "revenue_prior_year": 12_394_000_000},
+                   10_514_000_000)
+check("two counts of revenue the same order of size: both kept, and said to differ",
+      (deere["revenue_checked"], deere["revenue"], deere["revenue_second"]),
+      ("differs", 12_115_000_000, 10_514_000_000))
+check("and the card shows both",
+      discord.release_embed("DE", "", deere, where)["description"].splitlines()[0],
+      "• Revenue $12.12bn, -2.3% on the year (Finnhub counts $10.51bn, likely a "
+      "narrower measure).")
+check("a card for a company whose name is not known has no stray space in its title",
+      discord.release_embed("DE", "", deere, where)["title"][:15], "DE: first read,")
 check("nothing to check against is said to be unchecked",
       pr.checked(got, None)["revenue_checked"], None)
 

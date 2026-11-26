@@ -329,16 +329,28 @@ def growth(now, before) -> float | None:
 def checked(found: dict, second_revenue: float | None) -> dict:
     """The read with its revenue held against a second source's.
 
-    `revenue_checked` is "agrees", "disagrees" or None when there was nothing
-    to check against. On a disagreement the model's revenue figures are
-    removed: of the two, it is the one that can be wrong by a factor of a
-    thousand."""
+    `revenue_checked` is one of:
+      "agrees"     within three per cent of the second source
+      "differs"    further apart, but the same order of size. Two counts of
+                   revenue, usually: Deere's release gives $12.1bn of sales
+                   and revenues where the second source carries the $10.5bn
+                   of equipment sales analysts estimate. Both are shown.
+      "disagrees"  apart by more than half or double. A misread scale. The
+                   model's revenue figures are removed: of the two, it is
+                   the one that can be wrong by a factor of a thousand.
+      None         nothing to check against
+    `revenue_second` is the second source's figure when there was one."""
     out = dict(found)
-    out["revenue_checked"] = None
+    out["revenue_checked"] = out["revenue_second"] = None
     revenue = found.get("revenue")
     if revenue and second_revenue:
-        near = abs(float(revenue) - second_revenue) / second_revenue <= REVENUE_TOLERANCE
-        out["revenue_checked"] = "agrees" if near else "disagrees"
-        if not near:
+        ratio = float(revenue) / second_revenue
+        out["revenue_second"] = second_revenue
+        if abs(ratio - 1.0) <= REVENUE_TOLERANCE:
+            out["revenue_checked"] = "agrees"
+        elif 0.5 <= ratio <= 2.0:
+            out["revenue_checked"] = "differs"
+        else:
+            out["revenue_checked"] = "disagrees"
             out["revenue"] = out["revenue_prior_year"] = None
     return out
