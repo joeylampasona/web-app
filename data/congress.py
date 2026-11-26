@@ -78,18 +78,25 @@ _HEADER_LINES = {"ID Owner Asset Transaction", "Type", "Date Notification", "Dat
 # capitals, which arrive as a capital followed by NULs: "FILING STATUS:"
 # becomes "F S:", "SUBHOLDING OF:" "S O:", "DESCRIPTION:" "D:".
 _DETAIL = re.compile(r"^(?P<label>[A-Z](?: [A-Z]){0,3}):\s*(?P<value>.*)$")
-# Details that are free text and can run on to a second line.
+# Details that are free text, and the length past which one may have run on
+# to a second line. A line that long leaves it unknown where the next asset
+# begins, and with it whether that asset has an owner code in front of it.
 _FREE_TEXT = {"D", "C"}
+RUN_ON_FROM = 100
+_RUN_ON = "~"
 
 _AMOUNT = (r"(?:Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+|\$[\d,]+\s*\+|\$[\d,]+)")
+# The cells of a row come out run together as often as not:
+# "S 10/07/202610/22/2026$1,001 - $15,000". Nothing between the two dates
+# or before the amount can be relied on.
 _TRANSACTION = re.compile(
     r"\[(?P<kind>[A-Z]{2})\]\s*"
     r"(?P<type>S \(partial\)|P|S|E)\s+"
-    r"(?P<traded>\d{1,2}/\d{1,2}/\d{4})\s+"
-    r"(?P<notified>\d{1,2}/\d{1,2}/\d{4})\s+"
+    r"(?P<traded>\d{1,2}/\d{1,2}/\d{4})\s*"
+    r"(?P<notified>\d{1,2}/\d{1,2}/\d{4})\s*"
     rf"(?P<amount>{_AMOUNT})")
 _TICKER = re.compile(r"\(([A-Z][A-Z0-9./\-]{0,7})\)\s*$")
-_DATE_PAIR = re.compile(r"\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}/\d{1,2}/\d{4}")
+_DATE_PAIR = re.compile(r"\d{1,2}/\d{1,2}/\d{4}\s*\d{1,2}/\d{1,2}/\d{4}")
 _MARK = "¦"
 
 
@@ -162,6 +169,8 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
         detail = _DETAIL.match(line)
         if detail:
             label = detail["label"].replace(" ", "")
+            if label in _FREE_TEXT and len(line) >= RUN_ON_FROM:
+                label += _RUN_ON
             parts.append(f"{_MARK}{label}={detail['value']}{_MARK}")
         else:
             parts.append(line)
@@ -176,7 +185,7 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
         cut = before.rfind(_MARK)
         asset_text = before[cut + 1:].strip() if cut >= 0 else before.strip()
         last_label = None
-        marks = re.findall(rf"{_MARK}([A-Z]+)=", before)
+        marks = re.findall(rf"{_MARK}([A-Z]+{_RUN_ON}?)=", before)
         if marks:
             last_label = marks[-1]
         owner = None
@@ -184,9 +193,10 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
         if code:
             owner = OWNERS[code[1]]
             asset_text = asset_text[code.end():]
-        elif last_label not in _FREE_TEXT:
-            # Nothing free-running came before it, so the first word of the
-            # asset is where an owner code would be, and there is none.
+        elif not (last_label or "").endswith(_RUN_ON):
+            # Nothing that could have run on came before it, so the first
+            # word of the asset is where an owner code would be, and there
+            # is none: the member's own.
             owner = "self"
         ticker = None
         hit = _TICKER.search(asset_text)
@@ -195,7 +205,7 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
             asset_text = asset_text[:hit.start()].strip()
         after = stream[match.end():found[index + 1].start()
                        if index + 1 < len(found) else len(stream)]
-        details = dict(re.findall(rf"{_MARK}([A-Z]+)=([^{_MARK}]*){_MARK}", after))
+        details = dict(re.findall(rf"{_MARK}([A-Z]+){_RUN_ON}?=([^{_MARK}]*){_MARK}", after))
         low, high, band = amount_band(match["amount"])
         rows.append({
             "asset": asset_text[-160:].strip(" -"),

@@ -807,6 +807,7 @@ def probe_congress() -> None:
     print("11. CONGRESS — where members' trades can be read from")
     print(RULE)
     import io
+    import re
     import zipfile
     import zoneinfo
     year = dt.datetime.now(zoneinfo.ZoneInfo("America/New_York")).year
@@ -887,11 +888,12 @@ def probe_congress() -> None:
     except Exception as exc:                          # noqa: BLE001
         print(f"   cannot import the reader: {exc}")
         return
-    want = int(os.environ.get("PROBE_CONGRESS_FILINGS", "25") or 25)
+    want = int(os.environ.get("PROBE_CONGRESS_FILINGS", "60") or 60)
     listed = congress.fetch_index(year) or []
     newest = sorted(listed, key=lambda f: (f["filed"], f["doc_id"]), reverse=True)[:want]
     print(f"   {len(listed):,} reports in the {year} index; reading the newest {len(newest)}")
     total = collections.Counter()
+    longest = {"n": 0}
     shown = 0
     started = time.monotonic()
     for filing in newest:
@@ -919,21 +921,47 @@ def probe_congress() -> None:
               f"({filing['district']}): HTTP {reply.status_code}, {len(reply.content):,} "
               f"bytes, {len(lines)} lines, {len(rows)} rows {dict(kinds)} owners "
               f"{dict(owners)}, {len(misses)} unread")
-        for row in rows[:3]:
+        for row in rows[:2]:
             print(f"      row: {row['owner']} | {row['asset'][:50]} | {row['ticker']} "
                   f"[{row['kind']}] {row['type']} {row['traded']} {row['notified']} "
                   f"{row['amount_text']} amended={row['amended']}")
+        # Anything odd, said per row: no ticker on a stock, an owner that
+        # could not be told, one figure where a band was expected.
+        for row in rows:
+            odd = []
+            if row["kind"] == "ST" and not row["ticker"]:
+                odd.append("stock without a ticker")
+            if row["owner"] is None:
+                odd.append("owner unknown")
+            if row["amount_low"] is not None and row["amount_low"] == row["amount_high"]:
+                odd.append("one figure, not a band")
+            if not (row["traded"] and row["notified"]):
+                odd.append("a date did not read")
+            if odd:
+                total["odd"] += 1
+                if total["odd"] <= 25:
+                    print(f"      ODD ({', '.join(odd)}): {row['asset'][-90:]!r} "
+                          f"{row['ticker']} [{row['kind']}] {row['amount_text']!r}")
         for miss in misses[:4]:
             print(f"      UNREAD: {miss!r}")
-        # The raw lines of a few, so the reader can be checked against what
-        # the form really says: the first three with text, and any with
-        # something unread or nothing read at all.
-        if lines and (shown < 3 or misses or not rows) and shown < 9:
+        # How long a free-text detail line gets before the form breaks it,
+        # and what the line after a long one looks like.
+        for at, line in enumerate(lines):
+            if re.match(r"^[DC]: ", line):
+                total["detail_lines"] += 1
+                longest["n"] = max(longest["n"], len(line))
+                if len(line) >= 95 and total["long_shown"] < 12:
+                    total["long_shown"] += 1
+                    nxt = lines[at + 1] if at + 1 < len(lines) else ""
+                    print(f"      LONG DETAIL ({len(line)}): {line[:150]!r} THEN {nxt[:70]!r}")
+        # The raw lines of a filing with something unread or nothing read.
+        if lines and (misses or not rows) and shown < 4:
             shown += 1
             for line in lines[:70]:
                 print(f"         | {line[:140]}")
         time.sleep(congress.PAUSE)
-    print(f"   totals: {dict(total)}; {time.monotonic() - started:.0f}s")
+    print(f"   totals: {dict(total)}; longest detail line {longest['n']}; "
+          f"{time.monotonic() - started:.0f}s")
 
 
 def probe_press(agent: str = "") -> None:
