@@ -1135,6 +1135,7 @@ def main() -> int:
         ("congress", probe_congress),
         ("press", probe_press),
         ("optvol", probe_option_volume),
+        ("reclaim", probe_reclaim_screen),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:
@@ -1148,6 +1149,24 @@ def main() -> int:
     print(RULE)
     print("Probe complete. Nothing was written.")
     return 0
+
+
+def probe_reclaim_screen() -> None:
+    """What each of the reclaim screen's dials costs, on live prices.
+
+    Its thresholds were first set off the synthetic fixture, which is invented
+    names on a random walk: good for counting, useless for saying whether a
+    reclaim is followed by anything. This prints the same sweep on real bars.
+    """
+    print()
+    print(RULE)
+    print("RECLAIM — under last week's low and back above it, on the live database")
+    print(RULE)
+    try:
+        import probe_reclaim
+        probe_reclaim.main()
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   could not be measured here: {type(exc).__name__}: {exc}")
 
 
 def probe_flag_gates() -> None:
