@@ -87,6 +87,10 @@ jobs:
           # Optional. The day's reported figures, earnings and revenue
           # against their estimates. Without it the run reads Yahoo alone.
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          # Optional. A first read of each named company's press release, by
+          # a model, the evening it reports. Each read is a paid request;
+          # without the key none is made.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SITE_URL: https://thetape.cc
           WHEN: ${{ inputs.when || 'auto' }}
           SEND: ${{ github.event_name == 'schedule' || inputs.send == 'true' }}

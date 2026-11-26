@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress). Empty runs all."
+        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress, press). Empty runs all."
         required: false
         default: ""
 
@@ -47,6 +47,9 @@ jobs:
           PROBE_ONLY: ${{ inputs.only }}
           # For the finnhub section. Never printed.
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          # For the press section: with it, two releases are sent to the
+          # model, which is a paid request each. Never printed.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python tools/probe_sources.py
 
 

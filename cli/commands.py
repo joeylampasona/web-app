@@ -344,6 +344,12 @@ def cmd_catalysts(args) -> int:
     from data import indexes as indexes_mod
     indexes_mod.refresh(conn, market.as_of, notice=lambda m: print(f"  → {m}", flush=True))
 
+    # Trades by members of the House, from the Clerk's own filings: the
+    # newest reports not yet read, capped a night and by the clock.
+    from data import congress as congress_mod
+    congress_mod.record(conn, market.as_of, congress_mod.refresh(
+        conn, dt.date.today(), notice=lambda m: print(f"  → {m}", flush=True)))
+
     from catalysts import forecast as forecastmod
     asked_forecasts, kept_forecasts = forecastmod.fetch(
         conn, market.universe, limit=400,
@@ -950,6 +956,8 @@ def cmd_publish(args) -> int:
     desk_extras = desk_mod.extras(conn)
     from data import indexes as indexes_mod
     sp500_members, sp500_on = indexes_mod.sp500(conn)
+    from data import congress as congress_mod
+    congress_trades = congress_mod.load(conn, market.universe, market.as_of)
 
     # Filed figures, from the fundamentals step's cache. Never fetched here.
     from data import fundamentals as fundamentals_mod
@@ -1002,6 +1010,7 @@ def cmd_publish(args) -> int:
                              desk_extras=desk_extras,
                              sources_history=sources_history,
                              sp500=(sp500_members, sp500_on),
+                             congress=congress_trades,
                              fundamentals=filed,
                              earnings_reads=earnings_reads,
                              sources=sources)
@@ -1359,6 +1368,9 @@ def cmd_reporters(args) -> int:
     rows_today: list[dict] = []
     pending: list[dict] = []
     settled_kept: list[dict] = []
+    # Which companies have had a first read posted from their press release,
+    # and the day: {symbol: "YYYY-MM-DD"}. Kept a fortnight.
+    releases: dict[str, str] = {}
     state_path = getattr(args, "state", None)
     if state_path:
         try:
@@ -1368,6 +1380,8 @@ def cmd_reporters(args) -> int:
                 rows_today = list(kept.get("rows") or [])
             pending = list(kept.get("pending") or [])
             settled_kept = list(kept.get("settled") or [])
+            releases = {k: v for k, v in (kept.get("releases") or {}).items()
+                        if str(v) >= (day - dt.timedelta(days=14)).isoformat()}
         except (OSError, ValueError):
             pass
 
@@ -1384,7 +1398,8 @@ def cmd_reporters(args) -> int:
         (out / "reporters.json").write_text(json.dumps(
             {"date": day.isoformat(), "posted": sorted(set(posted)), "reads": reads,
              "rows": rows_today, "pending": pending,
-             "settled": settled_kept[:discord.SETTLED_KEPT]}))
+             "settled": settled_kept[:discord.SETTLED_KEPT],
+             "releases": releases}))
 
     keep()
     if getattr(args, "reads", False):
@@ -1420,98 +1435,205 @@ def cmd_reporters(args) -> int:
         except Exception as exc:                   # noqa: BLE001 - never cost the reaction
             print(f"  settling: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
 
+    # Whatever the reaction post does below, and however it returns, the
+    # first reads from the press releases are attempted after it: for the
+    # companies named today, this run's included.
     try:
-        upcoming = json.loads((out / "catalysts" / "upcoming.json").read_text())
-    except (OSError, ValueError) as exc:
-        print(f"No published calendar to read ({exc}).")
-        return 1
-    def listed(on: dt.date) -> set[str]:
-        return {e["ticker"] for e in upcoming.get("events") or []
-                if e.get("type") == "earnings" and e.get("date") == on.isoformat()
-                and not e.get("readthrough")}
+        try:
+            upcoming = json.loads((out / "catalysts" / "upcoming.json").read_text())
+        except (OSError, ValueError) as exc:
+            print(f"No published calendar to read ({exc}).")
+            return 1
+        def listed(on: dt.date) -> set[str]:
+            return {e["ticker"] for e in upcoming.get("events") or []
+                    if e.get("type") == "earnings" and e.get("date") == on.isoformat()
+                    and not e.get("readthrough")}
 
-    due = sorted(listed(day))
-    # The calendar's date for a report can be a day out: it is refreshed
-    # weekly and companies move. So the days either side are asked about too,
-    # and kept only where Yahoo has the report on today.
-    nearby = sorted((listed(day - dt.timedelta(days=1))
-                     | listed(day + dt.timedelta(days=1))) - set(due))
-    _banner(f"Reporters — {day.isoformat()}, the {'morning' if run == 'pre' else 'evening'} run")
-    print(f"  {len(due)} due today by the calendar, {len(nearby)} listed a day either "
-          f"side, {len(posted)} already named")
-    if not due and not nearby:
-        return 0
+        due = sorted(listed(day))
+        # The calendar's date for a report can be a day out: it is refreshed
+        # weekly and companies move. So the days either side are asked about too,
+        # and kept only where Yahoo has the report on today.
+        nearby = sorted((listed(day - dt.timedelta(days=1))
+                         | listed(day + dt.timedelta(days=1))) - set(due))
+        _banner(f"Reporters — {day.isoformat()}, the {'morning' if run == 'pre' else 'evening'} run")
+        print(f"  {len(due)} due today by the calendar, {len(nearby)} listed a day either "
+              f"side, {len(posted)} already named")
+        if not due and not nearby:
+            return 0
 
-    on_screen = _names_on_screens(out)
-    try:
-        implied = discord.implied_moves(json.loads((out / "market" / "earnings.json").read_text()))
-    except (OSError, ValueError):
-        implied = {}
+        on_screen = _names_on_screens(out)
+        try:
+            implied = discord.implied_moves(json.loads((out / "market" / "earnings.json").read_text()))
+        except (OSError, ValueError):
+            implied = {}
 
-    # Finnhub's calendar for the day: one request, every reporter, with
-    # earnings and revenue against their estimates soon after the print.
-    # Empty without a key, and then Yahoo is read alone as before.
-    from catalysts import finnhub
-    figures = finnhub.calendar(day)
-    if finnhub.enabled():
-        print(f"  finnhub: {len(figures):,} companies on the day, "
-              f"{sum(1 for r in figures.values() if r['eps'] is not None):,} "
-              f"with a reported figure ({dict(finnhub.OUTCOMES)})")
-    else:
-        print("  finnhub: no FINNHUB_API_KEY set; figures from Yahoo alone.")
-
-    quotes = yfmod.report_day_quotes(due + nearby)
-    moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()
-             or s in figures]
-    if moved:
-        print(f"  {len(moved)} of those are on today by Yahoo or Finnhub: "
-              f"{', '.join(moved)}")
-        due = sorted(set(due) | set(moved))
-    named = discord.reporters_to_name(due, quotes, on_screen, set(posted))
-    tables: dict[str, dict | None] = {}
-    asked_yahoo = 0
-    for symbol in named:
-        theirs = figures.get(symbol)
-        if finnhub.complete(theirs):
-            # When in the day and the figure are both in hand: Yahoo's table
-            # has nothing to add, and it is the slow request of the two.
-            tables[symbol] = finnhub.merged(None, theirs)
-            continue
-        tables[symbol] = finnhub.merged(yfmod.report_row(symbol, day), theirs)
-        asked_yahoo += 1
-        time.sleep(0.4)
-    if finnhub.enabled():
-        print(f"  Yahoo's table was needed for {asked_yahoo} of {len(named)}.")
-    rows = discord.reporter_rows(run, named, quotes, tables, on_screen, implied)
-    others = len([s for s in due if s not in posted]) - len(named)
-    print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
-          f"{sum(1 for t in tables.values() if t)} with a line for today; "
-          f"{len(rows)} to name in this run")
-    message = discord.reporters_message(run, rows, day, local.strftime("%-I:%M %p"),
-                                        others=max(0, others))
-    if not message:
-        print("  nobody to name in this run.")
-        return 0
-    print(message)
-    if not getattr(args, "send", False):
-        return 0
-    try:
-        if discord.post("earnings", message, username="The Tape · earnings"):
-            posted += [row["symbol"] for row in rows]
-            read_at = local.strftime("%Y-%m-%dT%H:%M")
-            rows_today += [discord.public_row(row, day, run, read_at) for row in rows]
-            pending += [{"symbol": row["symbol"], "name": row["name"],
-                         "day": day.isoformat(), "when": row["when"],
-                         "move": row["move"], "implied": row.get("implied")}
-                        for row in rows if discord.awaits_session(row)]
-            keep()
-            print("\nSent to Discord.")
+        # Finnhub's calendar for the day: one request, every reporter, with
+        # earnings and revenue against their estimates soon after the print.
+        # Empty without a key, and then Yahoo is read alone as before.
+        from catalysts import finnhub
+        figures = finnhub.calendar(day)
+        if finnhub.enabled():
+            print(f"  finnhub: {len(figures):,} companies on the day, "
+                  f"{sum(1 for r in figures.values() if r['eps'] is not None):,} "
+                  f"with a reported figure ({dict(finnhub.OUTCOMES)})")
         else:
-            print("\nNo Discord webhook is set; nothing was sent.")
-    except Exception as exc:                       # noqa: BLE001
-        print(f"\nDiscord refused the post: {type(exc).__name__}")
-        return 1
-    return 0
+            print("  finnhub: no FINNHUB_API_KEY set; figures from Yahoo alone.")
+
+        quotes = yfmod.report_day_quotes(due + nearby)
+        moved = [s for s in nearby if (quotes.get(s) or {}).get("due_on") == day.isoformat()
+                 or s in figures]
+        if moved:
+            print(f"  {len(moved)} of those are on today by Yahoo or Finnhub: "
+                  f"{', '.join(moved)}")
+            due = sorted(set(due) | set(moved))
+        named = discord.reporters_to_name(due, quotes, on_screen, set(posted))
+        tables: dict[str, dict | None] = {}
+        asked_yahoo = 0
+        for symbol in named:
+            theirs = figures.get(symbol)
+            if finnhub.complete(theirs):
+                # When in the day and the figure are both in hand: Yahoo's table
+                # has nothing to add, and it is the slow request of the two.
+                tables[symbol] = finnhub.merged(None, theirs)
+                continue
+            tables[symbol] = finnhub.merged(yfmod.report_row(symbol, day), theirs)
+            asked_yahoo += 1
+            time.sleep(0.4)
+        if finnhub.enabled():
+            print(f"  Yahoo's table was needed for {asked_yahoo} of {len(named)}.")
+        rows = discord.reporter_rows(run, named, quotes, tables, on_screen, implied)
+        others = len([s for s in due if s not in posted]) - len(named)
+        print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
+              f"{sum(1 for t in tables.values() if t)} with a line for today; "
+              f"{len(rows)} to name in this run")
+        message = discord.reporters_message(run, rows, day, local.strftime("%-I:%M %p"),
+                                            others=max(0, others))
+        if not message:
+            print("  nobody to name in this run.")
+            return 0
+        print(message)
+        if not getattr(args, "send", False):
+            return 0
+        try:
+            if discord.post("earnings", message, username="The Tape · earnings"):
+                posted += [row["symbol"] for row in rows]
+                read_at = local.strftime("%Y-%m-%dT%H:%M")
+                rows_today += [discord.public_row(row, day, run, read_at) for row in rows]
+                pending += [{"symbol": row["symbol"], "name": row["name"],
+                             "day": day.isoformat(), "when": row["when"],
+                             "move": row["move"], "implied": row.get("implied")}
+                            for row in rows if discord.awaits_session(row)]
+                keep()
+                print("\nSent to Discord.")
+            else:
+                print("\nNo Discord webhook is set; nothing was sent.")
+        except Exception as exc:                       # noqa: BLE001
+            print(f"\nDiscord refused the post: {type(exc).__name__}")
+            return 1
+        return 0
+
+    finally:
+        try:
+            _release_reads(args, out, day, posted, pending, releases, keep)
+        except Exception as exc:                   # noqa: BLE001 - never cost the run
+            print(f"  press releases: {type(exc).__name__}: {str(exc)[:200]}", flush=True)
+
+
+#: How many press releases one run sends to the model. Each is a request
+#: that costs money; the names on a screen go first.
+RELEASE_READS_A_RUN = 8
+
+
+def _release_reads(args, out, day: dt.date, posted: list[str], pending: list[dict],
+                   releases: dict[str, str], keep) -> None:
+    """A first read from the press release for the companies named today.
+
+    The read of a quarter waits days for its 10-Q. The release is filed the
+    same hour, as an exhibit to an 8-K, and a model can read the handful of
+    figures a reader wants that evening. Needs ANTHROPIC_API_KEY; without it
+    this says so once and does nothing.
+    """
+    import requests
+
+    from catalysts import finnhub
+    from data import edgar, press_release
+    from publish import discord
+
+    # Today's names, and yesterday's after-the-bell ones still waiting on
+    # their session: a release filed after last evening's run is read in the
+    # morning.
+    recent = {row["symbol"]: row.get("day") for row in pending
+              if str(row.get("day")) >= (day - dt.timedelta(days=1)).isoformat()}
+    wanted = [s for s in list(dict.fromkeys(list(posted) + list(recent)))
+              if s not in releases]
+    if not wanted:
+        return
+    if not press_release.enabled():
+        print(f"  press releases: no ANTHROPIC_API_KEY set; {len(wanted)} first "
+              f"reads not attempted.")
+        return
+    on_screen = _names_on_screens(out)
+    order = {symbol: index for index, symbol in enumerate(wanted)}
+    wanted.sort(key=lambda s: (s not in on_screen, order[s]))
+    agent = edgar._user_agent()
+    session = requests.Session()
+    try:
+        cik_map = edgar._ticker_to_cik(session)
+    except edgar.EdgarUnavailable as exc:
+        print(f"  press releases: SEC is not answering ({str(exc)[:120]}).")
+        return
+    second = {}
+    names = {}
+    try:
+        names = {symbol: (json.loads((out / "stocks" / f"{symbol}.json").read_text())
+                          .get("name") or "") for symbol in wanted[:60]
+                 if (out / "stocks" / f"{symbol}.json").exists()}
+    except (OSError, ValueError):
+        pass
+    read = found_none = 0
+    for symbol in wanted:
+        if read >= RELEASE_READS_A_RUN:
+            break
+        cik = next((cik_map[c] for c in edgar._cik_candidates(symbol) if c in cik_map), None)
+        if not cik:
+            continue
+        reported = dt.date.fromisoformat(str(recent.get(symbol) or day.isoformat()))
+        try:
+            where = press_release.find(session, cik, reported, agent)
+            text = press_release.fetch(session, where["url"], agent) if where else None
+        except (requests.RequestException, ValueError) as exc:
+            print(f"  press releases: {symbol}: {type(exc).__name__}")
+            continue
+        if not text:
+            found_none += 1
+            continue
+        if len(text) > press_release.MAX_CHARS:
+            print(f"  press releases: {symbol}: the exhibit is {len(text):,} "
+                  f"characters, too long to send whole; skipped.")
+            continue
+        read += 1
+        found = press_release.read(text, symbol, names.get(symbol, ""))
+        if not found:
+            print(f"  press releases: {symbol}: no read came back.")
+            continue
+        if reported not in second:
+            second[reported] = finnhub.calendar(reported)
+        found = press_release.checked(
+            found, (second[reported].get(symbol) or {}).get("revenue"))
+        card = discord.release_embed(symbol, names.get(symbol, ""), found, where)
+        print(f"  press releases: {symbol}: {card['title']} | "
+              + card["description"].replace("\n", " | ")[:400])
+        if not getattr(args, "send", False):
+            continue
+        try:
+            if discord.post("earnings", "", embeds=[card],
+                            username="The Tape · first read"):
+                releases[symbol] = day.isoformat()
+                keep()
+        except Exception as exc:                   # noqa: BLE001
+            print(f"  press releases: Discord refused {symbol}: {type(exc).__name__}")
+    print(f"  press releases: {read} sent to the model, {found_none} with no "
+          f"8-K exhibit on file yet, {len(releases)} first reads on record.")
 
 
 def _reads_file(path) -> dict[str, str]:

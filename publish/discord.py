@@ -55,7 +55,10 @@ def post(room: str, content: str = "", *, embeds: list[dict] | None = None,
     url = hook(room)
     if not url:
         return False
-    body: dict = {"content": content[:LIMIT]}
+    # No message of ours pings anybody. Some of what is posted is a model's
+    # reading of a document a stranger wrote, and "@everyone" in it must be
+    # text and nothing more.
+    body: dict = {"content": content[:LIMIT], "allowed_mentions": {"parse": []}}
     if embeds:
         body["embeds"] = embeds
     if username:
@@ -504,6 +507,66 @@ def reactions_settled_message(rows: list[dict], today: dt.date) -> str | None:
     lines.append("_The first figure is the regular session, close to close. "
                  "The second is the quote the reaction line gave._")
     return "\n".join(lines)
+
+
+GUIDANCE_WORDS = {"raised": "Outlook raised", "lowered": "Outlook lowered",
+                  "maintained": "Outlook maintained", "initiated": "Outlook given",
+                  "withdrawn": "Outlook withdrawn"}
+
+
+def release_embed(symbol: str, name: str, found: dict, where: dict) -> dict:
+    """A first read from the press release, as a card.
+
+    Every figure on it was read out of the release by a model, and the card
+    says so in its title and its footer. `found` has been through
+    press_release.checked, so a revenue that disagreed with the second
+    source is already gone.
+    """
+    from data import press_release                 # noqa: PLC0415
+    lines = []
+    if found.get("revenue"):
+        line = f"Revenue {money(found['revenue'])}"
+        change = press_release.growth(found["revenue"], found.get("revenue_prior_year"))
+        if change is not None:
+            line += f", {change:+.1f}% on the year"
+        if found.get("revenue_checked") == "agrees":
+            line += " (agrees with Finnhub)"
+        lines.append(line + ".")
+    elif found.get("revenue_checked") == "disagrees":
+        lines.append("Revenue withheld: the figure read from the release and "
+                     "Finnhub's do not agree.")
+
+    def eps(label: str, now, before) -> None:
+        if now is None:
+            return
+        line = f"{label} EPS {now:.2f}"
+        if before is not None:
+            line += f", against {before:.2f} a year earlier"
+        lines.append(line + ".")
+    eps("GAAP", found.get("eps_gaap"), found.get("eps_gaap_prior_year"))
+    eps("Adjusted", found.get("eps_adjusted"), found.get("eps_adjusted_prior_year"))
+    word = GUIDANCE_WORDS.get(str(found.get("guidance_direction")))
+    if word:
+        detail = press_release.clean(found.get("guidance_detail"), 260)
+        lines.append(f"{word}: {detail}" if detail else f"{word}.")
+    led = press_release.clean(found.get("led_with"))
+    if led:
+        lines.append(f"Led with: {led}")
+    period = press_release.clean(found.get("period_label"), 60)
+    foot = "Read by a model from the company's press release"
+    if where.get("filed"):
+        filed = dt.date.fromisoformat(where["filed"])
+        foot += f", filed {filed.month}/{filed.day}"
+    foot += ". Unaudited. The read of the filed quarter follows."
+    title = f"{symbol} {company_name(name or '')}: first read"
+    if period:
+        title += f", {period}"
+    return {
+        "title": title[:250],
+        "url": where.get("url") or f"{site()}/stocks/{symbol}",
+        "description": "\n".join(f"• {line}" for line in lines)[:1500],
+        "footer": {"text": foot},
+    }
 
 
 def money(amount: float) -> str:

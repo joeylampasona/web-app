@@ -936,6 +936,64 @@ def probe_congress() -> None:
     print(f"   totals: {dict(total)}; {time.monotonic() - started:.0f}s")
 
 
+def probe_press(agent: str = "") -> None:
+    """Whether a results press release can be found at SEC and read as text,
+    and, with a key, what the model makes of one."""
+    print()
+    print(RULE)
+    print("12. PRESS RELEASES — the 8-K exhibit, found and read")
+    print(RULE)
+    try:
+        from data import edgar, press_release
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the pipeline: {exc}")
+        return
+    agent = agent or os.environ.get("EDGAR_USER_AGENT", "").strip()
+    session = requests.Session()
+    try:
+        cik_map = edgar._ticker_to_cik(session)
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   SEC's ticker file: {type(exc).__name__}: {str(exc)[:120]}")
+        return
+    cases = [s.split(":") for s in (os.environ.get("PROBE_PRESS") or
+             "DE:2026-11-25,DELL:2026-11-24,BBY:2026-11-24,ZS:2026-11-24,"
+             "HPQ:2026-11-24,ADI:2026-11-24").split(",")]
+    texts = {}
+    for symbol, day in cases:
+        cik = next((cik_map[c] for c in edgar._cik_candidates(symbol) if c in cik_map), None)
+        if not cik:
+            print(f"   {symbol}: not in SEC's ticker file")
+            continue
+        try:
+            where = press_release.find(session, cik, dt.date.fromisoformat(day), agent)
+            if not where:
+                print(f"   {symbol} {day}: no 8-K with item 2.02 and an exhibit 99 found")
+                continue
+            text = press_release.fetch(session, where["url"], agent)
+            print(f"   {symbol} {day}: {where['url'].rsplit('/', 1)[-1]}, accepted "
+                  f"{where['accepted']}, {len(text or ''):,} characters of text")
+            head = " / ".join(line for line in (text or "").splitlines() if line.strip())[:260]
+            print(f"      begins: {head}")
+            texts[symbol] = (text, where)
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {symbol}: {type(exc).__name__}: {str(exc)[:160]}")
+    if not press_release.enabled():
+        print("\n   ANTHROPIC_API_KEY is not set here, so no release was sent to a "
+              "model. The reads stay off until it is.")
+        return
+    from publish import discord
+    for symbol in list(texts)[:2]:
+        text, where = texts[symbol]
+        started = time.monotonic()
+        found = press_release.read(text, symbol, "")
+        print(f"\n   {symbol}: read in {time.monotonic() - started:.0f}s: "
+              f"{json.dumps(found)[:700] if found else 'nothing came back'}")
+        if found:
+            card = discord.release_embed(symbol, "", press_release.checked(found, None), where)
+            print(f"      card: {card['title']} | "
+                  + card["description"].replace(chr(10), " | "))
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -960,6 +1018,7 @@ def main() -> int:
         ("chains", probe_chains),
         ("finnhub", probe_finnhub),
         ("congress", probe_congress),
+        ("press", probe_press),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

@@ -42,6 +42,7 @@ SOURCES = (
     ("filings", "Company filings", "SEC"),
     ("desk", "Market Desk", "Market Desk nightly"),
     ("desk_options", "Market Desk options reads", "Market Desk nightly"),
+    ("congress", "Congressional trades", "House Clerk"),
     ("news", "Headlines", "Polygon"),
 )
 

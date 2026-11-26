@@ -176,6 +176,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             desk_extras: dict | None = None,
             sources_history: list | None = None,
             sp500: tuple[set, str | None] | None = None,
+            congress: dict | None = None,
             fundamentals: dict[str, dict] | None = None,
             earnings_reads: list[dict] | None = None,
             out: pathlib.Path | None = None) -> list[pathlib.Path]:
@@ -565,6 +566,8 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                                      priced_last.get(symbol)),
                                              sp500=(symbol in sp500_members
                                                     if sp500_members else None),
+                                             congress=(None if congress is None else
+                                                       congress["by_symbol"].get(symbol, [])),
                                              short_interest=short_by_symbol.get(symbol),
                                              options_read=options_by_symbol.get(symbol),
                                              short_volume=short_volume_by_symbol.get(symbol),
@@ -710,6 +713,33 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
         "copy": INSIDER_COPY,
         "days": sorted(insider_days.values(), key=lambda d: d["date"], reverse=True),
     }))
+
+    # ---- trades by members of the House --------------------------------
+    #
+    # From the Clerk's periodic transaction reports. Free to every reader
+    # and never gated: the statute that makes the reports public allows
+    # their use by news media for dissemination to the general public and
+    # for no other commercial purpose. Not written at all before the first
+    # fetch, so a page can tell "not read yet" from "none".
+    if congress is not None:
+        from data import congress as congress_mod
+        recent_trades = [{**row, "name": (market.refs[row["symbol"]].name
+                                          if row["symbol"] in market.refs else row["symbol"])}
+                         for row in congress_mod.recent(congress, as_of)]
+        written.append(_write(out / "market" / "congress.json", {
+            "as_of": as_of.isoformat(),
+            "days": congress_mod.RECENT_DAYS,
+            "count": len(recent_trades),
+            "rows": recent_trades,
+            # How many transactions each name has had in the last year.
+            "by_ticker": {symbol: len(rows) for symbol, rows
+                          in sorted(congress["by_symbol"].items())},
+            "filings_read": congress.get("filings_read"),
+            "filings_unread": congress.get("filings_unread"),
+            "newest_filed": congress.get("newest_filed"),
+            "copy": congress_mod.COPY,
+            "source": "Clerk of the House",
+        }))
 
     # ---- relative volume, across the whole universe -------------------
     #
@@ -1248,6 +1278,7 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    holders_locked: set[str] | None = None,
                    priced: tuple[dict | None, dict | None] = (None, None),
                    sp500: bool | None = None,
+                   congress: list | None = None,
                    short_interest: dict | None = None,
                    options_read: dict | None = None,
                    short_volume: dict | None = None,
@@ -1329,6 +1360,10 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                            and len(primary.base_history) > gatedmod.FREE_XRAY_BASES),
         "catalyst_roadmap": [e.to_json(market.as_of) for e in events],
         "insiders": (insiders or {}).get(symbol),
+        # Trades in this stock by members of the House over the last year,
+        # newest first. Null before the reports have ever been read, which
+        # is not the same as an empty list.
+        "congress": congress,
         # Where open interest concentrates gamma. Absent for any name with
         # no listed options, which is most of the universe, and absent
         # rather than zeroed so the page can tell the two apart.
