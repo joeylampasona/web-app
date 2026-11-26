@@ -794,6 +794,108 @@ def probe_finnhub() -> None:
     print(f"   outcomes: {dict(finnhub.OUTCOMES)}")
 
 
+def probe_congress() -> None:
+    """Where trades by members of Congress can be read from, free.
+
+    Four candidates: Finnhub's endpoint (which may be a paid one), the two
+    community feeds that republish the disclosures as JSON, and the House
+    Clerk's own yearly index with one of its filings.
+    """
+    print()
+    print(RULE)
+    print("11. CONGRESS — where members' trades can be read from")
+    print(RULE)
+    import io
+    import zipfile
+    import zoneinfo
+    year = dt.datetime.now(zoneinfo.ZoneInfo("America/New_York")).year
+    plain = {"User-Agent": PLAIN_AGENT, "Accept": "*/*"}
+
+    print("\n-- Finnhub /stock/congressional-trading --")
+    token = (os.environ.get("FINNHUB_API_KEY") or "").strip()
+    if not token:
+        print("   no FINNHUB_API_KEY here")
+    else:
+        try:
+            reply = requests.get("https://finnhub.io/api/v1/stock/congressional-trading",
+                                 params={"symbol": "NVDA", "from": f"{year}-01-01",
+                                         "to": f"{year}-12-31"},
+                                 headers={"X-Finnhub-Token": token, **plain}, timeout=30)
+            body = reply.text[:300].replace("\n", " ")
+            print(f"   HTTP {reply.status_code}, {len(reply.text):,} chars: {body}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {type(exc).__name__}: {exc}")
+
+    feeds = (
+        ("House Stock Watcher", "https://house-stock-watcher-data.s3-us-west-2."
+                                "amazonaws.com/data/all_transactions.json"),
+        ("Senate Stock Watcher", "https://senate-stock-watcher-data.s3-us-west-2."
+                                 "amazonaws.com/aggregate/all_transactions.json"),
+    )
+    for label, url in feeds:
+        print(f"\n-- {label} --")
+        try:
+            reply = requests.get(url, headers=plain, timeout=90)
+            print(f"   HTTP {reply.status_code}, {len(reply.content):,} bytes, "
+                  f"last-modified {reply.headers.get('last-modified')}")
+            if reply.status_code == 200:
+                rows = reply.json()
+                print(f"   {len(rows):,} rows; keys {sorted(rows[0])}")
+
+                def when(row):
+                    text = str(row.get("transaction_date") or "")
+                    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+                        try:
+                            return dt.datetime.strptime(text, fmt).date()
+                        except ValueError:
+                            continue
+                    return dt.date.min
+                newest = sorted(rows, key=when)[-3:]
+                for row in newest:
+                    print(f"   newest: {json.dumps(row)[:330]}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {type(exc).__name__}: {str(exc)[:200]}")
+
+    print("\n-- House Clerk: the year's index of filings --")
+    try:
+        url = f"https://disclosures-clerk.house.gov/public_disc/financial-pdfs/{year}FD.zip"
+        reply = requests.get(url, headers=plain, timeout=90)
+        print(f"   HTTP {reply.status_code}, {len(reply.content):,} bytes, "
+              f"{reply.headers.get('content-type')}")
+        if reply.status_code == 200:
+            archive = zipfile.ZipFile(io.BytesIO(reply.content))
+            print(f"   files: {archive.namelist()}")
+            name = next(n for n in archive.namelist() if n.lower().endswith(".txt"))
+            lines = archive.read(name).decode("utf-8", "replace").splitlines()
+            print(f"   {name}: {len(lines):,} lines; header: {lines[0][:160]}")
+            cells = [line.split("\t") for line in lines[1:] if line.strip()]
+            head = lines[0].split("\t")
+            kind = head.index("FilingType") if "FilingType" in head else 4
+            ptrs = [c for c in cells if len(c) > kind and c[kind].strip() == "P"]
+            print(f"   periodic transaction reports this year: {len(ptrs):,}")
+            for c in ptrs[-3:]:
+                print(f"   a recent one: {c}")
+            if ptrs:
+                doc = ptrs[-1][-1].strip()
+                pdf_url = (f"https://disclosures-clerk.house.gov/public_disc/"
+                           f"ptr-pdfs/{year}/{doc}.pdf")
+                pdf = requests.get(pdf_url, headers=plain, timeout=60)
+                print(f"   its filing: HTTP {pdf.status_code}, {len(pdf.content):,} "
+                      f"bytes, {pdf.headers.get('content-type')}")
+                try:
+                    import pypdf                       # noqa: PLC0415
+                    reader = pypdf.PdfReader(io.BytesIO(pdf.content))
+                    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+                    print(f"   pypdf: {len(reader.pages)} pages, {len(text):,} chars of text")
+                    for line in [l for l in text.splitlines() if l.strip()][:40]:
+                        # Names are public record; this prints the form's own rows.
+                        print(f"      | {line[:150]}")
+                except ImportError:
+                    print("   pypdf is not installed here; the filing's text was not read.")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {str(exc)[:200]}")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -817,6 +919,7 @@ def main() -> int:
         ("reporters", probe_reporters),
         ("chains", probe_chains),
         ("finnhub", probe_finnhub),
+        ("congress", probe_congress),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

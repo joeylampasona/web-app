@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub). Empty runs all."
+        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress). Empty runs all."
         required: false
         default: ""
 
@@ -47,7 +47,10 @@ jobs:
           PROBE_ONLY: ${{ inputs.only }}
           # For the finnhub section. Never printed.
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-        run: python tools/probe_sources.py
+        run: |
+          # The congress section reads one PDF filing; nothing else needs this.
+          case ",${PROBE_ONLY}," in *,congress,*) pip install -q pypdf ;; esac
+          python tools/probe_sources.py
 
 
       # The one part of this workflow that is not read-only, and it runs only
