@@ -171,6 +171,14 @@ export default function ColophonPage() {
             out companies that have since delisted.</>
           )}
         </p>
+        {/* The chart library's licence asks for its notice and a link on a
+            page readers can reach. This is that page. */}
+        <p className="footnote muted" style={{ margin: 0, maxWidth: "70ch" }}>
+          The price charts are drawn with TradingView Lightweight Charts&trade;,
+          Copyright &copy; 2025 TradingView, Inc.{" "}
+          <a href="https://www.tradingview.com/" rel="noopener noreferrer"
+             style={{ textDecoration: "underline" }}>https://www.tradingview.com/</a>
+        </p>
       </section>
     </div>
   );

@@ -863,6 +863,19 @@ table.data thead th {
 .chart-layers button[aria-pressed="true"] { color: var(--text-primary); border-bottom-color: var(--rule); font-weight: 600; }
 .chart-layers button[aria-pressed="false"] .swatch { opacity: 0.35; }
 .chart-layers .swatch { width: 16px; height: 0; }
+/* How much history the chart shows. Pushed to the far end of the same rule
+   as the layer switches: they choose what is drawn, these choose how far
+   back. On a phone the row wraps and these take a line of their own. */
+.chart-ranges { display: inline-flex; margin-left: auto; }
+.chart-ranges button { padding: 0 8px; font-family: var(--font-mono); font-size: 11px;
+                       letter-spacing: 0.04em; }
+/* The session under the crosshair. One line of figures in the mono face,
+   wrapping on a phone; a fixed minimum height so the chart below never
+   moves as the pointer comes and goes. */
+.chart-readout { display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline;
+                 min-height: 20px; font-size: 12px; color: var(--text-secondary); }
+.chart-readout i { font-style: normal; color: var(--text-muted); }
+.chart-fallback { display: block; }
 .metric-grid--strip { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0;
                       background: none; border: 0; border-top: 3px solid var(--rule);
                       border-radius: 0; overflow: hidden; }

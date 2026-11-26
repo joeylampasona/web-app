@@ -21,7 +21,7 @@ import { InsiderPanel } from "./InsiderPanel";
 import { MovingAverageKey } from "./MovingAverageKey";
 import { NewsPanel } from "./NewsPanel";
 import { PeerBars } from "./PeerBars";
-import { SetupChart } from "./SetupChart";
+import { type ChartRange, SetupChart } from "./SetupChart";
 import { ShapeReadout } from "./ShapeReadout";
 import { StructureCheck } from "./StructureCheck";
 import { StockCard } from "./StockCard";
@@ -30,6 +30,21 @@ import { planMovingAverages } from "@/lib/movingAverages";
 import type { DeskRun, StockFile } from "@/lib/types";
 
 // Stable empties, so the chart is not rebuilt on every render.
+/** The ranges worth offering for a history of `count` sessions. A range has
+ *  to leave something out to be a choice, so one that would show nearly
+ *  everything is dropped in favour of "All". */
+function chartRanges(count: number): { label: string; value: ChartRange }[] {
+  const offered = [{ label: "1M", value: 21 }, { label: "3M", value: 63 },
+                   { label: "6M", value: 126 }]
+    .filter((option) => option.value <= count - 15);
+  return [...offered, { label: "All", value: "all" as const }];
+}
+
+/** Six months when there is that much, else everything. */
+function defaultRange(ranges: { value: ChartRange }[]): ChartRange {
+  return ranges.some((option) => option.value === 126) ? 126 : "all";
+}
+
 const NONE: never[] = [];
 const NONE_FLAGS: string[] = [];
 
@@ -68,7 +83,11 @@ export function StockDetail({ stock, run, deskNote }: {
   // One slice and one plan, shared by the chart and the key beneath it. Both
   // are memoised because a fresh array on every render would rebuild the chart
   // on every render.
-  const chartBars = useMemo(() => stock.bars.slice(-140), [stock.bars]);
+  //
+  // Every bar the file carries, about eight months of them. The chart used
+  // to be cut to the last hundred and forty sessions; now it opens on the
+  // last six months and the rest is a drag or a button away.
+  const chartBars = stock.bars;
   const maPlan = useMemo(
     () => planMovingAverages(
       chartBars.map((b) => b.close),
@@ -82,6 +101,12 @@ export function StockDetail({ stock, run, deskNote }: {
 
   const lines = useMemo(() => levelLines(stock.levels), [stock.levels]);
   const [layers, setLayers] = useState({ base: true, averages: true, levels: false });
+  // How much history the chart opens on. A formation frames itself, so a
+  // stock on a shape screen starts with no range chosen and the chart shows
+  // the formation; everything else opens on six months.
+  const ranges = useMemo(() => chartRanges(chartBars.length), [chartBars.length]);
+  const [range, setRange] = useState<ChartRange | undefined>(
+    () => (setup?.shape ? undefined : defaultRange(ranges)));
   const flip = (key: keyof typeof layers) =>
     setLayers((held) => ({ ...held, [key]: !held[key] }));
   const toggles = (
@@ -103,6 +128,16 @@ export function StockDetail({ stock, run, deskNote }: {
           Levels <span className="num dim">{lines.length}</span>
         </button>
       )}
+      {ranges.length > 1 && (
+        <span className="chart-ranges" role="group" aria-label="How much history the chart shows">
+          {ranges.map((option) => (
+            <button key={option.label} type="button" aria-pressed={range === option.value}
+                    onClick={() => setRange(option.value)}>
+              {option.label}
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   );
 
@@ -121,7 +156,8 @@ export function StockDetail({ stock, run, deskNote }: {
                      showHeader={false} strip
                      overlays={{ base: layers.base,
                                  movingAverages: layers.averages ? maPlan : null,
-                                 levels: layers.levels ? lines : null }}
+                                 levels: layers.levels ? lines : null,
+                                 readout: true, range }}
                      chartHead={toggles}
                      chartFoot={layers.averages
                        ? <MovingAverageKey plan={maPlan} stacked={setup.trend?.stacked} /> : null} />
@@ -142,6 +178,9 @@ export function StockDetail({ stock, run, deskNote }: {
                   height="responsive"
                   movingAverages={layers.averages ? maPlan : null}
                   levels={layers.levels ? lines : null}
+                  readout
+                  range={range}
+                  fallback
                 />
                 {layers.averages && <MovingAverageKey plan={maPlan} />}
               </div>

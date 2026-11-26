@@ -40,6 +40,106 @@ const useMeasureEffect = typeof window === "undefined" ? useEffect : useLayoutEf
 /** What a responsive chart reserves before it has measured itself. */
 export const MIN_CHART_HEIGHT = RESPONSIVE.min;
 
+/** How much of the history a chart opens on: a number of trailing sessions,
+ *  or everything it was given. */
+export type ChartRange = number | "all";
+
+/** Sessions of empty space kept to the right of the last bar. */
+const RIGHT_OFFSET = 4;
+
+type RangeTarget = {
+  timeScale(): {
+    fitContent(): void;
+    setVisibleLogicalRange(range: { from: number; to: number }): void;
+  };
+};
+
+function showRange(chart: RangeTarget, count: number, range: ChartRange): void {
+  if (range === "all" || range >= count) {
+    chart.timeScale().fitContent();
+    return;
+  }
+  chart.timeScale().setVisibleLogicalRange({
+    from: count - range - 0.5, to: count - 1 + RIGHT_OFFSET,
+  });
+}
+
+/** The crosshair's time, back as the ISO date the bars are keyed by. The
+ *  library hands back whatever shape it was given, and has changed its mind
+ *  about that between versions, so all three are read. */
+function isoDate(time: unknown): string | null {
+  if (typeof time === "string") return time.slice(0, 10);
+  if (typeof time === "number") return new Date(time * 1000).toISOString().slice(0, 10);
+  if (time && typeof time === "object" && "year" in time) {
+    const t = time as { year: number; month: number; day: number };
+    return `${t.year}-${String(t.month).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+const READOUT_DATE = new Intl.DateTimeFormat("en-US", {
+  month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+});
+
+function compactVolume(value: number): string {
+  if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
+  return String(Math.round(value));
+}
+
+/** One session, spelled out: the line a reader gets under the crosshair. It
+ *  shows the last session when nothing is pointed at, so it is never empty
+ *  and the chart beneath it never moves. */
+function Readout({ bar, previous, pointed }: {
+  bar: Bar; previous: Bar | undefined; pointed: boolean;
+}) {
+  const change = previous && previous.close > 0
+    ? 100 * (bar.close / previous.close - 1) : null;
+  return (
+    <div className="chart-readout num" aria-live="off">
+      <span className={pointed ? undefined : "dim"}>
+        {READOUT_DATE.format(new Date(`${bar.time.slice(0, 10)}T00:00:00Z`))}
+      </span>
+      <span><i>O</i> {bar.open.toFixed(2)}</span>
+      <span><i>H</i> {bar.high.toFixed(2)}</span>
+      <span><i>L</i> {bar.low.toFixed(2)}</span>
+      <span><i>C</i> {bar.close.toFixed(2)}</span>
+      {change !== null && (
+        <span style={{ color: change >= 0 ? "var(--gain)" : "var(--loss)" }}>
+          {change >= 0 ? "+" : ""}{change.toFixed(2)}%
+        </span>
+      )}
+      <span><i>Vol</i> {compactVolume(bar.volume)}</span>
+    </div>
+  );
+}
+
+/**
+ * The closes as one line, drawn by the server. It is what a reader sees
+ * before the chart library has loaded, and all a reader without JavaScript
+ * ever sees: the shape of the price, with none of the overlays, which is
+ * better than a blank box the height of a chart.
+ */
+export function ChartFallback({ bars, height }: { bars: Bar[]; height: number }) {
+  if (bars.length < 2) return null;
+  const closes = bars.map((b) => b.close);
+  const low = Math.min(...closes);
+  const high = Math.max(...closes);
+  const span = high - low || 1;
+  const points = closes
+    .map((close, i) => `${((i / (closes.length - 1)) * 1000).toFixed(1)},`
+      + `${(8 + (1 - (close - low) / span) * 84).toFixed(1)}`)
+    .join(" ");
+  return (
+    <svg className="chart-fallback" viewBox="0 0 1000 100" preserveAspectRatio="none"
+         width="100%" height={height} aria-hidden>
+      <polyline points={points} fill="none" stroke="var(--text-muted)" strokeWidth={1.25}
+                vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 function heightFor(width: number): number {
   const raw = Math.min(RESPONSIVE.max, Math.max(RESPONSIVE.min, width * RESPONSIVE.ratio));
   return Math.round(raw / RESPONSIVE.step) * RESPONSIVE.step;
@@ -56,7 +156,7 @@ function token(name: string, fallback = "transparent"): string {
 
 export function SetupChart({
   bars, pivot, contractions, breakoutDate, flags, symbol, height = 210, onReady,
-  movingAverages, shape, levels,
+  movingAverages, shape, levels, readout = false, range, fallback = false,
 }: {
   bars: Bar[];
   /** Null when the stock is not on a screen: there is no pivot to draw. */
@@ -82,8 +182,29 @@ export function SetupChart({
   /** Three-touch support and resistance, drawn dotted with their touch
    *  counts. Only the stock page's levels chart passes these. */
   levels?: ChartLevel[] | null;
+  /** A line above the chart giving the session under the crosshair: date,
+   *  open, high, low, close, the change on the day and the volume. The
+   *  stock's own page asks for it; a card the size of a business card does
+   *  not have the room. */
+  readout?: boolean;
+  /** How much history to open on. Left out, the chart frames its formation
+   *  if it has one and otherwise shows every bar, as it always has.
+   *  Changing it moves the view without rebuilding the chart. */
+  range?: ChartRange;
+  /** Draw the closes as a plain line until the chart is ready. */
+  fallback?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const chartHandle = useRef<RangeTarget | null>(null);
+  const rangeRef = useRef(range);
+  rangeRef.current = range;
+  const [ready, setReady] = useState(false);
+  const [pointed, setPointed] = useState<number | null>(null);
+  useEffect(() => {
+    if (range !== undefined && chartHandle.current) {
+      showRange(chartHandle.current, bars.length, range);
+    }
+  }, [range, bars.length]);
   const [measured, setMeasured] = useState<number | null>(null);
   const responsive = height === "responsive";
   const drawnHeight = responsive ? (measured ?? RESPONSIVE.min) : height;
@@ -152,6 +273,10 @@ export function SetupChart({
         timeScale: { borderColor: token("--border"), rightOffset: 4, fixLeftEdge: true },
         crosshair: { mode: lw.CrosshairMode.Normal },
         handleScale: { axisPressedMouseMove: false },
+        // A finger dragged up or down over a chart is scrolling the page.
+        // Left on, the chart keeps the gesture and a phone reader is stuck
+        // on it until they find a margin to scroll by. Sideways still pans.
+        handleScroll: { vertTouchDrag: false },
         // Pinned rather than taken from navigator.language. A browser whose
         // language string Intl rejects (a POSIX locale such as
         // "en-US@posix" is one) makes the library throw while formatting
@@ -304,7 +429,19 @@ export function SetupChart({
           return false;
         }
       })();
-      if (!framed) chart.timeScale().fitContent();
+      if (rangeRef.current !== undefined) showRange(chart, bars.length, rangeRef.current);
+      else if (!framed) chart.timeScale().fitContent();
+      chartHandle.current = chart;
+      setReady(true);
+
+      const indexOf = new Map(bars.map((b, i) => [b.time.slice(0, 10), i]));
+      const onCrosshair = (param: { time?: unknown }) => {
+        const date = isoDate(param.time);
+        const index = date === null ? undefined : indexOf.get(date);
+        setPointed(index === undefined ? null : index);
+      };
+      if (readout) chart.subscribeCrosshairMove(onCrosshair as never);
+
       onReady?.(() => {
         try {
           return chart.takeScreenshot();
@@ -350,6 +487,8 @@ export function SetupChart({
       cleanup = () => {
         onReady?.(null);
         observer.disconnect();
+        chartHandle.current = null;
+        setPointed(null);
         chart.remove();
       };
     })();
@@ -359,10 +498,21 @@ export function SetupChart({
       cleanup();
     };
   }, [bars, pivot, boxes, breakoutDate, flags, drawnHeight, onReady,
-      movingAverages, shape, levels]);
+      movingAverages, shape, levels, readout]);
+
+  const shown = pointed !== null && pointed < bars.length ? pointed : bars.length - 1;
 
   return (
+    <>
+    {readout && bars.length > 0 && (
+      <Readout bar={bars[shown]} previous={bars[shown - 1]} pointed={pointed !== null} />
+    )}
     <div style={{ position: "relative" }} aria-label={`${symbol} price chart`}>
+      {fallback && !ready && (
+        <div style={{ position: "absolute", inset: 0 }}>
+          <ChartFallback bars={bars} height={drawnHeight} />
+        </div>
+      )}
       <div ref={container} style={{ width: "100%", height: drawnHeight }} />
       <svg
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
@@ -415,5 +565,6 @@ export function SetupChart({
         })}
       </svg>
     </div>
+    </>
   );
 }

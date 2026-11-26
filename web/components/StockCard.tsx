@@ -13,7 +13,8 @@ import { CriteriaMeter } from "./CriteriaMeter";
 import { MetricTile } from "./MetricRow";
 import { PriceChange } from "./PriceChange";
 import { DelayedGap } from "./DelayedGap";
-import { type ChartLevel, MIN_CHART_HEIGHT, SetupChart } from "./SetupChart";
+import { type ChartLevel, type ChartRange, MIN_CHART_HEIGHT,
+         SetupChart } from "./SetupChart";
 import { ShareButton } from "./ShareButton";
 import { TickerLink } from "./StockDrawer";
 import { WatchStar } from "./WatchStar";
@@ -44,7 +45,12 @@ export function StockCard({
   /** The stock page's one chart: the base, the averages and the levels drawn
    *  together, each switched by the controls passed as `chartHead`. Cards in a
    *  list pass none of these and draw the base alone. */
-  overlays?: { base: boolean; movingAverages?: MaPlan | null; levels?: ChartLevel[] | null };
+  overlays?: { base: boolean; movingAverages?: MaPlan | null; levels?: ChartLevel[] | null;
+               /** The session under the crosshair, spelled out above the chart.
+                *  It takes the place of the card's own one-line bar. */
+               readout?: boolean;
+               /** How much history the chart opens on. */
+               range?: ChartRange; };
   chartHead?: React.ReactNode;
   chartFoot?: React.ReactNode;
   /** The six readings as one ruled strip rather than a block of tiles. */
@@ -123,6 +129,7 @@ export function StockCard({
 
       {/* One line. The close and the day's change are in the header above,
           so this carries only the rest of the bar. */}
+      {!overlays?.readout && (
       <div className="caption num dim">
         {shortDate(ohlc?.date)}
         {"  "}O {decimal(ohlc?.open)}
@@ -130,6 +137,7 @@ export function StockCard({
         {"  "}L {decimal(ohlc?.low)}
         {"  "}Vol {volume(setup.volume)}
       </div>
+      )}
 
       {chartHead}
       {/* Holds the card's height steady whether or not the chart is mounted, so
@@ -150,6 +158,9 @@ export function StockCard({
           shape={base ? setup.shape : null}
           movingAverages={overlays?.movingAverages}
           levels={overlays?.levels}
+          readout={overlays?.readout}
+          range={overlays?.range}
+          fallback={Boolean(overlays?.readout)}
         />
         )}
       </div>
