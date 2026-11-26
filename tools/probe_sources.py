@@ -585,6 +585,161 @@ def probe_reporters() -> None:
             print(f"   {symbol} earnings table: {type(exc).__name__}: {str(exc)[:120]}")
 
 
+#: Names every chains probe asks about, so two runs at different hours can be
+#: laid side by side: the largest books, mid-sized ones, and small companies
+#: whose options trade by appointment.
+CHAIN_NAMES = ("AAPL", "NVDA", "TSLA", "AMD", "PLTR", "BRK.B", "JPM", "COST",
+               "DELL", "ZS", "DLTR", "ANF", "CELH", "DKS", "BURL", "ROST",
+               "AVA", "CENTA", "SHOO", "WSM", "IOT", "ONON", "NBIS", "MNDY")
+
+
+def probe_chains() -> None:
+    """Option chains from OCC and Yahoo, measured the way gamma uses them."""
+    print()
+    print(RULE)
+    print("9. OPTION CHAINS — OCC's open interest with Yahoo's quotes")
+    print(RULE)
+    import zoneinfo
+    now = dt.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    print(f"   New York time: {now:%a %Y-%m-%d %H:%M}. Run it again at another "
+          f"hour to see what the hour changes.\n")
+    try:
+        from catalysts import chains, gamma, occ, yf
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the pipeline: {exc}")
+        return
+
+    names = list(CHAIN_NAMES)
+    want = int(os.environ.get("PROBE_CHAIN_NAMES", "60") or 60)
+    try:
+        from data import store
+        universe = sorted(store.universe_symbols(store.open_db()))
+        step = max(1, len(universe) // max(1, want - len(names)))
+        names += [s for s in universe[::step] if s not in names][:want - len(names)]
+        print(f"   {len(names)} names: {len(CHAIN_NAMES)} fixed, the rest every "
+              f"{step}th of the {len(universe):,} in the database.")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   no database here ({exc}); the fixed {len(names)} names only.")
+
+    today = chains.today()
+    horizon = today + dt.timedelta(days=90)
+
+    def near(spot, strike):
+        return spot > 0 and abs(strike - spot) / spot <= gamma.MAX_MONEYNESS
+
+    print("\n   Per name, inside gamma's window (90 days, strikes within 30%):")
+    print("   name    occ   exp  yahoo  own-OI>0  IV-ok  wide  no-quote "
+          "| OI yahoo -> OI occ | gamma: yahoo-only -> joined")
+    total = dict(names=0, occ_ok=0, occ_none=0, occ_silent=0, yahoo_ok=0,
+                 contracts=0, iv_ok=0, wide=0, unquoted=0, oi_yahoo=0, oi_occ=0,
+                 gamma_old=0, gamma_new=0, conc_old=0.0, conc_new=0.0,
+                 held_old=0, held_new=0, peak_same=0, peak_both=0)
+    occ_seconds = yahoo_seconds = 0.0
+    for symbol in names:
+        total["names"] += 1
+        started = time.monotonic()
+        book = occ.open_interest(symbol)
+        occ_seconds += time.monotonic() - started
+        if book is None:
+            total["occ_silent"] += 1
+            tag = "none!"
+        elif not any(v > 0 for v in book.values()):
+            total["occ_none"] += 1
+            print(f"   {symbol:<7} no listed options with open interest at OCC")
+            continue
+        else:
+            total["occ_ok"] += 1
+            tag = "ok"
+        started = time.monotonic()
+        spot, quoted = yf.quoted_chain(symbol, today,
+                                       horizon_days=chains.HORIZON_DAYS,
+                                       at_least=chains.MIN_EXPIRIES,
+                                       at_most=chains.MAX_EXPIRIES)
+        yahoo_seconds += time.monotonic() - started
+        if not quoted or spot <= 0:
+            print(f"   {symbol:<7} {tag:<5} Yahoo gave no chain "
+                  f"(standing down: {yf.chains_standing_down()})")
+            continue
+        total["yahoo_ok"] += 1
+        asked = {r["expiry"] for r in quoted}
+        window = [r for r in quoted if r["expiry"] <= horizon and near(spot, r["strike"])]
+        iv_ok = [r for r in window if chains.usable(r["iv"])
+                 and not chains.wide(r["bid"], r["ask"])]
+        too_wide = [r for r in window if chains.wide(r["bid"], r["ask"])]
+        unquoted = [r for r in window if r["bid"] <= 0 and r["ask"] <= 0]
+        oi_yahoo = sum(r["oi"] for r in window)
+        oi_occ = sum(v for (e, _, k), v in (book or {}).items()
+                     if e in asked and e <= horizon and near(spot, k))
+        alone = gamma.profile(chains.join(symbol, spot, [dict(r) for r in quoted], None), today)
+        joined = gamma.profile(chains.join(symbol, spot, [dict(r) for r in quoted], book), today)
+
+        def peak(found):
+            return max(found.levels, key=lambda l: l.concentration).strike if found else None
+
+        def said(found):
+            return (f"{found.contracts:>4} rows {found.open_interest:>9,} held "
+                    f"${found.total_concentration / 1e6:>8,.1f}m peak {peak(found):g}"
+                    if found else "nothing")
+        print(f"   {symbol:<7} {tag:<5} {len(asked):>3} {len(window):>6} "
+              f"{sum(1 for r in window if r['oi'] > 0):>9} {len(iv_ok):>6} "
+              f"{len(too_wide):>5} {len(unquoted):>9} | {oi_yahoo:>9,} -> {oi_occ:>9,} "
+              f"| {said(alone)} -> {said(joined)}")
+        total["contracts"] += len(window)
+        total["iv_ok"] += len(iv_ok)
+        total["wide"] += len(too_wide)
+        total["unquoted"] += len(unquoted)
+        total["oi_yahoo"] += oi_yahoo
+        total["oi_occ"] += oi_occ
+        if alone:
+            total["gamma_old"] += 1
+            total["conc_old"] += alone.total_concentration
+            total["held_old"] += alone.open_interest
+        if joined:
+            total["gamma_new"] += 1
+            total["conc_new"] += joined.total_concentration
+            total["held_new"] += joined.open_interest
+        if alone and joined:
+            total["peak_both"] += 1
+            total["peak_same"] += peak(alone) == peak(joined)
+
+    print("\n   Totals")
+    print(f"      names asked {total['names']}: OCC answered with a book for "
+          f"{total['occ_ok']}, holds nothing for {total['occ_none']}, was "
+          f"silent for {total['occ_silent']}; Yahoo gave a chain for "
+          f"{total['yahoo_ok']}.")
+    if total["contracts"]:
+        share = 100.0 / total["contracts"]
+        print(f"      Yahoo contracts in the window {total['contracts']:,}: a "
+              f"usable implied volatility on {total['iv_ok'] * share:.0f}%, a "
+              f"quote too wide on {total['wide'] * share:.0f}%, no quote at all "
+              f"on {total['unquoted'] * share:.0f}%.")
+    print(f"      open interest in the window: Yahoo {total['oi_yahoo']:,}, "
+          f"OCC {total['oi_occ']:,}.")
+    print(f"      gamma from Yahoo alone: {total['gamma_old']} names, "
+          f"{total['held_old']:,} contracts held, "
+          f"${total['conc_old'] / 1e9:,.2f}bn per 1%.")
+    print(f"      gamma from the two joined: {total['gamma_new']} names, "
+          f"{total['held_new']:,} contracts held, "
+          f"${total['conc_new'] / 1e9:,.2f}bn per 1%.")
+    print(f"      the peak strike is the same either way on "
+          f"{total['peak_same']} of {total['peak_both']}.")
+    print(f"      seconds: OCC {occ_seconds:.0f}, Yahoo {yahoo_seconds:.0f}.")
+    print(f"      OCC outcomes: {dict(occ.OUTCOMES)}")
+    print(f"      Yahoo chain requests: {dict(yf.CHAIN_OUTCOMES)}")
+
+    print("\n   What the nightly's current reader makes of the first twelve "
+          "(Yahoo alone, first eight expiries):")
+    for symbol in names[:12]:
+        try:
+            found = gamma.profile(yf.option_chain(symbol), today)
+        except Exception as exc:                      # noqa: BLE001
+            print(f"      {symbol}: {type(exc).__name__}: {exc}")
+            continue
+        print(f"      {symbol:<7} "
+              + (f"{found.contracts:>4} rows {found.open_interest:>9,} held "
+                 f"${found.total_concentration / 1e6:>8,.1f}m" if found else "nothing"))
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -606,6 +761,7 @@ def main() -> int:
         ("splits", probe_splits),
         ("cboe", lambda: probe_cboe_refusals(PLAIN_AGENT)),
         ("reporters", probe_reporters),
+        ("chains", probe_chains),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

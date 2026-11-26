@@ -98,6 +98,136 @@ def option_chain(symbol: str) -> OptionChain | None:
         return None
 
 
+#: What happened to every chain request made in this process.
+CHAIN_OUTCOMES: "collections.Counter[str]" = collections.Counter()
+
+# Seconds to wait, once, when Yahoo answers "too many requests"; and how many
+# such answers in a row before it is left alone for the rest of the process.
+# A night without chains is better than a night spent waiting on them.
+RATE_LIMIT_WAIT = 20
+RATE_LIMITS_BEFORE_STANDING_DOWN = 3
+CHAIN_PAUSE = 0.05
+
+_rate_limited_in_a_row = 0
+
+
+class _StoodDown(Exception):
+    pass
+
+
+def chains_standing_down() -> bool:
+    return _rate_limited_in_a_row >= RATE_LIMITS_BEFORE_STANDING_DOWN
+
+
+def reset_chains() -> None:
+    global _rate_limited_in_a_row                  # noqa: PLW0603
+    _rate_limited_in_a_row = 0
+
+
+def _rate_limited(exc: Exception) -> bool:
+    return ("ratelimit" in type(exc).__name__.lower()
+            or "too many requests" in str(exc).lower())
+
+
+def _chain_request(ask):
+    """One Yahoo request, waited out once when it is rate limited."""
+    import time                                    # noqa: PLC0415
+    global _rate_limited_in_a_row                  # noqa: PLW0603
+    if chains_standing_down():
+        CHAIN_OUTCOMES["not_asked"] += 1
+        raise _StoodDown
+    for attempt in (1, 2):
+        try:
+            found = ask()
+            _rate_limited_in_a_row = 0
+            CHAIN_OUTCOMES["ok"] += 1
+            time.sleep(CHAIN_PAUSE)
+            return found
+        except Exception as exc:                   # noqa: BLE001
+            if not _rate_limited(exc):
+                CHAIN_OUTCOMES["error"] += 1
+                raise
+            CHAIN_OUTCOMES["rate_limited"] += 1
+            _rate_limited_in_a_row += 1
+            if chains_standing_down():
+                raise _StoodDown from exc
+            if attempt == 1:
+                time.sleep(RATE_LIMIT_WAIT)
+    raise _StoodDown
+
+
+def _number(value) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if number != number else number
+
+
+def quoted_chain(symbol: str, today: dt.date, *, horizon_days: int = 95,
+                 at_least: int = 4, at_most: int = 30
+                 ) -> tuple[float, list[dict]]:
+    """Every contract Yahoo lists on the expiries inside the horizon.
+
+    Returns the underlying's price and one plain row a contract: expiry,
+    side, strike, Yahoo's own open interest, its implied volatility, and the
+    bid and ask that volatility was drawn from. Nothing is filtered here.
+    Which rows are readings is the caller's decision, and it cannot make it
+    from rows already thrown away.
+
+    (0.0, []) when there is no chain, and when Yahoo has started refusing.
+    """
+    yf = _yf()
+    if yf is None:
+        return 0.0, []
+    rows: list[dict] = []
+    spot = 0.0
+    try:
+        ticker = yf.Ticker(yahoo_symbol(symbol))
+        listed = list(_chain_request(lambda: ticker.options) or [])
+        dated = []
+        for text in listed:
+            try:
+                dated.append((dt.date.fromisoformat(text), text))
+            except ValueError:
+                continue
+        dated = [d for d in sorted(dated) if d[0] >= today]
+        inside = [d for d in dated if (d[0] - today).days <= horizon_days]
+        wanted = (inside if len(inside) >= at_least else dated[:at_least])[:at_most]
+        for expiry, text in wanted:
+            try:
+                chain = _chain_request(lambda t=text: ticker.option_chain(t))
+            except _StoodDown:
+                raise
+            except Exception as exc:               # noqa: BLE001
+                # One expiry missing is not the chain missing.
+                log.debug("option chain %s %s: %s", symbol, text, exc)
+                continue
+            underlying = getattr(chain, "underlying", None) or {}
+            spot = spot or _number(underlying.get("regularMarketPrice"))
+            for side, frame in (("call", chain.calls), ("put", chain.puts)):
+                if frame is None or frame.empty or "strike" not in frame:
+                    continue
+                for record in frame.to_dict("records"):
+                    strike = _number(record.get("strike"))
+                    if strike <= 0:
+                        continue
+                    rows.append({
+                        "expiry": expiry, "side": side, "strike": strike,
+                        "oi": int(_number(record.get("openInterest"))),
+                        "iv": _number(record.get("impliedVolatility")),
+                        "bid": _number(record.get("bid")),
+                        "ask": _number(record.get("ask")),
+                    })
+        if rows and spot <= 0:
+            spot = _spot_price(ticker.fast_info)
+    except _StoodDown:
+        return 0.0, []
+    except Exception as exc:                       # noqa: BLE001
+        log.debug("option chain failed for %s: %s", symbol, exc)
+        return 0.0, []
+    return spot, rows
+
 
 # The keys a spot price has been known to arrive under, in preference order.
 #
