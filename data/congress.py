@@ -47,10 +47,11 @@ AGENT = "tape-research"
 TIMEOUT = 60
 
 #: New filings read a night, and the clock that stops it sooner. A filing is
-#: one small PDF; the first nights backfill the year and after that a night
-#: has a handful.
-FILINGS_A_NIGHT = 120
-TIME_BUDGET_SECONDS = 120.0
+#: one small PDF; the first three nights backfill the year (about five
+#: hundred reports) and after that a night has a handful.
+# Measured from the nightly's runner: sixty reports in 32 seconds.
+FILINGS_A_NIGHT = 200
+TIME_BUDGET_SECONDS = 110.0
 PAUSE = 0.4
 
 #: Failures in a row before the rest of the night's filings are left alone.
@@ -81,8 +82,10 @@ _DETAIL = re.compile(r"^(?P<label>[A-Z](?: [A-Z]){0,3}):\s*(?P<value>.*)$")
 # Details that are free text, and the length past which one may have run on
 # to a second line. A line that long leaves it unknown where the next asset
 # begins, and with it whether that asset has an owner code in front of it.
+# On sixty real reports a line of 96 characters had not broken and one of
+# 104 had, so a line is suspected from a little under that.
 _FREE_TEXT = {"D", "C"}
-RUN_ON_FROM = 100
+RUN_ON_FROM = 90
 _RUN_ON = "~"
 
 _AMOUNT = (r"(?:Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+|\$[\d,]+\s*\+|\$[\d,]+)")
@@ -90,7 +93,7 @@ _AMOUNT = (r"(?:Over\s+\$[\d,]+|\$[\d,]+\s*-\s*\$[\d,]+|\$[\d,]+\s*\+|\$[\d,]+)"
 # "S 10/07/202610/22/2026$1,001 - $15,000". Nothing between the two dates
 # or before the amount can be relied on.
 _TRANSACTION = re.compile(
-    r"\[(?P<kind>[A-Z]{2})\]\s*"
+    r"\[(?P<kind>[A-Z0-9]{2})\]\s*"
     r"(?P<type>S \(partial\)|P|S|E)\s+"
     r"(?P<traded>\d{1,2}/\d{1,2}/\d{4})\s*"
     r"(?P<notified>\d{1,2}/\d{1,2}/\d{4})\s*"

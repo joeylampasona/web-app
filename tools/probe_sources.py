@@ -921,7 +921,7 @@ def probe_congress() -> None:
               f"({filing['district']}): HTTP {reply.status_code}, {len(reply.content):,} "
               f"bytes, {len(lines)} lines, {len(rows)} rows {dict(kinds)} owners "
               f"{dict(owners)}, {len(misses)} unread")
-        for row in rows[:2]:
+        for row in rows[:1]:
             print(f"      row: {row['owner']} | {row['asset'][:50]} | {row['ticker']} "
                   f"[{row['kind']}] {row['type']} {row['traded']} {row['notified']} "
                   f"{row['amount_text']} amended={row['amended']}")
@@ -954,10 +954,10 @@ def probe_congress() -> None:
                     total["long_shown"] += 1
                     nxt = lines[at + 1] if at + 1 < len(lines) else ""
                     print(f"      LONG DETAIL ({len(line)}): {line[:150]!r} THEN {nxt[:70]!r}")
-        # The raw lines of a filing with something unread or nothing read.
-        if lines and (misses or not rows) and shown < 4:
+        # The raw lines of a filing that has text and gave no rows at all.
+        if lines and not rows and shown < 3:
             shown += 1
-            for line in lines[:70]:
+            for line in lines[:50]:
                 print(f"         | {line[:140]}")
         time.sleep(congress.PAUSE)
     print(f"   totals: {dict(total)}; longest detail line {longest['n']}; "
