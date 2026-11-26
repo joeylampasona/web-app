@@ -22,6 +22,7 @@ prints it.
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import json
 import os
@@ -875,25 +876,64 @@ def probe_congress() -> None:
             print(f"   periodic transaction reports this year: {len(ptrs):,}")
             for c in ptrs[-3:]:
                 print(f"   a recent one: {c}")
-            if ptrs:
-                doc = ptrs[-1][-1].strip()
-                pdf_url = (f"https://disclosures-clerk.house.gov/public_disc/"
-                           f"ptr-pdfs/{year}/{doc}.pdf")
-                pdf = requests.get(pdf_url, headers=plain, timeout=60)
-                print(f"   its filing: HTTP {pdf.status_code}, {len(pdf.content):,} "
-                      f"bytes, {pdf.headers.get('content-type')}")
-                try:
-                    import pypdf                       # noqa: PLC0415
-                    reader = pypdf.PdfReader(io.BytesIO(pdf.content))
-                    text = "\n".join((page.extract_text() or "") for page in reader.pages)
-                    print(f"   pypdf: {len(reader.pages)} pages, {len(text):,} chars of text")
-                    for line in [l for l in text.splitlines() if l.strip()][:40]:
-                        # Names are public record; this prints the form's own rows.
-                        print(f"      | {line[:150]}")
-                except ImportError:
-                    print("   pypdf is not installed here; the filing's text was not read.")
     except Exception as exc:                          # noqa: BLE001
         print(f"   {type(exc).__name__}: {str(exc)[:200]}")
+
+    # The parser the nightly uses, on the newest reports: what it reads off
+    # each, and every line that looks like a transaction and was not read.
+    print("\n-- The nightly's own reader on the newest reports --")
+    try:
+        from data import congress
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the reader: {exc}")
+        return
+    want = int(os.environ.get("PROBE_CONGRESS_FILINGS", "25") or 25)
+    listed = congress.fetch_index(year) or []
+    newest = sorted(listed, key=lambda f: (f["filed"], f["doc_id"]), reverse=True)[:want]
+    print(f"   {len(listed):,} reports in the {year} index; reading the newest {len(newest)}")
+    total = collections.Counter()
+    shown = 0
+    started = time.monotonic()
+    for filing in newest:
+        try:
+            reply = congress._get(congress.url_of(filing["year"], filing["doc_id"]))
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {filing['doc_id']}: {type(exc).__name__}")
+            total["failed"] += 1
+            continue
+        text = congress.text_of(reply.content) if reply.status_code == 200 else ""
+        lines = congress.lines_of(text)
+        rows, misses = congress.parse(text)
+        stocks = [r for r in rows if r["kind"] == "ST"]
+        with_ticker = [r for r in stocks if r["ticker"]]
+        total["filings"] += 1
+        total["no_text"] += len(lines) < 5
+        total["rows"] += len(rows)
+        total["stocks"] += len(stocks)
+        total["stocks_with_ticker"] += len(with_ticker)
+        total["owner_known"] += sum(1 for r in rows if r["owner"])
+        total["misses"] += len(misses)
+        kinds = collections.Counter(r["kind"] for r in rows)
+        owners = collections.Counter(str(r["owner"]) for r in rows)
+        print(f"   {filing['doc_id']} filed {filing['filed']} {filing['member']} "
+              f"({filing['district']}): HTTP {reply.status_code}, {len(reply.content):,} "
+              f"bytes, {len(lines)} lines, {len(rows)} rows {dict(kinds)} owners "
+              f"{dict(owners)}, {len(misses)} unread")
+        for row in rows[:3]:
+            print(f"      row: {row['owner']} | {row['asset'][:50]} | {row['ticker']} "
+                  f"[{row['kind']}] {row['type']} {row['traded']} {row['notified']} "
+                  f"{row['amount_text']} amended={row['amended']}")
+        for miss in misses[:4]:
+            print(f"      UNREAD: {miss!r}")
+        # The raw lines of a few, so the reader can be checked against what
+        # the form really says: the first three with text, and any with
+        # something unread or nothing read at all.
+        if lines and (shown < 3 or misses or not rows) and shown < 9:
+            shown += 1
+            for line in lines[:70]:
+                print(f"         | {line[:140]}")
+        time.sleep(congress.PAUSE)
+    print(f"   totals: {dict(total)}; {time.monotonic() - started:.0f}s")
 
 
 def main() -> int:

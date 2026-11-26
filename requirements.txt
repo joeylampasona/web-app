@@ -3,6 +3,10 @@ requests>=2.31
 PyYAML>=6.0
 jsonschema>=4.21
 
+# Congressional trades only: the House Clerk publishes each report as a PDF.
+# Pure Python. Imported lazily, so nothing else needs it.
+pypdf==5.9.0
+
 # Catalysts and implied volatility only. Imported lazily; the rest of the
 # pipeline runs without it. Pulls pandas in transitively.
 yfinance>=0.2.40
