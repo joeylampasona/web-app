@@ -1039,6 +1039,76 @@ def probe_press(agent: str = "") -> None:
     print("\n   spent: " + ", ".join(f"{m} ${v:.4f}" for m, v in spent.items()))
 
 
+def probe_option_volume() -> None:
+    """The VIX and its three-month version from Yahoo's quote endpoint, and
+    what the option chains say about the day's volume."""
+    print()
+    print(RULE)
+    print("13. OPTION VOLUME AND THE VIX — what Yahoo carries")
+    print(RULE)
+    try:
+        from catalysts import chains, occ, optvol, volatility, yf
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   cannot import the pipeline: {exc}")
+        return
+    import zoneinfo
+    now = dt.datetime.now(zoneinfo.ZoneInfo("America/New_York"))
+    print(f"   New York time: {now:%a %Y-%m-%d %H:%M}\n")
+
+    print("-- ^VIX and ^VIX3M from the quote endpoint --")
+    try:
+        found = yf.quotes(list(volatility.SYMBOLS))
+        for symbol in volatility.SYMBOLS:
+            print(f"   {symbol}: {found.get(symbol)}")
+        print(f"   outcomes: {dict(yf.QUOTE_OUTCOMES)}")
+        print(f"   reading: {volatility._fetch()}")
+    except Exception as exc:                          # noqa: BLE001
+        print(f"   {type(exc).__name__}: {str(exc)[:200]}")
+
+    print("\n-- option volume off the chains the nightly already reads --")
+    today = chains.today()
+    total = dict(names=0, rows=0, with_volume=0, fresh_volume=0, stale_volume=0)
+    started = time.monotonic()
+    for symbol in CHAIN_NAMES[:12]:
+        try:
+            book = occ.open_interest(symbol)
+            spot, quoted = yf.quoted_chain(symbol, today,
+                                           horizon_days=chains.HORIZON_DAYS,
+                                           at_least=chains.MIN_EXPIRIES,
+                                           at_most=chains.MAX_EXPIRIES)
+            if not quoted:
+                print(f"   {symbol}: no chain")
+                continue
+            traded = [r for r in quoted if r.get("volume")]
+            fresh = [r for r in traded if r.get("fresh")]
+            total["names"] += 1
+            total["rows"] += len(quoted)
+            total["with_volume"] += len(traded)
+            total["fresh_volume"] += sum(r["volume"] for r in fresh)
+            total["stale_volume"] += sum(r["volume"] for r in traded if not r.get("fresh"))
+            said = optvol.summary(symbol, spot, quoted, book)
+            if not said:
+                print(f"   {symbol}: {len(quoted)} rows, no summary")
+                continue
+            top = said["top"][0] if said["top"] else {}
+            print(f"   {symbol:<6} session {said['session']} | {len(quoted):>5} rows, "
+                  f"{len(traded):>4} with volume, {len(fresh):>4} of them fresh | "
+                  f"calls {said['call_volume']:>9,} puts {said['put_volume']:>9,} "
+                  f"p/c {said['put_call']} | OI {said['open_interest']:>10,} "
+                  f"({said['oi_source']}) vol/OI {said['volume_oi']} | unusual "
+                  f"{said['unusual']:>3} | busiest {top.get('expiry')} "
+                  f"{top.get('side')} {top.get('strike')} {top.get('volume'):,} "
+                  f"x{top.get('multiple')}")
+        except Exception as exc:                      # noqa: BLE001
+            print(f"   {symbol}: {type(exc).__name__}: {str(exc)[:160]}")
+    print(f"\n   totals: {total}; {time.monotonic() - started:.0f}s for the chains "
+          f"themselves (the volume adds no request)")
+    if total["fresh_volume"] + total["stale_volume"]:
+        share = 100.0 * total["stale_volume"] / (total["fresh_volume"] + total["stale_volume"])
+        print(f"   volume on contracts that did not trade on the latest session: "
+              f"{share:.1f}% of all volume Yahoo shows, and not counted.")
+
+
 def main() -> int:
     agent = os.environ.get("EDGAR_USER_AGENT", "").strip()
     if not agent:
@@ -1064,6 +1134,7 @@ def main() -> int:
         ("finnhub", probe_finnhub),
         ("congress", probe_congress),
         ("press", probe_press),
+        ("optvol", probe_option_volume),
     )
     unknown = only - {name for name, _ in sections}
     if unknown:

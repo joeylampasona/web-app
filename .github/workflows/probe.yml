@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress, press). Empty runs all."
+        description: "Sections to run, comma separated (shares, open_interest, flags, quotes, universe, splits, cboe, reporters, chains, finnhub, congress, press, optvol). Empty runs all."
         required: false
         default: ""
       models:
