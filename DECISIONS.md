@@ -477,9 +477,9 @@ beyond the free sample may be posted there.
 - **What was measured** (`probe.yml`, `only: chains`, 22:39 New York, sixty
   names). OCC's public series file answered for every company that has
   options, in about half a second each, and says "No data exists" for one
-  that has none. At that hour Yahoo's own open interest was nearly as full
-  as OCC's, 16.5 million contracts against 17.6 million, so it is the hour
-  that starves Yahoo's figure and not Yahoo. 76% of Yahoo's contracts
+  that has none. Yahoo's own open interest was nearly as full as OCC's,
+  16.5 million contracts against 17.6 million, and the same again at 02:30,
+  so the hour is not what starved it on the 24th. What did is not known. 76% of Yahoo's contracts
   carried an implied volatility worth believing, 14% a quote too wide to be
   one, and most of the rest a figure drawn from an old trade.
 - **The chain is joined** (`catalysts/chains.py`). Open interest is OCC's,
@@ -498,8 +498,13 @@ beyond the free sample may be posted there.
   put to Yahoo at all.
 - **Cboe's block is not worked around.** A browser's headers get past it.
   It was put up on purpose, in front of something Cboe sells.
-- **Still open**: whether OCC's file is as full at two in the morning as at
-  eleven at night. If it is not, the chains move to an evening run.
+- **The first night on it** (session of the 25th, read about 02:00): 415
+  full books from the join, none from Yahoo alone, 27 companies with no
+  chain; the gamma board at 502 names. OCC's file was exactly as full at
+  02:30 as at 22:39, so the chains stay in the nightly and no evening run
+  was built. OCC answers three to four times slower at that hour, 1.7
+  seconds a company against half a second, and the options stage took 37
+  minutes against 12.
 
 ## What Market Desk sends is read whole, and dated (2026-11-25)
 
