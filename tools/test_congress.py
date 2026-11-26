@@ -137,6 +137,18 @@ check("a scanned paper report has no text and gives nothing, quietly",
       congress.parse(""), ([], []))
 check("so does a page that is not a report", congress.parse("Access denied\nTry later"),
       ([], []))
+turned = (HEAD + "Acme Corp (ACME) [ST]\nP 10/27/202610/28/2026$1,001 - $15,000\n"
+          "F\x00 S\x00: New\nNorwegian Cruise Line HoldingsP 10/20/202611/09/2026$1,001 - $15,000\n"
+          "Ltd. Ordinary Shares (NCLH)\n[ST]\nF\x00 S\x00: New\n"
+          "Zeta Inc. (ZETA) [ST]\nS 10/21/202611/09/2026$15,001 -\n$50,000\nF\x00 S\x00: New\n"
+          + TAIL)
+got = congress.parse(turned)
+check("a row whose cells came out between the halves of its asset is still read",
+      ([(r["ticker"], r["type"], r["traded"], r["amount_low"]) for r in got[0]], got[1]),
+      ([("ACME", "buy", "2026-10-27", 1001), ("NCLH", "buy", "2026-10-20", 1001),
+        ("ZETA", "sell", "2026-10-21", 15001)], []))
+check("with its name put back together",
+      got[0][1]["asset"], "Norwegian Cruise Line Holdings Ltd. Ordinary Shares")
 broken = HEAD + "Acme Corp (ACME) [ST]\nP 10/27/2026 10/28/2026 fifteen thousand\n" + TAIL
 check("a row whose amount does not read is reported, not dropped in silence",
       (congress.parse(broken)[0], len(congress.parse(broken)[1])), ([], 1))

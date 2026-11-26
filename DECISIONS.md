@@ -586,3 +586,47 @@ beyond the free sample may be posted there.
 - **No Discord post can ping anybody** (`allowed_mentions` is empty on every
   message), since some of what is posted is now read out of documents the
   site did not write.
+
+## Trades by members of the House, from the Clerk's own filings (2026-11-26)
+
+- **The source is the Clerk of the House, and only the House.** A member
+  who trades a security files a periodic transaction report. The Clerk
+  publishes the year's reports as an index and each one as a PDF, and
+  `data/congress.py` reads both. The other candidates were asked from the
+  nightly's runner the same day: Finnhub's endpoint is a paid one, and the
+  two community feeds that republished both chambers as JSON answered 403.
+  The Senate publishes its reports behind a click-through session with no
+  file to fetch, so senators are not covered and the page says so.
+- **What was measured** (`probe.yml`, `only: congress`, the sixty newest
+  reports): 54 had text and 6 were paper filings scanned as images, which
+  are counted and not read. 440 transactions, 387 of them stocks, 386 with a
+  ticker. The form's cells come out of the PDF run together, the two dates
+  and the amount with nothing between them, and one row in the sixty had
+  its transaction cells in the middle of its asset's name. Both are read.
+- **Three things a reader has to know, and the page says each.** A member
+  has 45 days to report and some take longer, so the filed date is shown
+  beside the traded one with the gap. The amount is a band the form offers,
+  never a figure. And whose account it was is given only when the report's
+  owner column can be read off reliably; after a description long enough
+  to have run on to a second line it is left unstated, because a guess
+  would put a spouse's trade in a member's name.
+- **An amended report restates the trade it corrects.** The two are told
+  from two trades only by being the same in every published field, and
+  then the newer filing stands.
+- **A night reads at most 200 new reports inside 110 seconds** (sixty took
+  32), newest first, so the first three nights fill in the year and after
+  that a night has a handful. A report that does not answer is asked for
+  again; a scanned or missing one is written off once. It stands down after
+  four failures in a row, and it will not run at all without its PDF
+  reader, because without one every report would look scanned and be
+  written off for good.
+- **Free to every reader, never behind the paywall, and whether to carry it
+  at all is the owner's decision.** The statute that makes these reports
+  public, 5 U.S.C. 13107, makes it unlawful to obtain or use one for any
+  commercial purpose other than by news and communications media for
+  dissemination to the general public. Every site that republishes these
+  reports rests on that exception. This one sells subscriptions, so the
+  section is published in the public tree, shown to everyone, kept out of
+  the gated store and out of anything a subscriber gets that a visitor does
+  not. That is the careful reading, not a legal opinion, and the owner may
+  prefer not to carry it.

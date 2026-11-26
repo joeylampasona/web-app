@@ -98,6 +98,18 @@ _TRANSACTION = re.compile(
     r"(?P<traded>\d{1,2}/\d{1,2}/\d{4})\s*"
     r"(?P<notified>\d{1,2}/\d{1,2}/\d{4})\s*"
     rf"(?P<amount>{_AMOUNT})")
+# One row in sixty real reports came out the other way round: the asset's
+# first line, then the transaction cells, then the rest of the asset with
+# its ticker and type code ("Norwegian Cruise Line HoldingsP 10/20/2026
+# 11/09/2026$1,001 - $15,000 Ltd. Ordinary Shares (NCLH) [ST]"). It is told
+# from an ordinary row by what follows the amount: more asset and a type
+# code, with no detail line in between.
+_INTERLEAVED = re.compile(
+    r"(?P<type>S \(partial\)|P|S|E)\s+"
+    r"(?P<traded>\d{1,2}/\d{1,2}/\d{4})\s*"
+    r"(?P<notified>\d{1,2}/\d{1,2}/\d{4})\s*"
+    rf"(?P<amount>{_AMOUNT})\s+"
+    r"(?P<tail>[^\u00a6\[\]]{1,140}?)\s*\[(?P<kind>[A-Z0-9]{2})\]")
 _TICKER = re.compile(r"\(([A-Z][A-Z0-9./\-]{0,7})\)\s*$")
 _DATE_PAIR = re.compile(r"\d{1,2}/\d{1,2}/\d{4}\s*\d{1,2}/\d{1,2}/\d{4}")
 _MARK = "¦"
@@ -181,12 +193,21 @@ def parse(text: str) -> tuple[list[dict], list[str]]:
 
     rows: list[dict] = []
     found = list(_TRANSACTION.finditer(stream))
+    taken = [(m.start(), m.end()) for m in found]
+    for odd in _INTERLEAVED.finditer(stream):
+        if not any(a < odd.end() and odd.start() < b for a, b in taken):
+            found.append(odd)
+    found.sort(key=lambda m: m.start())
     previous_end = 0
     for index, match in enumerate(found):
         before = stream[previous_end:match.start()]
+        tail = match.groupdict().get("tail")
         # The asset is what follows the last detail mark of the row before.
         cut = before.rfind(_MARK)
         asset_text = before[cut + 1:].strip() if cut >= 0 else before.strip()
+        if tail is not None:
+            # The asset in two halves, either side of the transaction cells.
+            asset_text = f"{asset_text} {tail.strip()}"
         last_label = None
         marks = re.findall(rf"{_MARK}([A-Z]+{_RUN_ON}?)=", before)
         if marks:
