@@ -18,6 +18,8 @@ import {
 import { shortDate } from "@/lib/format";
 import { readMarket } from "@/lib/marketRead";
 import { MarketContext } from "@/components/MarketContext";
+import { RecordLine } from "@/components/ScreenRecord";
+import { getScreenRecord } from "@/lib/data";
 import { LayerBar } from "@/components/Leadership";
 import { ScreensScale } from "@/components/ScreensScale";
 import { StrengthMatrix } from "@/components/StrengthMatrix";
@@ -268,6 +270,8 @@ export default function Home() {
       </div>
 
       <HomeFoldButton what="The layers, the strength matrix and the strongest three" />
+
+      <RecordLine file={getScreenRecord()} />
 
       <HomeDisclaimer />
     </div>

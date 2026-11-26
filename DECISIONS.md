@@ -636,3 +636,50 @@ beyond the free sample may be posted there.
   the gated store and out of anything a subscriber gets that a visitor does
   not. That is the careful reading, not a legal opinion, and the owner may
   prefer not to carry it.
+
+## The record, the on-watch rule, and the research ledger (2026-11-26)
+
+The follow-through page lists every breakout a screen showed. Nothing counted
+them into a verdict, and nothing happened to a screen whose breakouts stopped
+paying. Now both.
+
+- **The record** is `market/record.json`, built by `publish/record.py` from
+  the follow-through payload the nightly already computes. Nothing is found
+  or measured a second time, so the scoreboard cannot disagree with the list.
+  For each screen and each horizon (5, 20 and 60 sessions) it gives how many
+  breakouts reached the horizon, how many were up, how many closed at or
+  above the pivot they cleared, the average and median move, and the
+  benchmark's move over the same sessions. It is counts and rates only, never
+  a name, and it is public. What is gated did not change.
+- **The rule**, applied by code and printed on the page in these numbers:
+  a screen is judged at 20 sessions after each breakout, over the same 180
+  days follow-through covers. It takes 12 breakouts that have run their 20
+  sessions to judge one; fewer is "too few to judge", which is not a
+  verdict. A judged screen is **on watch** when fewer than 50% of those
+  breakouts were up at 20 sessions **and** the median breakout trailed the
+  benchmark over the same sessions. Both, not either: a screen that beat a
+  falling market is doing its job, and so is one that lags a roaring market
+  while most of its breakouts rise. Otherwise it is holding.
+- **On watch is a label and nothing else.** The screen is not hidden, not
+  reordered and loses no name. The label and the numbers behind it show on
+  the record page, on the screen's own page and in one line on the front
+  page. It comes off by the same rule on the first night the numbers no
+  longer meet it. There is no memory.
+- **The only baseline is the benchmark** over the same sessions. There is no
+  control group of stocks that did not break out, and the page says so. The
+  price history carries no delisted companies, so the figures are flattered;
+  the rule is applied to them as they are. With no benchmark figure on file a
+  screen cannot be put on watch.
+- **The shape screens have no record.** Follow-through cannot rebuild a flag,
+  wedge, triangle or squeeze from history, so those six are "too few to
+  judge" with nothing counted, and the page says that is not the same as
+  holding. A new screen is counted from whatever follow-through holds for it
+  and is "too few to judge" until twelve of its breakouts have run.
+- **The research ledger** is `research/ledger.yaml`, validated by
+  `publish/ledger.py` and published as `research/ledger.json`. One entry a
+  question the project put to real data: what was measured, the result, a
+  verdict from held, refuted, refused, adopted or open, and where in the
+  repository the measurement is written down. Failures stay. An entry may
+  only state what the repository already records; an open one says what it
+  is waiting for. History before November was squashed, so the earliest
+  entries carry the date their result entered the repository.

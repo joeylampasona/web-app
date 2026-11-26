@@ -210,6 +210,32 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/record": {
+    label: "The record",
+    // A tally: four strokes and the one that crosses them.
+    art: (
+      <>
+        <path d="M5 5.5 L5 18.5" />
+        <path d="M9.5 5.5 L9.5 18.5" />
+        <path d="M14 5.5 L14 18.5" />
+        <path d="M18.5 5.5 L18.5 18.5" />
+        <path d="M2.5 16 L21 8" opacity={0.7} />
+      </>
+    ),
+  },
+  "/market/research": {
+    label: "What we tested",
+    // A ledger page: entries, one struck through.
+    art: (
+      <>
+        <path d="M4.5 3.5 L19.5 3.5 L19.5 20.5 L4.5 20.5 Z" />
+        <path d="M8 3.5 L8 20.5" opacity={0.6} />
+        <path d="M10.5 8.5 L17 8.5" />
+        <path d="M10.5 12.5 L17 12.5" strokeDasharray="2.5 2" opacity={0.7} />
+        <path d="M10.5 16.5 L15 16.5" />
+      </>
+    ),
+  },
   "/market/editions": {
     label: "Earlier editions",
     // A stack of pages, the top one ruled.

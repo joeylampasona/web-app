@@ -112,6 +112,12 @@ check("with no benchmark on file a screen cannot be put on watch",
 check("a night with no follow-through at all still publishes every screen",
       [r["status"] for r in record.build(None, [("a", "A")], replayable={"a"})["screens"]],
       ["too_few"])
+# A screen follow-through rebuilds some other way is counted like any other.
+other = record.build(follow(level=[breakout(4.0, 1.0)] * 14), [("level", "Level")],
+                     replayable={"weak"})
+check("a screen follow-through holds is counted, whatever it is built on",
+      (record.by_screen(other)["level"]["measured"],
+       record.by_screen(other)["level"]["status"]), (True, "holding"))
 check("no name of any stock is in the record",
       "symbol" in str(made["screens"]), False)
 

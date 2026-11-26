@@ -6,7 +6,8 @@ import { WhatChanged } from "@/components/WhatChanged";
 import { RS_NOTE } from "@/lib/copy";
 import { longDate } from "@/lib/format";
 import { screenClass } from "@/lib/screenColour";
-import { EAGER_CHARTS, SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, hasData } from "@/lib/data";
+import { EAGER_CHARTS, SCREEN_KEYS, barsFor, getDiff, getMeta, getScreen, getScreenRecord, hasData } from "@/lib/data";
+import { RecordNote } from "@/components/ScreenRecord";
 import { screenCard } from "@/lib/cards/cards";
 import { cardMetadata } from "@/lib/cards/metadata";
 import { PageShare } from "@/lib/cards/share";
@@ -72,6 +73,9 @@ export default async function ScreenPage({
         direction={file.direction}
         href={file.has_followthrough === false ? undefined : "/market/followthrough"}
       />
+      {/* How this screen's own breakouts have gone, by the rule on the record
+          page. On watch is said in full; the screen itself is unchanged. */}
+      <RecordNote row={getScreenRecord()?.screens.find((row) => row.screen === screen)} />
       <GatedScreenBrowser file={file} bars={bars} describe={false} />
       <p className="caption dim" style={{ marginTop: "var(--pad-xl)" }}>{RS_NOTE}</p>
     </div>

@@ -417,3 +417,14 @@ export function barsFor(symbols: string[], limit = 90): Record<string, import(".
   }
   return out;
 }
+
+/** Each screen's results over the trailing window, and which are on watch.
+ *  Null on a build from before the record was kept. */
+export function getScreenRecord() {
+  return read<import("./types").ScreenRecordFile>("market/record.json");
+}
+
+/** The research ledger: every question tested, with the failures. */
+export function getLedger() {
+  return read<import("./types").LedgerFile>("research/ledger.json");
+}

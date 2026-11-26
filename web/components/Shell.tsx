@@ -57,6 +57,8 @@ const TABS: {
       { href: "/market/calendar", title: "The calendar", blurb: "Earnings, ex-dividends and splits, day by day." },
       { href: "/market/earnings", title: "Earnings", blurb: "Priced against realised, and every recent quarter read." },
       { href: "/market/followthrough", title: "Did it work?", blurb: "What happened to the breakouts we showed." },
+      { href: "/market/record", title: "The record", blurb: "Each screen's breakouts counted, and which screens are on watch." },
+      { href: "/market/research", title: "What we tested", blurb: "Every question put to real data, with the failures kept." },
       { href: "/market/editions", title: "Back issues", blurb: "Each night's read, kept as it was published." },
       { group: "The structure", href: "/market/breadth", title: "Breadth", blurb: "How much of the market is participating." },
       { href: "/market/rotation", title: "Rotation", blurb: "Strength now against momentum since last month." },

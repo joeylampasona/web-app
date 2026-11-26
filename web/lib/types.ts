@@ -1158,3 +1158,72 @@ export interface EditionIndex {
     breakouts: number | null; failed: number | null; rebuilt: boolean;
   }[];
 }
+
+/** One screen at one horizon on the record: counted from follow-through. */
+export interface ScreenRecordHorizon {
+  n: number;
+  up: number;
+  share_up_pct: number | null;
+  /** Closed above the pivot it cleared, at the horizon. */
+  held: number;
+  share_held_pct: number | null;
+  mean_pct: number | null;
+  median_pct: number | null;
+  bench_mean_pct: number | null;
+  bench_median_pct: number | null;
+  median_vs_bench_pct: number | null;
+}
+
+export type ScreenRecordStatus = "holding" | "on_watch" | "too_few";
+
+export interface ScreenRecordRow {
+  screen: string;
+  name: string;
+  status: ScreenRecordStatus;
+  label: string;
+  /** The sentence, with its numbers, that says why the status is what it is. */
+  reason: string;
+  /** False for a screen whose past breakouts cannot be rebuilt at all. */
+  measured: boolean;
+  total: number;
+  settled: number;
+  failed_fast: number;
+  share_failed_pct: number | null;
+  horizons: Record<string, ScreenRecordHorizon>;
+}
+
+/** market/record.json: every screen's results and which are on watch. */
+export interface ScreenRecordFile {
+  as_of: string | null;
+  window_days: number | null;
+  benchmark: string;
+  horizons: number[];
+  rule: { judge_horizon: number; min_to_judge: number; min_share_up_pct: number; text: string };
+  counts: Record<ScreenRecordStatus, number>;
+  copy: { baseline: string; survivorship: string; held: string };
+  screens: ScreenRecordRow[];
+}
+
+export type LedgerVerdict = "held" | "refuted" | "refused" | "adopted" | "open";
+
+export interface LedgerEntry {
+  id: string;
+  date: string;
+  question: string;
+  measured: string;
+  result: string;
+  verdict: LedgerVerdict;
+  /** Where in the repository the measurement is recorded. */
+  source: string[];
+  /** Only on an open question. */
+  waiting_for: string | null;
+}
+
+/** research/ledger.json: every question put to real data, failures kept. */
+export interface LedgerFile {
+  as_of: string;
+  verdicts: Record<LedgerVerdict, string>;
+  counts: Record<LedgerVerdict, number>;
+  note: string;
+  entries: LedgerEntry[];
+}

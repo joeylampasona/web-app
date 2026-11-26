@@ -30,11 +30,12 @@ over the same sessions as each breakout. That is the only baseline the
 pipeline has. There is no control group of stocks that did not break out, so
 nothing here says a breakout beat a similar stock that stayed in its base.
 
-Screens not built on a base (flags, wedges, triangles, the squeeze) have no
-breakouts on record: the replay that rebuilds a screen's past can rebuild a
-base and nothing else yet. They are "too few to judge" with nothing counted,
-and the page says why. A screen added tomorrow starts the same way, whatever
-it is built on, until twelve of its breakouts have run their twenty sessions.
+Screens drawn from a shape (flags, wedges, triangles, the squeeze) have no
+breakouts on record: follow-through cannot rebuild their past yet. They are
+"too few to judge" with nothing counted, and the page says why. A screen
+added tomorrow is counted from whatever follow-through holds for it, and is
+"too few to judge" until twelve of its breakouts have run their twenty
+sessions.
 """
 from __future__ import annotations
 
@@ -109,9 +110,8 @@ def judge(at: dict, benchmark: str, measured: bool = True) -> tuple[str, str]:
     if n < MIN_TO_JUDGE:
         if not measured:
             return TOO_FEW, (
-                "No breakouts on record. The replay that rebuilds a screen's "
-                "past breakouts can rebuild a base and nothing else yet, and "
-                "this screen is not built on one.")
+                "No breakouts on record. Follow-through cannot rebuild this "
+                "screen's past breakouts yet, so there is nothing to count.")
         ran = ("No breakout has" if n == 0 else
                f"{_count(n).capitalize()} breakout{' has' if n == 1 else 's have'}")
         return TOO_FEW, (f"{ran} run {JUDGE_HORIZON} sessions; "
@@ -136,16 +136,16 @@ def build(follow: dict | None, screens: list[tuple[str, str]],
 
     `screens` is every screen the site has, as (key, name). One that
     follow-through has nothing for still gets its row. `replayable` is the
-    set whose past breakouts can be rebuilt; a screen outside it is said to
-    have no record rather than a short one.
+    set whose past breakouts can be rebuilt; a screen outside it, and with no
+    entry in follow-through either, is said to have no record rather than a
+    short one.
     """
     follow = follow or {}
     benchmark = str(follow.get("benchmark") or "the benchmark")
     horizons = [int(h) for h in (follow.get("horizons") or [])] or [JUDGE_HORIZON]
     if JUDGE_HORIZON not in horizons:
         horizons = sorted(set(horizons) | {JUDGE_HORIZON})
-    measured_keys = set(replayable if replayable is not None
-                        else (follow.get("screens") or {}))
+    measured_keys = set(replayable or ()) | set(follow.get("screens") or {})
     rows = []
     for key, name in screens:
         found = (follow.get("screens") or {}).get(key) or {}

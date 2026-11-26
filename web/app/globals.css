@@ -1069,3 +1069,68 @@ a.read-name:hover { text-decoration: underline; }
                       line-height: 1.15; white-space: nowrap; }
   .home-last { order: 3; }
 }
+
+/* ---- the record --------------------------------------------------------- */
+/* A verdict is a boxed word in the caps face, like a carried-over mark. No
+   colour: colour here means gain and loss, and a screen on watch is neither.
+   On watch is the one that is filled, so it is found at a glance. */
+.record-mark { display: inline-block; font-family: var(--font-display); font-weight: 600;
+               font-size: 11px; line-height: 1.5; letter-spacing: 0.06em;
+               text-transform: uppercase; padding: 0 5px; white-space: nowrap;
+               border: 1px solid var(--text-secondary); color: var(--text-secondary);
+               vertical-align: 1px; }
+.record-on_watch { background: var(--text-primary); border-color: var(--text-primary);
+                   color: var(--surface-0); }
+.record-too_few { border-style: dashed; color: var(--text-muted);
+                  border-color: var(--text-muted); }
+.record-rule { border-top: 3px solid var(--rule); padding-top: var(--pad-lg); }
+.record-name { text-decoration: underline; text-decoration-color: var(--border-strong);
+               text-underline-offset: 3px; }
+table.data tr.record-row td { border-bottom: 0; padding-bottom: 2px; }
+table.data tr.record-why td { padding-top: 0; color: var(--text-muted);
+                              white-space: normal; }
+table.data th.record-group { text-align: center; border-left: 1px solid var(--border); }
+.record-note { margin: var(--gap-md) 0 0; max-width: 78ch; }
+.record-note-watch { color: var(--text-primary); border-left: 3px solid var(--text-primary);
+                     padding-left: var(--gap-md); }
+.record-line { margin-top: var(--gap-lg); }
+
+/* ---- the ledger --------------------------------------------------------- */
+/* A register: the id, date and verdict in a margin column, the entry beside
+   it. On a phone the margin goes above the entry as a single line. */
+.ledger { border-top: 3px solid var(--rule); }
+.ledger-entry { display: grid; grid-template-columns: 124px minmax(0, 1fr);
+                gap: var(--pad-lg); padding: var(--pad-lg) 0;
+                border-bottom: 1px solid var(--border); }
+.ledger-margin { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.ledger-id { font-size: var(--size-footnote); font-weight: 600; }
+.ledger-question { margin: 0; font-size: clamp(19px, 2.2vw, 24px); line-height: 1.2;
+                   max-width: 34ch; }
+.ledger-body { display: grid; grid-template-columns: 96px minmax(0, 1fr);
+               gap: 6px var(--gap-md); margin: 0; max-width: 78ch; }
+.ledger-body dt { font-family: var(--font-display); font-weight: 600; font-size: 12px;
+                  letter-spacing: 0.06em; text-transform: uppercase;
+                  color: var(--text-muted); padding-top: 3px; }
+.ledger-body dd { margin: 0; font-size: var(--size-footnote); }
+.ledger-source { font-size: var(--size-caption); color: var(--text-secondary);
+                 overflow-wrap: anywhere; }
+.ledger-verdict { display: inline-block; font-family: var(--font-display); font-weight: 600;
+                  font-size: 11px; line-height: 1.5; letter-spacing: 0.06em;
+                  text-transform: uppercase; padding: 0 5px; white-space: nowrap;
+                  border: 1px solid var(--text-secondary); color: var(--text-secondary); }
+.ledger-refuted, .ledger-refused { background: var(--text-primary);
+                                   border-color: var(--text-primary); color: var(--surface-0); }
+.ledger-open { border-style: dashed; color: var(--text-muted); border-color: var(--text-muted); }
+.ledger-key { display: grid; gap: 6px; margin: 0; max-width: 78ch; }
+.ledger-key-row { display: grid; grid-template-columns: 124px minmax(0, 1fr);
+                  gap: var(--gap-md); align-items: baseline; }
+.ledger-key-row dt { white-space: nowrap; }
+.ledger-key-row dd { margin: 0; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  .ledger-entry { grid-template-columns: minmax(0, 1fr); gap: var(--gap-md); }
+  .ledger-margin { flex-direction: row; align-items: baseline; gap: var(--gap-md);
+                   flex-wrap: wrap; }
+  .ledger-body { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .ledger-body dt { padding-top: var(--gap-sm); }
+  .ledger-key-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
