@@ -376,6 +376,17 @@ const GLYPHS: Record<string, { label: string; art: React.ReactNode }> = {
       </>
     ),
   },
+  "/market/gap-fade": {
+    label: "A gap that gives some back",
+    // A close, a gap up to a higher open, and a line drifting back toward it.
+    art: (
+      <>
+        <path d="M3 16 L9 16" />
+        <path d="M9 16 L9 6" strokeDasharray="2 1.8" opacity={0.6} />
+        <path d="M11 6 L15 9 L21 12" />
+      </>
+    ),
+  },
   "/market/volume": {
     label: "Unusual activity",
     art: (

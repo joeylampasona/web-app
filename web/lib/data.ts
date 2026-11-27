@@ -4,7 +4,7 @@ import path from "node:path";
 import type {
   Edition, EditionIndex, LeadershipLayer,
   BacktestSummary, BreadthCard, GammaBoardRow, InsiderDay, SeasonalSymbol, VolumeRow, FollowThroughFile, GroupRow, IVRow, LearnFile, Meta, RotationPoint,
-  BreadthBarcode, CongressFile, DealerGammaFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, OptionsVolumeFile, PositioningFile, Radar, ScreenFile,
+  BreadthBarcode, CongressFile, DealerGammaFile, GapFadeFile, EarningsFile, SqueezeFile, FormingSummary, LeadershipSummary, MarketContextFile, OptionsVolumeFile, PositioningFile, Radar, ScreenFile,
   StockFile,
 } from "./types";
 
@@ -320,6 +320,12 @@ export function getVolumeHeat() {
  *  built before the nightly kept the volume column. */
 export function getOptionsVolumeBoard() {
   return read<OptionsVolumeFile>("market/options_volume.json");
+}
+
+/** The Market Desk's fade watch: liquid names that gapped with no news.
+ *  Null on a night the desk sent none. */
+export function getGapFade() {
+  return read<GapFadeFile>("market/gap_fade.json");
 }
 
 export function getGammaBoard() {

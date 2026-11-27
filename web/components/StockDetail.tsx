@@ -316,7 +316,7 @@ export function StockDetail({ stock, run, deskNote }: {
         <div className="eyebrow">Flagged by the market sweep</div>
         {deskNote}
         <div className="stack" style={{ gap: "var(--gap-sm)" }}>
-          <DeskSignals signals={stock.desk_signals} run={run} />
+          <DeskSignals signals={stock.desk_signals} run={run} story={stock.desk_story} />
           <ShortInterestBlock held={stock.short_interest} squeeze={stock.squeeze}
                               volume={stock.short_volume} asOf={stock.as_of} />
         </div>

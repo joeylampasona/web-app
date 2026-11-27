@@ -389,6 +389,11 @@ const getStockTool: Tool = {
       insiders: loose.insiders
         ? pick(loose.insiders, ["window_days", "buys", "sells", "buy_value", "sell_value"], 0)
         : null,
+      overnight_brief_line: obj(loose.desk_story).text
+        ? { text: clip(obj(loose.desk_story).text, 280), read_on: obj(loose.desk_story).d ?? null,
+            stale: Boolean(obj(loose.desk_story).stale),
+            note: "The one sentence the Market Desk's brief led this name with. Absent when its brief did not rank the name." }
+        : null,
       overnight_sweep_signals: arr(loose.desk_signals).slice(0, 6).map((s) => ({
         ...pick(s, ["as_of", "source", "reason"]),
         detail: clip(s.detail, 120),

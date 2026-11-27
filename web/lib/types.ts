@@ -481,6 +481,10 @@ export interface StockFile {
   base_history_total?: number;
   news: Headline[];
   desk_signals: DeskSignal[];
+  /** The one sentence the Market Desk's brief led this name with, from the
+   *  run dated `d`. Null when the brief did not rank the name, which says
+   *  nothing about it. */
+  desk_story?: DeskStory | null;
   /** The published 200-day line, aligned to `bars`. The 9, 21 and 50 are
    *  derived in the browser from those same bars.
    *
@@ -1229,6 +1233,38 @@ export interface PositioningFile {
   markets: PositioningMarket[];
   count?: number;
   gated?: boolean;
+}
+
+export interface DeskStory { text: string; d: string | null; stale: boolean }
+
+/** One slice of the desk's fade record: `x` the mean excess return in
+ *  percent against other liquid names, over `n` gaps on `nights` nights;
+ *  `neg` the percent of nights below zero; `thin` while too few to read. */
+export interface FadeReading {
+  n: number; x: number | null; nights: number; t: number | null;
+  neg: number | null; thin: boolean;
+}
+
+export interface GapFadeRow {
+  ticker: string; name: string; in_universe: boolean;
+  /** Signed, in percent. */
+  gap: number;
+  /** The name's median daily dollar volume. */
+  dollar_vol: number | null;
+}
+
+export interface GapFadeFile {
+  as_of: string;
+  read_on: string;
+  stale: boolean;
+  up: GapFadeRow[]; down: GapFadeRow[];
+  n_up: number; n_down: number;
+  floor: number | null;
+  record: {
+    up?: { h3?: FadeReading | null; h20?: FadeReading | null };
+    down?: { h3?: FadeReading | null; h20?: FadeReading | null };
+  };
+  source: string;
 }
 
 export interface DeskRun {

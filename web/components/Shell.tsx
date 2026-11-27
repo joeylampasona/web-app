@@ -71,6 +71,7 @@ const TABS: {
       { href: "/market/gamma", title: "Gamma concentration", blurb: "Where the option book anchors the most gamma." },
       { href: "/market/options-volume", title: "Options volume", blurb: "Where the day's option trading was large against what was open." },
       { href: "/market/volume", title: "Relative volume", blurb: "Who traded unusually heavily today." },
+      { href: "/market/gap-fade", title: "Gap fade watch", blurb: "Liquid names that gapped with no news behind the move." },
       { href: "/market/insiders", title: "Insider activity", blurb: "What officers and directors actually bought and sold." },
       { href: "/market/seasonals", title: "Seasonals", blurb: "What each month did, year by year." },
       { href: "/market/positioning", title: "Positioning", blurb: "How hedge funds are positioned in futures, and where stocks are sold short." },

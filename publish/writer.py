@@ -352,6 +352,32 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
             short_volume_by_symbol[s.upper()] = {
                 "ratio": row[0], "ratio_20d": row[1], "sessions": row[2],
                 "d": volume_block.get("d")}
+    # From desk schema 1.9: the sentence the desk's brief leads each ranked
+    # name with, dated by the run it came in, and the gap fade watch.
+    desk_night = (desk_run or {}).get("as_of")
+    story_by_symbol = {
+        s.upper(): {"text": line, "d": desk_night,
+                    "stale": _read_is_stale(desk_night, as_of)}
+        for s, line in ((desk_extras or {}).get("stories") or {}).items()
+        if isinstance(line, str) and line}
+    fade = (desk_extras or {}).get("gap_fade")
+    if fade:
+        def fade_rows(side: str) -> list[dict]:
+            return [{**row,
+                     "name": (market.refs[row["ticker"]].name
+                              if row["ticker"] in market.refs else row["ticker"]),
+                     "in_universe": row["ticker"] in market.refs}
+                    for row in fade.get(side) or []]
+        written.append(_write(out / "market" / "gap_fade.json", {
+            "as_of": as_of.isoformat(),
+            "read_on": fade.get("d"),
+            "stale": _read_is_stale(fade.get("d"), as_of),
+            "up": fade_rows("up"), "down": fade_rows("down"),
+            "n_up": fade.get("n_up"), "n_down": fade.get("n_down"),
+            "floor": fade.get("floor"),
+            "record": fade.get("record") or {},
+            "source": "Market Desk",
+        }))
     if squeeze_by_symbol:
         squeeze_rows = [{"symbol": symbol,
                          "name": (market.refs[symbol].name
@@ -606,6 +632,7 @@ def publish(market: Market, bundle: rs.Bundle, result: scan.ScanResult,
                                              options_read=options_by_symbol.get(symbol),
                                              short_volume=short_volume_by_symbol.get(symbol),
                                              squeeze=squeeze_by_symbol.get(symbol),
+                                             desk_story=story_by_symbol.get(symbol),
                                              fundamentals=(fundamentals or {}).get(symbol),
                                              fundamentals_known=symbol in (fundamentals or {}),
                                              leadership=layer_of.get(symbol),
@@ -1381,6 +1408,7 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                    options_read: dict | None = None,
                    short_volume: dict | None = None,
                    squeeze: dict | None = None,
+                   desk_story: dict | None = None,
                    fundamentals: dict | None = None,
                    fundamentals_known: bool = False,
                    leadership: dict | None = None,
@@ -1530,5 +1558,8 @@ def _stock_payload(market: Market, bundle: rs.Bundle, symbol: str,
                             else _structure_check(market, bundle, symbol)),
         "news": (news or {}).get(symbol) or [],
         "desk_signals": (desk or {}).get(symbol) or [],
+        # The one sentence the desk's brief led this name with, when its brief
+        # ranked it. Null for every other name, which says nothing about it.
+        "desk_story": desk_story,
         "peers": {"industry": peer_rows(same_industry), "theme": peer_rows(same_theme)},
     }

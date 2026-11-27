@@ -108,6 +108,47 @@ check("and so is the day's short volume",
       more["short_volume"]["by_ticker"], {"NVDA": [0.381, 0.313, 21]})
 check("a fresh options read moves the date the desk's reads are judged by",
       marketdesk.options_read_on(conn), "2026-11-27")
+# Desk schema 1.9: the brief's sentence per name, and the gap fade watch.
+nineteen = {**newer, "schema_version": "1.9",
+            "stories": {"zs": "3 insiders bought $11.4M in 30 days,\n the latest $268K.",
+                        "NOTOURS": "Not a name the site follows.",
+                        "NVDA": None, "LONG": "x" * 400},
+            "gap_fade": {"d": "2026-11-28", "floor": 20000000.0,
+                         "up": [{"ticker": "zs", "gap": 6.1, "dollar_vol": 4.1e8},
+                                {"ticker": "NOTOURS", "gap": 5.0, "dollar_vol": 2.2e7},
+                                {"ticker": "BAD", "gap": "n/a"}],
+                         "down": [],
+                         "n_up": 11, "n_down": 0,
+                         "record": {"up": {"h3": {"n": 140, "x": -0.42, "nights": 61,
+                                                  "t": -2.1, "neg": 58.0, "thin": False},
+                                           "h20": None}}}}
+conn.execute("INSERT INTO universe(symbol, as_of, price, passed) VALUES"
+             " ('LONG', '2026-11-27', 10.0, 1)")
+marketdesk._fetch_file = lambda repo, token, path: (
+    nineteen if path.endswith("2026-11-28.json") else None)
+marketdesk.ingest(conn, dt.date(2026, 11, 28))
+more = marketdesk.extras(conn)
+check("a 1.9 file is accepted", conn.execute(
+    "SELECT schema_version FROM desk_runs WHERE as_of = '2026-11-28'").fetchone()[0], "1.9")
+check("stories: the site's names only, upper-cased, one line",
+      {k: v for k, v in more["stories"].items() if k != "LONG"},
+      {"ZS": "3 insiders bought $11.4M in 30 days, the latest $268K."})
+check("a story past the contract's one line is cut, not run on",
+      (len(more["stories"]["LONG"]), more["stories"]["LONG"][-1]), (marketdesk.STORY_MAX, "…"))
+fade = more["gap_fade"]
+check("the fade watch keeps names the site does not follow, drops bad rows",
+      [r["ticker"] for r in fade["up"]], ["ZS", "NOTOURS"])
+check("its counts, its floor and its record pass through",
+      (fade["n_up"], fade["n_down"], fade["floor"], fade["record"]["up"]["h3"]["x"]),
+      (11, 0, 20000000.0, -0.42))
+check("a count smaller than the rows shown is not believed",
+      marketdesk._gap_fade({"d": "x", "up": [{"ticker": "A", "gap": 1}], "n_up": 0})["n_up"], 1)
+check("no gap fade without a date or rows",
+      (marketdesk._gap_fade({"up": [{"ticker": "A", "gap": 1}]}),
+       marketdesk._gap_fade({"d": "x", "up": [], "down": []})), (None, None))
+check("a 1.8 file has no stories and no fade watch, not an error",
+      (marketdesk._stories(None, None), marketdesk._extras(newer, [])["gap_fade"]), ({}, None))
+
 for n in range(1, 7):
     day = dt.date(2026, 11, 27) + dt.timedelta(days=n)
     marketdesk._fetch_file = lambda repo, token, path, day=day: (
@@ -117,6 +158,8 @@ kept = [r[0] for r in conn.execute(
     "SELECT as_of FROM desk_runs WHERE extras != 'null' ORDER BY as_of")]
 check("only the newest few runs keep a market's worth of short volume",
       (len(kept), kept[0]), (marketdesk.EXTRAS_KEPT, "2026-11-29"))
+check("a later run without stories has none: they are about that night",
+      marketdesk.extras(conn)["stories"], {})
 
 # A database from before the column existed still answers.
 bare = sqlite3.connect(":memory:")

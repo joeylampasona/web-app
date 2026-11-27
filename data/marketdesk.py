@@ -226,8 +226,9 @@ def _by_ticker(block, universe: set[str] | None) -> dict | None:
 
 def _extras(payload: dict, signals: list, universe: set[str] | None = None) -> dict | None:
     """The blocks that arrive in the file and had no column: dealer gamma,
-    the squeeze read, short interest per flagged name, macro releases, and
-    from desk schema 1.8 the options read and short volume per name."""
+    the squeeze read, short interest per flagged name, macro releases, from
+    desk schema 1.8 the options read and short volume per name, and from 1.9
+    the brief's sentence per name and the gap fade watch."""
     gamma = payload.get("gamma")
     gamma = gamma if isinstance(gamma, dict) and (
         gamma.get("index") or gamma.get("sectors")) else None
@@ -246,11 +247,74 @@ def _extras(payload: dict, signals: list, universe: set[str] | None = None) -> d
         if isinstance(crossing, list) else []
     options_read = _by_ticker(payload.get("options_read"), universe)
     short_volume = _by_ticker(payload.get("short_volume"), universe)
-    if not (gamma or squeeze or short or crossing or options_read or short_volume):
+    stories = _stories(payload.get("stories"), universe)
+    gap_fade = _gap_fade(payload.get("gap_fade"))
+    if not (gamma or squeeze or short or crossing or options_read or short_volume
+            or stories or gap_fade):
         return None
     return {"gamma": gamma, "squeeze": squeeze, "short_interest": short,
             "events_crossing": crossing, "options_read": options_read,
-            "short_volume": short_volume}
+            "short_volume": short_volume, "stories": stories,
+            "gap_fade": gap_fade}
+
+
+#: A story longer than this is not the one line the desk's contract promises,
+#: and is cut rather than let run across a stock page.
+STORY_MAX = 280
+
+
+def _stories(block, universe: set[str] | None) -> dict:
+    """From desk schema 1.9: the one sentence the brief leads each ranked name
+    with, cut to the site's names. Plain text by contract; anything that is
+    not a non-empty string is dropped, and a name without one has none."""
+    if not isinstance(block, dict):
+        return {}
+    out: dict[str, str] = {}
+    for ticker, line in block.items():
+        symbol = str(ticker).upper()
+        if universe is not None and symbol not in universe:
+            continue
+        if isinstance(line, str) and line.strip():
+            text = " ".join(line.split())
+            out[symbol] = text if len(text) <= STORY_MAX else text[:STORY_MAX - 1].rstrip() + "…"
+    return out
+
+
+def _gap_fade(block) -> dict | None:
+    """From desk schema 1.9: the fade watch, liquid names that gapped with no
+    news. Kept whole, names outside the site included: the list is the desk's
+    and the page says which of them the site follows. None when the desk
+    sent nothing, or nothing in the shape the contract gives."""
+    if not (isinstance(block, dict) and block.get("d")):
+        return None
+
+    def rows(side) -> list[dict]:
+        kept = []
+        for row in side if isinstance(side, list) else []:
+            if not isinstance(row, dict) or not row.get("ticker"):
+                continue
+            try:
+                gap = float(row.get("gap"))
+            except (TypeError, ValueError):
+                continue
+            vol = row.get("dollar_vol")
+            kept.append({"ticker": str(row["ticker"]).upper(), "gap": gap,
+                         "dollar_vol": float(vol) if isinstance(vol, (int, float)) else None})
+        return kept
+
+    up, down = rows(block.get("up")), rows(block.get("down"))
+    if not (up or down):
+        return None
+
+    def count(key, shown) -> int:
+        value = block.get(key)
+        return int(value) if isinstance(value, (int, float)) and value >= shown else shown
+
+    record = block.get("record") if isinstance(block.get("record"), dict) else {}
+    return {"d": str(block["d"]), "up": up, "down": down,
+            "n_up": count("n_up", len(up)), "n_down": count("n_down", len(down)),
+            "floor": block.get("floor") if isinstance(block.get("floor"), (int, float)) else None,
+            "record": record}
 
 
 def extras(conn: sqlite3.Connection) -> dict:
@@ -262,7 +326,8 @@ def extras(conn: sqlite3.Connection) -> dict:
     that has one, so a night the desk skipped it does not blank the panel.
     """
     empty = {"gamma": None, "squeeze": {}, "short_interest": {},
-             "events_crossing": [], "options_read": None, "short_volume": None}
+             "events_crossing": [], "options_read": None, "short_volume": None,
+             "stories": {}, "gap_fade": None}
     try:
         rows = conn.execute(
             "SELECT extras FROM desk_runs ORDER BY as_of DESC LIMIT 5").fetchall()

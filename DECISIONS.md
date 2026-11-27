@@ -779,3 +779,22 @@ paying. Now both.
   whole run. Once Yahoo stands down OCC is not asked either, since its book
   has nothing to join to, and OCC itself stands down after three silences
   in a row, not eight.
+
+## The desk's sentence per name, and its gap fade watch (2026-11-27)
+
+Market Desk's export went to schema 1.9 with two additive blocks, and both are
+now read.
+
+- **`stories`**: the one sentence the desk's brief leads each ranked name
+  with. It is shown at the top of a stock page's "Flagged by the market sweep"
+  section, marked as the desk's brief and dated by the run it came in, and
+  flagged when that run is old. It is cut to the site's own names, and cut at
+  280 characters if it ever runs past the one line the contract promises. A
+  name without one has none: the desk's brief only ranks a few dozen names a
+  night. Stories are about one night, so a later run without them clears them.
+- **`gap_fade`**: liquid names that gapped with no filing and no results
+  behind the move, eight a side, with the desk's own 90-day record for each
+  side. It has its own page, `/market/gap-fade`, public. Names the site does
+  not follow are kept, without a link, because the list is the desk's. The
+  record line says "too few readings" while the desk marks a slice thin, and
+  never calls the list trades: the desk itself never scores it.

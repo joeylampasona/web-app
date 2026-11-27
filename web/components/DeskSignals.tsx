@@ -1,4 +1,4 @@
-import type { DeskRun, DeskSignal, DeskTrack } from "@/lib/types";
+import type { DeskRun, DeskSignal, DeskStory, DeskTrack } from "@/lib/types";
 
 /**
  * Signals from the Market Desk — a separate overnight scanner that sweeps the
@@ -110,11 +110,26 @@ function trackVerdict(t: DeskTrack): string | null {
   }
 }
 
+/** The sentence the desk's brief led this name with, in its own words and
+ *  marked as the desk's. Dated, and flagged when the run is an old one. */
+function Story({ story }: { story: DeskStory }) {
+  return (
+    <div className="card" style={{ padding: "var(--pad-sm) var(--pad-md)" }}>
+      <div className="footnote">{story.text}</div>
+      <div className="caption dim">
+        The desk&apos;s brief{story.d ? `, ${story.d}` : ""}
+        {story.stale && " — an older run; the desk has not sent a newer one"}
+      </div>
+    </div>
+  );
+}
+
 export function DeskSignals({
-  signals, run,
+  signals, run, story,
 }: {
   signals: DeskSignal[];
   run?: DeskRun | null;
+  story?: DeskStory | null;
 }) {
   const broken = run
     ? Object.entries(run.stage_status).filter(([, v]) => v !== "ok")
@@ -123,9 +138,12 @@ export function DeskSignals({
   if (!signals?.length) {
     return (
       <div className="stack" style={{ gap: "var(--gap-xs)" }}>
-        <p className="muted footnote" style={{ margin: 0 }}>
-          Nothing flagged for this company on the last market sweep.
-        </p>
+        {story && <Story story={story} />}
+        {!story && (
+          <p className="muted footnote" style={{ margin: 0 }}>
+            Nothing flagged for this company on the last market sweep.
+          </p>
+        )}
         {broken.length > 0 && <Degraded broken={broken} />}
       </div>
     );
@@ -133,6 +151,7 @@ export function DeskSignals({
 
   return (
     <div className="stack" style={{ gap: "var(--gap-sm)" }}>
+      {story && <Story story={story} />}
       {signals.map((s, i) => {
         const body = (
           <>
