@@ -1546,7 +1546,7 @@ def cmd_reporters(args) -> int:
             print(f"  Yahoo's table was needed for {asked_yahoo} of {len(named)}.")
         rows = discord.reporter_rows(run, named, quotes, tables, on_screen, implied)
         others = len([s for s in due if s not in posted]) - len(named)
-        print(f"  prices for {len(quotes)} of {len(due)}; looked up {len(named)}, "
+        print(f"  prices for {len(quotes)} of {len(set(due) | set(nearby))} asked; looked up {len(named)}, "
               f"{sum(1 for t in tables.values() if t)} with a line for today; "
               f"{len(rows)} to name in this run")
         message = discord.reporters_message(run, rows, day, local.strftime("%-I:%M %p"),
