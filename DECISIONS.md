@@ -763,3 +763,19 @@ paying. Now both.
   moving 3% or more before the open, up to eight each way, to the edition
   room once a day. Discord only, since which screen a name is on is the
   paid half, and the post says these are quotes in thin trading.
+
+## Two things taken from Market Desk's own fixes (2026-11-27)
+
+- **CPI and the jobs report are kept from the BLS schedule** as well as read
+  from FRED (`catalysts/releases.py`, `BLS_SCHEDULE`). FRED lists a release
+  only a few weeks ahead, so the calendar and the week ahead never showed
+  more than the next print. The BLS had all of 2027 out. FRED still wins on
+  any date it lists, since it hears first when a release is moved; the kept
+  dates fill what it does not list yet. The nightly warns 45 days before
+  they run out.
+- **The chain stage has a clock** (`catalysts/chains.py`): forty-five minutes
+  for the whole sweep, the largest companies asked first, so a night when a
+  source answers slowly costs the smallest names their chain and not the
+  whole run. Once Yahoo stands down OCC is not asked either, since its book
+  has nothing to join to, and OCC itself stands down after three silences
+  in a row, not eight.

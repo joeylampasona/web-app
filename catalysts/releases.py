@@ -309,6 +309,59 @@ def store(conn, rows: list[Release]) -> int:
     return written
 
 
+# ------------------------------------------------------- the two that matter
+#
+# FRED lists a release only a few weeks ahead. Market Desk found it on
+# 2026-11-26: asked for the year, it held one date each for CPI and the jobs
+# report, the December ones, though the Bureau of Labor Statistics had already
+# published all of 2027. A calendar built from FRED alone showed the next CPI
+# and nothing after it, and the week ahead could not say a print was coming
+# until the week it came.
+#
+# So the two releases that move markets most are kept here as well, from the
+# BLS's own schedule pages (bls.gov/schedule/news_release/cpi.htm and
+# empsit.htm, read 26 November 2026; the same dates Market Desk keeps). FRED
+# still wins on any date it has: it hears first when a release is moved, which
+# a government shutdown does. These fill the dates FRED does not list yet.
+# Extend each December, when the BLS posts the next year.
+BLS_SCHEDULE = {
+    # FRED's own release ids, so a filled date links to the same page.
+    "Consumer Price Index": (10, (
+        "2026-12-10",
+        "2027-01-13", "2027-02-11", "2027-03-10", "2027-04-13", "2027-05-12",
+        "2027-06-10", "2027-07-14", "2027-08-11", "2027-09-14", "2027-10-14",
+        "2027-11-10", "2027-12-10")),
+    "Employment Situation": (50, (
+        "2026-12-04",
+        "2027-01-08", "2027-02-05", "2027-03-05", "2027-04-02", "2027-05-07",
+        "2027-06-04", "2027-07-02", "2027-08-06", "2027-09-03", "2027-10-08",
+        "2027-11-05", "2027-12-03")),
+}
+
+
+def schedule_runs_out() -> dt.date:
+    """The last date the kept schedule covers, for the nightly to warn on."""
+    return min(dt.date.fromisoformat(dates[-1]) for _, dates in BLS_SCHEDULE.values())
+
+
+def with_schedule(found: list[Release], as_of: dt.date, horizon: dt.date) -> list[Release]:
+    """FRED's releases with the kept CPI and jobs dates added where FRED has
+    no release of that name within a week of the date. A date FRED moved
+    stays FRED's; the kept one is not added beside it."""
+    out = list(found)
+    for name, (release_id, dates) in BLS_SCHEDULE.items():
+        theirs = [r.date for r in found if r.name.lower() == name.lower()]
+        for text in dates:
+            day = dt.date.fromisoformat(text)
+            if not as_of <= day <= horizon:
+                continue
+            if any(abs((day - known).days) <= 7 for known in theirs):
+                continue
+            out.append(Release(date=day, release_id=release_id, name=name, notable=True))
+    out.sort(key=lambda r: (r.date, not r.notable, r.name))
+    return out
+
+
 def load(conn, as_of: dt.date, lookahead_days: int | None = None) -> list[Release]:
     horizon = as_of + dt.timedelta(
         days=int(lookahead_days or settings.get("catalysts.lookahead_days", 90)))
@@ -316,8 +369,9 @@ def load(conn, as_of: dt.date, lookahead_days: int | None = None) -> list[Releas
         "SELECT date, release_id, name, notable FROM econ_releases"
         " WHERE date >= ? AND date <= ? ORDER BY date, notable DESC, name",
         (as_of.isoformat(), horizon.isoformat())).fetchall()
-    return [Release(dt.date.fromisoformat(r["date"]), r["release_id"],
-                    r["name"], bool(r["notable"])) for r in rows]
+    found = [Release(dt.date.fromisoformat(r["date"]), r["release_id"],
+                     r["name"], bool(r["notable"])) for r in rows]
+    return with_schedule(found, as_of, horizon)
 
 
 def prune(conn, before: dt.date) -> int:

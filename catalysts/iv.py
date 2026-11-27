@@ -145,7 +145,9 @@ def compute(calendar: Calendar, symbols, names: dict[str, str],
         counts.setdefault(key, 0)
 
     rows: list[IVRow] = []
-    for symbol in sorted(set(symbols)):
+    # In the order given, without repeats. The caller puts the largest first,
+    # so that if the chains run out of time it is the smallest that go without.
+    for symbol in dict.fromkeys(symbols):
         counts["asked"] += 1
         event: Event | None = calendar.next_owned(symbol)
         if event is None:

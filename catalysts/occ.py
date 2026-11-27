@@ -37,7 +37,10 @@ PAUSE = 0.15
 # How many names in a row may go unanswered before the rest are not asked.
 # Same reasoning as Cboe's: a host that has started saying no is not going to
 # be talked round by asking four hundred more times.
-FAILURES_BEFORE_STANDING_DOWN = 8
+# Three, as Market Desk settled on: at the nightly's hour OCC answers in
+# under two seconds, so three silences in a row is a host that has stopped
+# answering, and every further name asked costs a minute of retries.
+FAILURES_BEFORE_STANDING_DOWN = 3
 
 # What the body says, lower-cased, when OCC lists nothing for the symbol.
 NOTHING_LISTED = "no data exists"

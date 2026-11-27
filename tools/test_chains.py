@@ -244,6 +244,59 @@ yf.reset_chains()
 check("an answer clears the count", (yf._chain_request(lambda: 7), yf.chains_standing_down()),
       (7, False))
 
+# ------------------------------------------------------- the night's clock
+print("\nThe night's clock:")
+calls = {"occ": 0}
+real_open_interest = occ.open_interest
+
+
+def counted_occ(symbol):
+    calls["occ"] += 1
+    return {}
+
+
+occ.open_interest = counted_occ
+chains.OUTCOMES.clear()
+now = {"t": 1000.0}
+real_out_of_time = chains.out_of_time
+chains.out_of_time = lambda clock=None: real_out_of_time(clock=lambda: now["t"])
+chains.reset_budget()
+chains.build("AAA", TODAY)
+now["t"] += chains.TIME_BUDGET_SECONDS + 1
+check("past the budget, the rest get no chain and OCC is not asked",
+      (chains.build("BBB", TODAY), calls["occ"], chains.OUTCOMES["out_of_time"]),
+      (None, 1, 1))
+chains.reset_budget()
+yf.reset_chains()
+yf._rate_limited_in_a_row = yf.RATE_LIMITS_BEFORE_STANDING_DOWN
+before = calls["occ"]
+check("once Yahoo has stood down, OCC is not asked either",
+      (chains.build("CCC", TODAY), calls["occ"] - before, chains.OUTCOMES["yahoo_stood_down"]),
+      (None, 0, 1))
+yf.reset_chains()
+chains.out_of_time = real_out_of_time
+occ.open_interest = real_open_interest
+
+print("\nThe kept CPI and jobs dates:")
+from catalysts import releases as rel  # noqa: E402
+
+as_of = dt.date(2026, 11, 27)
+horizon = as_of + dt.timedelta(days=90)
+fred = [rel.Release(dt.date(2026, 12, 10), 10, "Consumer Price Index", True)]
+filled = rel.with_schedule(fred, as_of, horizon)
+check("dates FRED does not list yet are filled from the kept schedule",
+      [r.date.isoformat() for r in filled if r.name == "Employment Situation"],
+      ["2026-12-04", "2027-01-08", "2027-02-05"])
+check("a date FRED has is not repeated", sum(1 for r in filled if r.date == dt.date(2026, 12, 10)), 1)
+moved = rel.with_schedule([rel.Release(dt.date(2026, 12, 15), 10, "Consumer Price Index", True)],
+                          as_of, horizon)
+check("a release FRED has moved keeps FRED's date and not the kept one",
+      [r.date.isoformat() for r in moved if r.name == "Consumer Price Index"][:2],
+      ["2026-12-15", "2027-01-13"])
+check("the kept dates link to FRED's own release page",
+      next(r for r in filled if r.name == "Employment Situation").to_json(as_of)["link"],
+      "https://fred.stlouisfed.org/release?rid=50")
+
 print()
 if FAILED:
     print(f"{len(FAILED)} CHECK(S) FAILED: {FAILED}")

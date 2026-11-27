@@ -165,8 +165,46 @@ def join(symbol: str, spot: float, quoted: list[dict],
                        source="occ+yahoo" if book is not None else "yahoo")
 
 
+#: How long one process may spend building chains, in seconds. A full night
+#: is about twenty-five minutes: four hundred-odd companies at a couple of
+#: seconds each from OCC and Yahoo together. The ceiling is there for the bad
+#: night, when one of them answers at twelve seconds a request: without it the
+#: options stage would run for hours and take the nightly's timeout with it.
+#: Past it, the companies left get no chain tonight and keep their stored
+#: books, which are dated. The caller asks in order of size, so the ones
+#: left out are the smallest.
+TIME_BUDGET_SECONDS = 45 * 60
+
+_started: float | None = None
+
+
+def reset_budget() -> None:
+    """Start the clock again. For a new sweep in the same process, and tests."""
+    global _started                                # noqa: PLW0603
+    _started = None
+
+
+def out_of_time(clock=None) -> bool:
+    import time                                    # noqa: PLC0415
+    now = (clock or time.monotonic)()
+    global _started                                # noqa: PLW0603
+    if _started is None:
+        _started = now
+    return now - _started > TIME_BUDGET_SECONDS
+
+
 def build(symbol: str, as_of: dt.date | None = None) -> OptionChain | None:
     """The chain for one company, or None when it has none worth reading."""
+    if out_of_time():
+        OUTCOMES["out_of_time"] += 1
+        return None
+    if yf.chains_standing_down():
+        # Yahoo has been left alone for the night, so a book from OCC would
+        # have no volatilities to join to. Market Desk found the same: once
+        # Yahoo stood down, OCC was still asked for every name, at twelve
+        # seconds an answer on a bad night.
+        OUTCOMES["yahoo_stood_down"] += 1
+        return None
     book = occ.open_interest(symbol)
     if book is not None and not any(held > 0 for held in book.values()):
         # The clearing house answered and holds nothing. Yahoo is not asked:

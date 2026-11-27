@@ -301,6 +301,11 @@ def cmd_catalysts(args) -> int:
                 print(f"  → {gone:,} past release dates dropped.", flush=True)
     except Exception as exc:                      # noqa: BLE001
         print(f"  → Data releases skipped: {exc}", flush=True)
+    runs_out = rel.schedule_runs_out()
+    if (runs_out - market.as_of).days < 45:
+        print(f"  → CPI AND JOBS SCHEDULE NEEDS ATTENTION: the kept dates run out "
+              f"{runs_out}. Add the next year's from bls.gov/schedule "
+              f"(catalysts/releases.py, BLS_SCHEDULE).", flush=True)
 
     # Headlines, market-wide. Fetched once for everyone rather than per ticker:
     # five calls a minute would be three hours one name at a time.
@@ -371,6 +376,9 @@ def cmd_catalysts(args) -> int:
     # The day's option volume per company, off the same chains: no request.
     volume_profiles: dict = {}
     iv_stats: dict = {}
+    # Largest first: the chain stage has a time budget, and on a night it
+    # runs out the companies left without a chain should be the smallest.
+    population = sorted(population, key=lambda s: (-(market.caps.get(s) or 0.0), s))
     rows = ivmod.compute(calendar, population, names, adapter,
                          gamma_out=gamma_profiles, stats=iv_stats,
                          volume_out=volume_profiles)
