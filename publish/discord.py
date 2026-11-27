@@ -202,12 +202,9 @@ def new_on_screens(diff: dict, meta: dict) -> str | None:
 # ------------------------------------------------------ the morning line
 
 def next_session(day: dt.date) -> dt.date:
-    """The next weekday. Market holidays are not known here, so on one the
-    line is for a day that does not trade, and says a date either way."""
-    nxt = day + dt.timedelta(days=1)
-    while nxt.weekday() >= 5:
-        nxt += dt.timedelta(days=1)
-    return nxt
+    """The next trading day, market holidays skipped."""
+    from data import market_calendar               # noqa: PLC0415
+    return market_calendar.next_session(day)
 
 
 def morning_line(upcoming: dict, releases: dict, on_screen: dict[str, str],

@@ -798,3 +798,20 @@ now read.
   not follow are kept, without a link, because the list is the desk's. The
   record line says "too few readings" while the desk marks a slice thin, and
   never calls the list trades: the desk itself never scores it.
+
+## Market holidays are known, not inferred (2026-11-27)
+
+The night after Thanksgiving the nightly's gate took the holiday for a session
+nobody had published. Its only guard for holidays was "the data branch was
+written in the last four hours", and by 1:42am Friday it had been a day. So it
+rebuilt Wednesday's edition for forty minutes and posted it to Discord a
+second time, with the briefing and six earnings cards, under a "1 day behind"
+warning.
+
+The NYSE's full closures for 2026 and 2027 are now in
+`data/market_calendar.py`, and the gate keeps the same list in bash because it
+runs before the checkout. `tools/test_calendar.py` fails if the two differ and
+runs the gate's own lines against the clock of that night. The pre-publish
+staleness check and the morning line use the calendar too, so the line written
+on a Wednesday before Thanksgiving is for Friday. The nightly log warns 45 days
+before the list runs out. The four-hour guard stays for a closure nobody listed.

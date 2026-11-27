@@ -306,6 +306,11 @@ def cmd_catalysts(args) -> int:
         print(f"  → CPI AND JOBS SCHEDULE NEEDS ATTENTION: the kept dates run out "
               f"{runs_out}. Add the next year's from bls.gov/schedule "
               f"(catalysts/releases.py, BLS_SCHEDULE).", flush=True)
+    from data import market_calendar
+    if (market_calendar.runs_out() - market.as_of).days < 45:
+        print(f"  → MARKET HOLIDAYS NEED ATTENTION: the list runs out "
+              f"{market_calendar.runs_out()}. Add next year's NYSE closures to "
+              f"data/market_calendar.py and the nightly's gate.", flush=True)
 
     # Headlines, market-wide. Fetched once for everyone rather than per ticker:
     # five calls a minute would be three hours one name at a time.

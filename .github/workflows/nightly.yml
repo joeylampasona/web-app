@@ -88,10 +88,18 @@ jobs:
           # soon as a slot landed after midnight Eastern — the date rolled over,
           # the hour was 1, and the gate refused to catch up on a session that
           # was hours settled. This is the same question the backfill asks.
+          #
+          # Market holidays are not sessions either. Without them, the night
+          # after Thanksgiving 2026 took the holiday for an unpublished
+          # session, rebuilt Wednesday's edition and posted it to Discord a
+          # second time. The same dates as data/market_calendar.py, kept here
+          # because this step runs before the checkout; tools/test_calendar.py
+          # fails if the two differ.
+          holidays=" 2026-01-01 2026-01-19 2026-02-16 2026-04-03 2026-05-25 2026-06-19 2026-07-03 2026-09-07 2026-11-26 2026-12-25 2027-01-01 2027-01-18 2027-02-15 2027-03-26 2027-05-31 2027-06-18 2027-07-05 2027-09-06 2027-11-25 2027-12-24 "
           session=$(TZ=America/New_York date +%F)
           hour=$(TZ=America/New_York date +%-H)
           [ "$hour" -lt 18 ] && session=$(date -d "$session -1 day" +%F)
-          while [ "$(date -d "$session" +%u)" -gt 5 ]; do
+          while [ "$(date -d "$session" +%u)" -gt 5 ] || [[ "$holidays" == *" $session "* ]]; do
             session=$(date -d "$session -1 day" +%F)
           done
           echo "session=$session" >> "$GITHUB_OUTPUT"
@@ -297,13 +305,15 @@ jobs:
           from zoneinfo import ZoneInfo
 
           eastern = dt.datetime.now(ZoneInfo("America/New_York"))
+          from data import market_calendar
           expected = eastern.date()
           if eastern.hour < 18:
               expected -= dt.timedelta(days=1)
-          while expected.weekday() >= 5:
-              expected -= dt.timedelta(days=1)
+          expected = market_calendar.previous_session(expected)
 
           as_of = dt.date.fromisoformat(meta["as_of"])
+          # Calendar days, so the refusal below still reads in days; a market
+          # holiday is no longer one of them.
           behind = (expected - as_of).days
           print(f"last completed New York session: {expected}  published: {as_of}  "
                 f"({behind} days behind)")
