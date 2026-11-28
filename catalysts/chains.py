@@ -62,6 +62,16 @@ MAX_EXPIRIES = 30
 #: change meaning underneath itself.
 NEAR_THE_MONEY = 6
 
+#: And never one whose strike is further than this from the price, however
+#: few strikes the chain lists. On a thin chain the six nearest strikes reach
+#: deep in the money, where a quote of 7.90 by 11.50 on a 7.50 call with the
+#: stock at 11.77 passes every test above and implies a volatility near 500%.
+#: On 2026-11-28 that put Marten Transport top of the High IV page at 494%;
+#: inside this band its December expiry has no reading at all, which is the
+#: truth. Measured the same morning: no change to any expiry of AAPL, NVDA,
+#: TSLA, SPY, SMCI, GME, MSTR or F.
+NEAR_BAND = 0.25
+
 #: What happened to every company asked about in this process.
 OUTCOMES: "collections.Counter[str]" = collections.Counter()
 
@@ -109,7 +119,8 @@ def join(symbol: str, spot: float, quoted: list[dict],
         near: list[float] = []
         for side in ("call", "put"):
             mine = sorted((abs(r["strike"] - spot), r["own_iv"]) for r in quoted
-                          if r["expiry"] == expiry and r["side"] == side)
+                          if r["expiry"] == expiry and r["side"] == side
+                          and abs(r["strike"] / spot - 1) <= NEAR_BAND)
             near.extend(iv for _, iv in mine[:NEAR_THE_MONEY] if iv > 0)
         if near:
             expiries.append(OptionExpiry(expiry, sum(near) / len(near), len(near)))

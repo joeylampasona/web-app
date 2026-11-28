@@ -175,6 +175,16 @@ check("a tight quote, a wide one, a nickel-wide one on a cheap contract",
       (chains.wide(1.00, 1.10), chains.wide(0.10, 3.00), chains.wide(0.05, 0.10)),
       (False, True, False))
 
+# Marten Transport, 2026-11-28: a thin chain whose nearest strikes reach deep
+# in the money, where a wide two-sided quote implied 494%.
+THIN = [row(DEC, "call", 7.5, 4.94, bid=7.9, ask=11.5),
+        row(DEC, "call", 12.5, 0.58, bid=0.0, ask=0.75),
+        row(DEC, "put", 12.5, 0.90, bid=0.0, ask=1.45),
+        row(JAN, "put", 12.5, 0.49, bid=1.2, ask=1.7)]
+thin = chains.join("MRTN", 11.77, [dict(r) for r in THIN], None)
+check("a deep in-the-money quote is not an expiry's reading",
+      [(e.expiry, round(e.implied_volatility, 2)) for e in thin.expiries], [(JAN, 0.49)])
+
 # ------------------------------------------------------------ the build
 print("\nThe build:")
 yahoo_asked: list[str] = []

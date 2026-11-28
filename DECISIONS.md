@@ -815,3 +815,16 @@ runs the gate's own lines against the clock of that night. The pre-publish
 staleness check and the morning line use the calendar too, so the line written
 on a Wednesday before Thanksgiving is for Friday. The nightly log warns 45 days
 before the list runs out. The four-hour guard stays for a closure nobody listed.
+
+## An expiry's volatility reading stays near the money (2026-11-28)
+
+The first full night on OCC's books put Marten Transport top of the High IV
+page at 494%, with GRNT, NTST and FCPT near 400%. Each was a thin chain: its
+six nearest strikes a side reached deep in the money, where a wide two-sided
+quote (7.90 by 11.50 on a 7.50 call, stock at 11.77) passes the "believed"
+test and implies a volatility near the 500% ceiling. A strike now has to be
+within 25% of the price to count towards an expiry's reading. Those four
+expiries have no reading inside that band, so the names drop off the page
+rather than show a wrong number. The same morning, with and without the band:
+no expiry of AAPL, NVDA, TSLA, SPY, SMCI, GME, MSTR or F changed. Gamma is
+untouched; it reads every contract.
